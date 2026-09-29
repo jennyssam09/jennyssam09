@@ -19,12 +19,12 @@ const HIDDEN_KEYS = ['minutes'];
 // 하루가 바뀌는 시각: 새벽 4시 전에 남긴 기록은 전날 기록으로 쳐요. (자정 기준으로 돌리려면 0)
 const DAY_STARTS_AT = 4;
 
-// 연습량(약간 / 중 / 많이)과 하고 나서 기분. 시간을 숫자로 적지 않고 버튼으로만 골라요.
+// 연습량(살짝 / 적당히 / 듬뿍)과 하고 나서 기분. 시간을 숫자로 적지 않고 버튼으로만 골라요.
 //   v: 저장되는 값, icon: 버튼과 카드에 보이는 그림, label: 이름
 const AMOUNTS = [
-  { v: 1, icon: '●○○', label: '약간' },
-  { v: 2, icon: '●●○', label: '중' },
-  { v: 3, icon: '●●●', label: '많이' },
+  { v: 1, icon: '●○○', label: '살짝' },
+  { v: 2, icon: '●●○', label: '적당히' },
+  { v: 3, icon: '●●●', label: '듬뿍' },
 ];
 const MOODS = [
   { v: 'good', icon: '😊', label: '좋았어요' },
@@ -575,7 +575,7 @@ const moodOf = (r) => MOODS.find((m) => m.v === r.mood);
 function marksHTML(r) {
   const a = amountOf(r);
   const m = moodOf(r);
-  return `${a ? `<span class="amt" role="img" aria-label="연습량 ${a.label}" title="연습량 ${a.label}">${a.icon}</span>` : ''}${m ? `<span class="mood" role="img" aria-label="기분 ${m.label}" title="하고 나서 기분: ${m.label}">${m.icon}</span>` : ''}`;
+  return `${a ? `<span class="amt" role="img" aria-label="연습량 ${a.label}" title="연습량 ${a.label}">${a.icon} ${a.label}</span>` : ''}${m ? `<span class="mood" role="img" aria-label="기분 ${m.label}" title="하고 나서 기분: ${m.label}">${m.icon}</span>` : ''}`;
 }
 
 // 칩 선택지 하나를 {v, icon, label}로 맞춰요 (글자만 있는 것도 돼요)
@@ -2705,31 +2705,6 @@ document.addEventListener('input', (e) => {
 });
 
 $('#settingsBtn').addEventListener('click', openSettings);
-
-/* ---------------------------------------------------------------------
-   🌙 밤 모드 (🌙 버튼). 고른 적이 없으면 컴퓨터 설정을 따라가고, 한 번 고르면 기억해요.
-   --------------------------------------------------------------------- */
-const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
-function savedTheme() {
-  try { const t = localStorage.getItem('journal.theme'); return t === 'dark' || t === 'light' ? t : null; } catch (e) { return null; }
-}
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  const btn = $('#themeBtn');
-  const dark = t === 'dark';
-  btn.textContent = dark ? '☀️' : '🌙';
-  btn.title = dark ? '밝은 화면' : '밤 모드';
-  btn.setAttribute('aria-label', dark ? '밝은 화면으로 바꾸기' : '밤 모드로 바꾸기');
-}
-applyTheme(savedTheme() || (darkQuery && darkQuery.matches ? 'dark' : 'light'));
-$('#themeBtn').addEventListener('click', () => {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  try { localStorage.setItem('journal.theme', next); } catch (e) { /* 기억은 못 해도 지금은 바뀌어요 */ }
-  applyTheme(next);
-});
-if (darkQuery && darkQuery.addEventListener) {
-  darkQuery.addEventListener('change', (e) => { if (!savedTheme()) applyTheme(e.matches ? 'dark' : 'light'); });
-}
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
 dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; formShots = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; });

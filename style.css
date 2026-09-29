@@ -19,24 +19,6 @@
   color-scheme: light;
 }
 
-/* 🌙 밤 모드: 위의 색 이름은 그대로 두고, 값만 어두운 버전으로 바꿔요 */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #1b1916;
-  --card: #25221e;
-  --ink: #ebe4d8;
-  --muted: #a89e91;
-  --line: #3b352e;
-  --accent: #86b8a4;
-  --accent-soft: #263630;
-  --warm: #dd9a6e;
-  --warm-soft: #3a2b20;
-  --danger: #e8897a;
-  --red: #ee8b9c;
-  --red-soft: #3c2127;
-  --purple: #bba2e3;
-  --purple-soft: #2f2740;
-}
 
 * { box-sizing: border-box; }
 html { font-size: 17px; }
@@ -371,23 +353,6 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .recap-quote { padding: 8px 12px; margin-bottom: 8px; border-left: 4px solid var(--purple); background: var(--purple-soft); border-radius: 0 10px 10px 0; }
 @media (max-width: 640px) { .recap-figs { grid-template-columns: 1fr; } }
 
-/* ---------- 🌙 밤 모드: 고정 색으로 칠해 둔 곳을 어두운 화면에 맞춰요 ---------- */
-:root[data-theme="dark"] .stat,
-:root[data-theme="dark"] .field input,
-:root[data-theme="dark"] .field select,
-:root[data-theme="dark"] .field textarea,
-:root[data-theme="dark"] .copy-text,
-:root[data-theme="dark"] .search { background: var(--bg); }
-:root[data-theme="dark"] .art-img,
-:root[data-theme="dark"] .art-noimg,
-:root[data-theme="dark"] .shot-img { background: var(--bg); }
-:root[data-theme="dark"] .notice { border-color: var(--line); }
-:root[data-theme="dark"] .tag.todo { background: var(--line); color: var(--ink); }
-:root[data-theme="dark"] .btn.danger:hover { background: var(--red-soft); }
-:root[data-theme="dark"] .backup-bar .btn.ghost:hover { background: var(--card); }
-:root[data-theme="dark"] dialog { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
-:root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .6); }
-.theme-btn { padding: 6px 10px; line-height: 1.2; }
 
 /* ---------- 🎼 곡 노트 (템포 그래프, 곡 메모) ---------- */
 .piece-link {
