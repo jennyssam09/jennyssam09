@@ -16,6 +16,26 @@
   --red-soft: #f8e7ea;
   --purple: #78579e;
   --purple-soft: #efe9f5;
+  color-scheme: light;
+}
+
+/* 🌙 밤 모드: 위의 색 이름은 그대로 두고, 값만 어두운 버전으로 바꿔요 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b1916;
+  --card: #25221e;
+  --ink: #ebe4d8;
+  --muted: #a89e91;
+  --line: #3b352e;
+  --accent: #86b8a4;
+  --accent-soft: #263630;
+  --warm: #dd9a6e;
+  --warm-soft: #3a2b20;
+  --danger: #e8897a;
+  --red: #ee8b9c;
+  --red-soft: #3c2127;
+  --purple: #bba2e3;
+  --purple-soft: #2f2740;
 }
 
 * { box-sizing: border-box; }
@@ -45,7 +65,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 8px 14px; border-radius: 999px; color: var(--muted); font-weight: 600;
 }
 .tab:hover { background: var(--accent-soft); }
-.tab.active { background: var(--accent); color: #fff; }
+.tab.active { background: var(--accent); color: var(--card); }
 
 main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
 
@@ -56,7 +76,7 @@ main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
 
 /* ---------- 버튼 ---------- */
 .btn {
-  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--card);
   padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 600;
 }
 .btn:hover { filter: brightness(1.08); }
@@ -215,12 +235,15 @@ dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여
 }
 .cal-cell:hover { border-color: var(--accent); }
 .cal-cell.blank { background: transparent; border-color: transparent; cursor: default; }
-.cal-cell.has { background: var(--accent-soft); }
-/* 연습량이 적힌 날: 그날 가장 높은 연습량에 따라 보라색 배경이 조금씩 진해져요 (첫 줄은 color-mix를 못 쓰는 브라우저용) */
-.cal-cell.amt1 { background: var(--purple-soft); }
-.cal-cell.amt2 { background: var(--purple-soft); background: color-mix(in srgb, var(--purple-soft) 82%, var(--purple)); }
-.cal-cell.amt3 { background: var(--purple-soft); background: color-mix(in srgb, var(--purple-soft) 66%, var(--purple)); }
+.cal-cell.has, .cal-swatch.has { background: var(--purple-soft); }
+/* 연습량이 적힌 날: 그날 가장 높은 연습량에 따라 보라색이 조금씩 진해져요 (약간 < 중 < 많이) */
+.cal-cell.has.amt1, .cal-swatch.amt1 { background: color-mix(in srgb, var(--purple) 8%, var(--purple-soft)); }
+.cal-cell.has.amt2, .cal-swatch.amt2 { background: color-mix(in srgb, var(--purple) 17%, var(--purple-soft)); }
+.cal-cell.has.amt3, .cal-swatch.amt3 { background: color-mix(in srgb, var(--purple) 28%, var(--purple-soft)); }
 .cal-cell.rest-only { background: var(--card); } /* 쉰 날은 색 없이 😴만 조용히 */
+.cal-mark.rest { color: var(--muted); }
+.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 10px 0 0; }
+.cal-swatch { display: inline-block; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line); vertical-align: middle; margin-left: 4px; }
 .cal-cell.today { outline: 2px solid var(--purple); outline-offset: -1px; }
 .cal-cell:disabled { cursor: default; }
 .cal-num { font-weight: 700; font-size: .85rem; }
@@ -247,7 +270,7 @@ dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여
   background: var(--purple-soft); border: 2px dashed var(--purple); border-radius: 12px;
 }
 .field .dropzone small { font-weight: 400; font-size: .8rem; color: var(--muted); }
-.field .dropzone:hover, .field .dropzone.over { background: #e4d9ef; border-style: solid; }
+.field .dropzone:hover, .field .dropzone.over { background: #e4d9ef; background: color-mix(in srgb, var(--purple) 10%, var(--purple-soft)); border-style: solid; }
 label.btn { display: inline-flex; align-items: center; justify-content: center; }
 .drop-overlay {
   position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
@@ -259,7 +282,7 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .toast {
   position: fixed; inset: auto auto 24px 50%; margin: 0; border: 0; transform: translateX(-50%); z-index: 30;
   width: max-content; height: auto; max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px; overflow: visible;
-  background: #2f2a24; color: #fff; box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
+  background: var(--ink); color: var(--card); box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
 }
 
 /* ---------- 워치 캡처, 클로드 피드백, 요약 복사, 쌓인 기록 ---------- */
@@ -320,7 +343,15 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .memory-line { color: var(--muted); font-size: .92rem; }
 
 /* 도장 토스트 */
-.toast .stamp { display: inline-block; font-size: 1.7rem; line-height: 1; transform: rotate(-8deg); }
+/* 도장: 동그란 도장이 찍히듯 나타나요 */
+.stamp {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 46px; height: 46px; border-radius: 50%; font-size: 1.5rem; line-height: 1;
+  background: var(--purple-soft); border: 2px solid var(--purple);
+  transform: rotate(-12deg); animation: stamp-in .4s ease-out;
+}
+@keyframes stamp-in { from { transform: scale(1.7) rotate(-12deg); opacity: 0; } to { transform: scale(1) rotate(-12deg); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .stamp { animation: none; } }
 .toast-btn {
   border: 1px solid var(--card); background: transparent; color: var(--card); cursor: pointer;
   padding: 4px 12px; border-radius: 8px; font-weight: 700; white-space: nowrap;
@@ -339,3 +370,90 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .recap-fig figcaption { margin-top: 6px; font-size: .88rem; color: var(--muted); }
 .recap-quote { padding: 8px 12px; margin-bottom: 8px; border-left: 4px solid var(--purple); background: var(--purple-soft); border-radius: 0 10px 10px 0; }
 @media (max-width: 640px) { .recap-figs { grid-template-columns: 1fr; } }
+
+/* ---------- 🌙 밤 모드: 고정 색으로 칠해 둔 곳을 어두운 화면에 맞춰요 ---------- */
+:root[data-theme="dark"] .stat,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea,
+:root[data-theme="dark"] .copy-text,
+:root[data-theme="dark"] .search { background: var(--bg); }
+:root[data-theme="dark"] .art-img,
+:root[data-theme="dark"] .art-noimg,
+:root[data-theme="dark"] .shot-img { background: var(--bg); }
+:root[data-theme="dark"] .notice { border-color: var(--line); }
+:root[data-theme="dark"] .tag.todo { background: var(--line); color: var(--ink); }
+:root[data-theme="dark"] .btn.danger:hover { background: var(--red-soft); }
+:root[data-theme="dark"] .backup-bar .btn.ghost:hover { background: var(--card); }
+:root[data-theme="dark"] dialog { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
+:root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.theme-btn { padding: 6px 10px; line-height: 1.2; }
+
+/* ---------- 🎼 곡 노트 (템포 그래프, 곡 메모) ---------- */
+.piece-link {
+  border: 0; background: none; padding: 2px 0; font: inherit; font-weight: 700;
+  color: var(--purple); text-decoration: underline; cursor: pointer;
+}
+.piece-link:hover { filter: brightness(.85); }
+.chart { width: 100%; height: auto; display: block; margin-bottom: 8px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis-label { fill: var(--muted); font-size: 12px; }
+.chart .line { fill: none; stroke: var(--purple); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--purple); stroke: var(--card); stroke-width: 2; }
+.chart .val { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.tempo-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.tempo-table th, .tempo-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.tempo-table th { color: var(--muted); font-weight: 700; }
+.piece-memo { margin-bottom: 14px; }
+.piece-memo .row { flex-wrap: nowrap; }
+.piece-memo input { flex: 1; min-width: 0; }
+.note-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.note-list li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.note-list li .meta { flex-shrink: 0; min-width: 4.6em; }
+.piece-amounts .amt { margin-right: 2px; }
+
+/* ---------- ✍ 더 적기 (접힘 영역), 칩 표시, 질문형 칸 ---------- */
+.more { margin: 6px 0 12px; border: 1px dashed var(--purple); border-radius: 12px; background: var(--card); }
+.more > summary { padding: 10px 14px; cursor: pointer; font-weight: 700; color: var(--purple); font-size: 1rem; }
+.more[open] > summary { border-bottom: 1px dashed var(--line); margin-bottom: 12px; }
+.more > .field { margin-left: 14px; margin-right: 14px; }
+.more > .field:last-child { margin-bottom: 14px; }
+.field textarea::placeholder, .field input::placeholder { color: var(--muted); opacity: .75; }
+.chip-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; }
+.chip-label { font-size: .8rem; font-weight: 700; color: var(--accent); margin-right: 2px; }
+.tag.chip-tag { background: var(--purple-soft); color: var(--purple); margin-right: 0; }
+.lines { margin: 2px 0 0; padding-left: 1.4em; }
+.lines li { margin: 1px 0; }
+.chips .chip-label { align-self: center; }
+.chip.small { padding: 3px 12px; font-size: .88rem; }
+.chip-sep { display: inline-block; width: 1px; height: 22px; background: var(--line); margin: 0 6px; align-self: center; }
+.filter-box { margin-bottom: 10px; }
+.filter-box .chips { margin-bottom: 6px; }
+.tag.art-kind { background: var(--purple-soft); color: var(--purple); vertical-align: 2px; }
+
+/* 레슨 패널, 물어볼 것 */
+.lp-sep { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.lesson-panel h3 { font-size: 1rem; }
+.ask-box { padding: 10px 14px; border: 1px solid var(--purple); border-radius: 10px; background: var(--purple-soft); }
+.ask-box .meta { font-weight: 400; }
+
+/* 투자 복기 · 교훈 */
+.review-box { margin-top: 8px; padding: 8px 12px; border-left: 4px solid var(--purple); background: var(--purple-soft); border-radius: 0 10px 10px 0; }
+.rv-row { margin: 2px 0; }
+.rv-lesson { font-weight: 700; color: var(--purple); margin-top: 4px; }
+.review-ref { padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.stat-line { padding: 8px 14px; }
+
+/* 📒 용어장 · 링크 모양 버튼 */
+.term-initial { margin: 14px 0 4px; color: var(--accent); font-size: 1rem; }
+.term { padding: 10px 14px; margin-bottom: 8px; }
+.term-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 2px 0; }
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--purple); cursor: pointer; text-align: left; }
+.link-btn:hover { text-decoration: underline; }
+.flash { outline: 3px solid var(--purple); outline-offset: 2px; transition: outline-color .3s; }
+
+/* 📺 강의별 보기 */
+.course-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; margin-top: 6px; }
+.course-item { flex: 0 0 200px; margin: 0; }
+.course-img { aspect-ratio: 4 / 3; }
+.course-item figcaption { margin-top: 4px; font-size: .88rem; word-break: keep-all; }
