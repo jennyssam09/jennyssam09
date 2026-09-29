@@ -161,7 +161,7 @@ dialog.wide { width: min(1000px, 96vw); }
   .top { padding: 8px 12px; }
   .top h1 { flex: 1; }
   .tabs { order: 3; flex: 1 1 100%; gap: 4px; }
-  .tab { flex: 1 1 0; padding: 6px 4px; font-size: .85rem; line-height: 1.25; text-align: center; }
+  .tab { flex: 1 1 0; padding: 6px 4px; font-size: .85rem; line-height: 1.25; text-align: center; word-break: keep-all; }
   /* 휴대폰: 버튼과 입력 칸을 손가락으로 누르기 편하게 */
   .btn { min-height: 46px; padding: 10px 16px; }
   .btn.small { min-height: 40px; padding: 6px 12px; }
@@ -219,3 +219,31 @@ dialog.wide { width: min(1000px, 96vw); }
 .tempo-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .tempo-table th, .tempo-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
 .tempo-table th { color: var(--muted); font-weight: 700; }
+
+/* ---------- 캘린더 ---------- */
+.cal-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-dow { text-align: center; font-size: .8rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.cal-cell {
+  min-height: 92px; padding: 5px 6px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+}
+.cal-cell:hover { border-color: var(--accent); }
+.cal-cell.blank { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell.has { background: var(--accent-soft); }
+.cal-cell.today { outline: 2px solid var(--purple); outline-offset: -1px; }
+.cal-cell:disabled { cursor: default; }
+.cal-num { font-weight: 700; font-size: .85rem; }
+.cal-marks { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-mark { display: flex; align-items: center; gap: 3px; font-size: .75rem; line-height: 1.25; min-width: 0; }
+.cal-mark sup { font-size: .65rem; color: var(--muted); }
+.cal-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+@media (max-width: 720px) {
+  .cal-cell { min-height: 64px; padding: 4px 3px; }
+  .cal-marks { flex-direction: row; flex-wrap: wrap; gap: 1px 3px; }
+  .cal-t { display: none; }
+  .cal-mark { font-size: .85rem; }
+}

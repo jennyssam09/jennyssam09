@@ -20,7 +20,6 @@ const SCHEMAS = {
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
-      { key: 'minutes', label: '시간 (분)', type: 'number', min: 1, step: 1, required: true },
       { key: 'distance', label: '거리 (km) - 선택', type: 'number', min: 0, step: 0.01 },
       { key: 'condition', label: '컨디션', type: 'select', options: ['좋음', '보통', '피곤함'] },
       { key: 'memo', label: '메모', type: 'textarea' },
@@ -34,7 +33,6 @@ const SCHEMAS = {
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['연습', '레슨'], required: true },
       { key: 'piece', label: '곡 이름', type: 'text', required: true, only: '연습', suggest: true },
-      { key: 'minutes', label: '연습 시간 (분)', type: 'number', min: 1, step: 1, required: true, only: '연습' },
       { key: 'tempo', label: '템포 (BPM) - 선택', type: 'number', min: 1, step: 1, only: '연습', hint: '메트로놈 숫자예요. 곡 이름을 누르면 템포 변화를 그래프로 볼 수 있어요.' },
       { key: 'part', label: '연습한 부분', type: 'textarea', only: '연습' },
       { key: 'hard', label: '어려웠던 점', type: 'textarea', only: '연습' },
@@ -49,7 +47,6 @@ const SCHEMAS = {
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'topic', label: '주제', type: 'text', required: true },
-      { key: 'minutes', label: '공부 시간 (분) - 선택', type: 'number', min: 1, step: 1 },
       { key: 'learned', label: '배운 내용', type: 'textarea' },
       { key: 'links', label: '참고 링크', type: 'textarea', hint: '한 줄에 링크 하나씩 적어 주세요.' },
     ],
@@ -73,7 +70,6 @@ const SCHEMAS = {
       { key: 'image', label: '그림 이미지', type: 'image' },
       { key: 'topic', label: '연습 주제', type: 'text', required: true },
       { key: 'tools', label: '사용한 도구', type: 'text' },
-      { key: 'minutes', label: '작업 시간 (분) - 선택', type: 'number', min: 1, step: 1 },
       { key: 'tried', label: '새로 시도한 점', type: 'textarea' },
       { key: 'hard', label: '어려웠던 점', type: 'textarea' },
       { key: 'next', label: '다음 목표', type: 'textarea' },
@@ -86,13 +82,17 @@ const TABS = [
   { id: 'body', label: '🧘 운동·바이올린' },
   { id: 'econ', label: '📚 경제 공부·투자' },
   { id: 'art', label: '🎨 그림 기록' },
+  { id: 'cal', label: '📅 캘린더' },
 ];
 
+// 캘린더가 시작되는 달 (이 달부터 앞으로 계속 이어져요)
+const CALENDAR_START = '2026-01';
+
 // 빠른 기록: 메뉴마다 '종류' 목록과, 한 줄 메모가 어느 칸에 저장될지 정해요.
-//   memoKey: 한 줄 메모가 들어갈 칸 / minutes: false 이면 시간 칸을 숨겨요
+//   memoKey: 한 줄 메모가 들어갈 칸
 const QUICK = {
   body: {
-    title: '빠른 기록 - 운동·바이올린', minutesRequired: true, memoRequired: false,
+    title: '빠른 기록 - 운동·바이올린', memoRequired: false,
     kinds: [
       { label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: '예: 아침 스트레칭' },
       { label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: '예: 동네 한 바퀴' },
@@ -100,14 +100,14 @@ const QUICK = {
     ],
   },
   econ: {
-    title: '빠른 기록 - 경제 공부·투자', minutesRequired: false, memoRequired: true,
+    title: '빠른 기록 - 경제 공부·투자', memoRequired: true,
     kinds: [
       { label: '공부 메모', type: 'study', data: {}, memoKey: 'topic', hint: '공부한 주제를 한 줄로' },
-      { label: '투자 기록', type: 'invest', data: {}, memoKey: 'asset', minutes: false, hint: '관심 자산·종목 이름' },
+      { label: '투자 기록', type: 'invest', data: {}, memoKey: 'asset', hint: '관심 자산·종목 이름' },
     ],
   },
   art: {
-    title: '빠른 기록 - 그림', minutesRequired: false, memoRequired: true,
+    title: '빠른 기록 - 그림', memoRequired: true,
     kinds: ['연필·드로잉', '색연필', '수채·물감', '디지털', '기타'].map((t) => (
       { label: t, type: 'art', data: { tools: t }, memoKey: 'topic', hint: '연습 주제를 한 줄로' })),
   },
@@ -209,13 +209,21 @@ const Store = {
     return this.mode === 'localstorage' ? this._lsRead() : this._mem.slice();
   },
   async putMany(list) {
+    await this._putMany(list);
+    if (list.some((r) => r.type !== 'meta')) scheduleAutosave(); // 설정 저장만으로는 자동 저장하지 않아요
+  },
+  async remove(ids) {
+    await this._remove(ids);
+    scheduleAutosave();
+  },
+  async _putMany(list) {
     if (this.mode === 'indexeddb') return this._tx('readwrite', (s) => { list.forEach((r) => s.put(r)); });
     const map = new Map((this.mode === 'localstorage' ? this._lsRead() : this._mem).map((r) => [r.id, r]));
     list.forEach((r) => map.set(r.id, r));
     const merged = [...map.values()];
     if (this.mode === 'localstorage') this._lsWrite(merged); else this._mem = merged;
   },
-  async remove(ids) {
+  async _remove(ids) {
     if (this.mode === 'indexeddb') return this._tx('readwrite', (s) => { ids.forEach((id) => s.delete(id)); });
     const keep = (this.mode === 'localstorage' ? this._lsRead() : this._mem).filter((r) => !ids.includes(r.id));
     if (this.mode === 'localstorage') this._lsWrite(keep); else this._mem = keep;
@@ -228,6 +236,10 @@ const Store = {
 let records = [];   // 전체 기록 (메모리에 복사해 두고 화면에 사용)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
 let settings = { lastBackupAt: null, snoozeUntil: null }; // 마지막 백업 날짜, 알림 미루기
+// 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
+//   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
+const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
+let autosaveTimer = null;
 
 const ui = {
   tab: 'body',
@@ -240,6 +252,10 @@ const ui = {
   artOrder: 'newest', // newest | oldest
   cmpA: null,
   cmpB: null,
+  calMonth: null,       // 캘린더에서 보고 있는 달 (예: '2026-09')
+  calHidden: new Set(), // 캘린더에서 잠시 숨긴 종류
+  dayOpen: null,        // 캘린더에서 열어 둔 날짜
+  backToDay: null,      // 입력 창을 닫고 돌아갈 날짜
 };
 try {
   const saved = localStorage.getItem('journal.tab');
@@ -288,17 +304,17 @@ function buildSamples() {
   let seq = 0;
   const mk = (type, date, data) => ({ id: newId(), type, date, sample: true, createdAt: now + (seq++), updatedAt: now, ...data });
   return [
-    mk('workout', d(1), { kind: '요가', minutes: 30, condition: '좋음', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
-    mk('workout', d(2), { kind: '슬로조깅', minutes: 25, distance: 3.1, condition: '보통', memo: '대화할 수 있는 속도로 천천히. (예시 기록)' }),
-    mk('workout', d(4), { kind: '요가', minutes: 40, condition: '피곤함', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
-    mk('workout', d(8), { kind: '슬로조깅', minutes: 30, distance: 3.6, condition: '좋음', memo: '' }),
-    mk('workout', d(9), { kind: '요가', minutes: 20, condition: '보통', memo: '' }),
-    mk('violin', d(1), { kind: '연습', tempo: 60, piece: '바흐 미뉴에트 G장조', minutes: 20, part: '1~8마디 운지', hard: '3포지션으로 옮길 때 음정이 흔들렸다.', next: '메트로놈 60에 맞춰 9~16마디 연습하기 (예시 기록)' }),
-    mk('violin', d(3), { kind: '연습', tempo: 52, piece: '바흐 미뉴에트 G장조', minutes: 15, part: '활 쓰는 법(다운-업)', hard: '활이 줄 위에서 미끄러졌다.', next: '활을 줄에 수직으로 유지하기' }),
-    mk('violin', d(9), { kind: '연습', tempo: 76, piece: '스즈키 1권 - 반짝반짝 변주곡', minutes: 25, part: '변주 A, B', hard: '리듬이 자꾸 빨라진다.', next: '천천히 박자 세며 치기' }),
-    mk('violin', d(6), { kind: '연습', tempo: 48, piece: '바흐 미뉴에트 G장조', minutes: 20, part: '9~16마디', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
-    mk('violin', d(5), { kind: '레슨', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '미뉴에트 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습 5분', done: false }] }),
-    mk('workout', d(3), { kind: '요가', minutes: 15, memo: '퇴근 후 짧게 (간단 기록 예시)', quick: true }),
+    mk('workout', d(1), { kind: '요가', condition: '좋음', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
+    mk('workout', d(2), { kind: '슬로조깅', distance: 3.1, condition: '보통', memo: '대화할 수 있는 속도로 천천히. (예시 기록)' }),
+    mk('workout', d(4), { kind: '요가', condition: '피곤함', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
+    mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, condition: '좋음', memo: '' }),
+    mk('workout', d(9), { kind: '요가', condition: '보통', memo: '' }),
+    mk('violin', d(1), { kind: '연습', tempo: 60, piece: '바흐 미뉴에트 G장조', part: '1~8마디 운지', hard: '3포지션으로 옮길 때 음정이 흔들렸다.', next: '메트로놈 60에 맞춰 9~16마디 연습하기 (예시 기록)' }),
+    mk('violin', d(3), { kind: '연습', tempo: 52, piece: '바흐 미뉴에트 G장조', part: '활 쓰는 법(다운-업)', hard: '활이 줄 위에서 미끄러졌다.', next: '활을 줄에 수직으로 유지하기' }),
+    mk('violin', d(9), { kind: '연습', tempo: 76, piece: '스즈키 1권 - 반짝반짝 변주곡', part: '변주 A, B', hard: '리듬이 자꾸 빨라진다.', next: '천천히 박자 세며 치기' }),
+    mk('violin', d(6), { kind: '연습', tempo: 48, piece: '바흐 미뉴에트 G장조', part: '9~16마디', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
+    mk('violin', d(5), { kind: '레슨', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '미뉴에트 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습', done: false }] }),
+    mk('workout', d(3), { kind: '요가', memo: '퇴근 후 짧게 (간단 기록 예시)', quick: true }),
     mk('study', d(2), { topic: '금리와 물가의 관계', learned: '물가가 오르면 중앙은행이 금리를 올려 소비를 조금 식히려고 한다는 흐름을 알게 되었다. 예금·대출 금리에도 영향을 준다. (예시 기록)', links: 'https://www.bok.or.kr' }),
     mk('study', d(10), { topic: '분산 투자란?', learned: '한곳에 몰아두지 않고 나누어 두면 한 자산이 흔들려도 전체 충격이 줄어든다는 개념.', links: '' }),
     mk('invest', d(3), { asset: '국내 대형주 ETF (예시)', thought: '뉴스에서 자주 언급되어 관심이 생김. 어떤 기업들이 들어 있는지 궁금했다. (예시 기록)', check: '구성 종목과 운용 보수는 어떻게 되는지.', review: '' }),
@@ -326,6 +342,7 @@ function render() {
   renderBackupBar();
   if (ui.tab === 'body') renderBody();
   else if (ui.tab === 'econ') renderEcon();
+  else if (ui.tab === 'cal') renderCalendar();
   else renderArt();
 }
 
@@ -342,7 +359,7 @@ function actionButtons(type, id) {
    8. 메뉴 1: 운동·바이올린
    --------------------------------------------------------------------- */
 function workoutCard(r) {
-  const parts = [`<b>${esc(r.minutes)}분</b>`];
+  const parts = [];
   if (r.distance) parts.push(`${esc(fmtNum(r.distance))}km`);
   if (r.condition) parts.push(`컨디션 ${esc(r.condition)}`);
   return `<div class="card">
@@ -370,6 +387,7 @@ async function toggleHomework(id, i, done) {
     await saveRecord({ ...r, homework, updatedAt: Date.now() });
   }
   render();
+  refreshDay();
 }
 
 // 바이올린 탭 맨 위: 가장 최근 레슨의 과제
@@ -403,7 +421,7 @@ function violinCard(r) {
   }
   return `<div class="card">
     <div class="item-head">
-      <div><span class="tag violin">바이올린</span> ${r.piece ? `<b>${pieceButton(r.piece)}</b>` : '<span class="meta">(곡 이름 미입력)</span>'} · ${esc(r.minutes)}분${r.tempo ? ` · 템포 ${esc(r.tempo)} BPM` : ''} ${quickTag(r)}</div>
+      <div><span class="tag violin">바이올린</span> ${r.piece ? `<b>${pieceButton(r.piece)}</b>` : '<span class="meta">(곡 이름 미입력)</span>'}${r.tempo ? ` · 템포 ${esc(r.tempo)} BPM` : ''} ${quickTag(r)}</div>
       ${actionButtons('violin', r.id)}
     </div>
     ${textBlock('연습한 부분', r.part)}
@@ -502,10 +520,8 @@ function weekSummaryHTML(start) {
     </div>
     <div class="stats">
       <div class="stat"><b>${ws.length}회</b><span>운동 횟수</span></div>
-      <div class="stat"><b>${sum(ws, 'minutes')}분</b><span>운동 시간</span></div>
       <div class="stat"><b>${esc(fmtNum(km))}km</b><span>이동 거리</span></div>
       <div class="stat"><b>${violinDays}일</b><span>바이올린 연습한 날</span></div>
-      <div class="stat"><b>${sum(prac, 'minutes')}분</b><span>바이올린 연습 시간</span></div>
     </div>
     ${ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)} · 컨디션: ${esc(condText)}</p>` : ''}
     ${lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
@@ -558,7 +574,7 @@ function renderBody() {
 function studyCard(r) {
   return `<div class="card">
     <div class="item-head">
-      <div><h3>${esc(r.topic || '(주제 미입력)')}</h3><div class="meta">${esc(dayLabel(r.date))}${r.minutes ? ` · ${esc(r.minutes)}분` : ''} ${quickTag(r)}</div></div>
+      <div><h3>${esc(r.topic || '(주제 미입력)')}</h3><div class="meta">${esc(dayLabel(r.date))} ${quickTag(r)}</div></div>
       ${actionButtons('study', r.id)}
     </div>
     ${textBlock('배운 내용', r.learned)}
@@ -632,7 +648,7 @@ function artCard(r) {
       ? `<img class="art-img" src="${esc(r.image)}" alt="${esc(r.topic)}" data-act="zoom" data-id="${esc(r.id)}">`
       : '<div class="art-noimg">이미지 없음</div>'}
     <h3>${esc(r.topic || '(주제 미입력)')}</h3>
-    <div class="meta">${esc(dayLabel(r.date))}${r.tools ? ` · ${esc(r.tools)}` : ''}${r.minutes ? ` · ${esc(r.minutes)}분` : ''} ${quickTag(r)}</div>
+    <div class="meta">${esc(dayLabel(r.date))}${r.tools ? ` · ${esc(r.tools)}` : ''} ${quickTag(r)}</div>
     ${details ? `<details open><summary>돌아보기 메모</summary>${details}</details>` : ''}
     <div class="row" style="margin-top:10px">
       ${r.image ? `<button type="button" class="btn ghost small" data-act="compare-prev" data-id="${esc(r.id)}">이전 작업과 비교</button>` : ''}
@@ -708,6 +724,119 @@ function renderArt() {
 }
 
 /* ---------------------------------------------------------------------
+   10-2. 메뉴 4: 캘린더 (2026년부터, 한눈에 보기)
+   --------------------------------------------------------------------- */
+// 달력에 표시할 종류 (icon: 달력에 보이는 그림, label: 이름)
+const CAL_CATS = [
+  { id: 'workout', icon: '🧘', label: '운동', test: (r) => r.type === 'workout' },
+  { id: 'practice', icon: '🎻', label: '바이올린 연습', test: (r) => r.type === 'violin' && r.kind !== '레슨' },
+  { id: 'lesson', icon: '🎓', label: '레슨', test: (r) => r.type === 'violin' && r.kind === '레슨' },
+  { id: 'study', icon: '📚', label: '경제 공부', test: (r) => r.type === 'study' },
+  { id: 'invest', icon: '📊', label: '투자 기록', test: (r) => r.type === 'invest' },
+  { id: 'art', icon: '🎨', label: '그림', test: (r) => r.type === 'art' },
+];
+const catOf = (r) => CAL_CATS.find((c) => c.test(r));
+
+function calTitle(r) {
+  switch (r.type) {
+    case 'workout': return r.kind || '운동';
+    case 'violin': return r.kind === '레슨' ? '레슨' : (r.piece || '연습');
+    case 'study': return r.topic || '공부 메모';
+    case 'invest': return r.asset || '투자 기록';
+    default: return r.topic || '그림';
+  }
+}
+
+const shiftMonth = (ym, n) => {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
+
+function renderCalendar() {
+  const today = todayStr();
+  if (!ui.calMonth) ui.calMonth = today.slice(0, 7);
+  if (ui.calMonth < CALENDAR_START) ui.calMonth = CALENDAR_START;
+  const [y, m] = ui.calMonth.split('-').map(Number);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 월요일 시작 (주간 요약과 같아요)
+  const dayCount = new Date(y, m, 0).getDate();
+
+  // 이 달의 기록을 날짜별·종류별로 모아요
+  const byDate = new Map();
+  const monthCount = new Map();
+  records.forEach((r) => {
+    if (!r.date || r.date.slice(0, 7) !== ui.calMonth) return;
+    const c = catOf(r);
+    if (!c) return;
+    monthCount.set(c.id, (monthCount.get(c.id) || 0) + 1);
+    if (ui.calHidden.has(c.id)) return;
+    if (!byDate.has(r.date)) byDate.set(r.date, new Map());
+    const g = byDate.get(r.date);
+    if (!g.has(c.id)) g.set(c.id, []);
+    g.get(c.id).push(r);
+  });
+
+  const cells = [];
+  for (let i = 0; i < lead; i += 1) cells.push('<div class="cal-cell blank" aria-hidden="true"></div>');
+  for (let d = 1; d <= dayCount; d += 1) {
+    const date = `${ui.calMonth}-${pad(d)}`;
+    const groups = CAL_CATS.filter((c) => byDate.get(date) && byDate.get(date).has(c.id)).map((c) => ({ c, items: byDate.get(date).get(c.id) }));
+    const say = groups.length ? groups.map((g) => `${g.c.label}${g.items.length > 1 ? ` ${g.items.length}개` : ''}`).join(', ') : '기록 없음';
+    cells.push(`<button type="button" class="cal-cell${groups.length ? ' has' : ''}${date === today ? ' today' : ''}" data-act="calDay" data-date="${date}" aria-label="${esc(dayLabel(date))}, ${esc(say)}">
+      <span class="cal-num">${d}</span>
+      <span class="cal-marks">${groups.map((g) => `<span class="cal-mark" title="${esc(g.c.label)}"><span class="cal-ico">${g.c.icon}</span>${g.items.length > 1 ? `<sup>${g.items.length}</sup>` : ''}<span class="cal-t">${esc(calTitle(g.items[0]))}</span></span>`).join('')}</span>
+    </button>`);
+  }
+
+  const startYear = Number(CALENDAR_START.slice(0, 4));
+  const latest = records.reduce((a, r) => Math.max(a, Number((r.date || '0').slice(0, 4)) || 0), 0);
+  const lastYear = Math.max(new Date().getFullYear(), latest) + 10; // 앞으로 10년 이상 넉넉히
+  const yearOpts = [];
+  for (let yy = startYear; yy <= lastYear; yy += 1) yearOpts.push(`<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}년</option>`);
+  const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''}>${i + 1}월</option>`).join('');
+  const summary = CAL_CATS.filter((c) => monthCount.get(c.id)).map((c) => `${c.icon} ${c.label} ${monthCount.get(c.id)}`).join(' · ');
+  const older = records.filter((r) => r.date && r.date.slice(0, 7) < CALENDAR_START).length;
+
+  view.innerHTML = `
+    <h2 class="page-title">캘린더</h2>
+    <p class="page-sub">${startYear}년부터 이어지는 달력이에요. 날짜를 누르면 그날의 기록을 보고, 기록을 더할 수 있어요.</p>
+    <div class="cal-head">
+      <button type="button" class="btn ghost small" data-act="calShift" data-d="-1" ${ui.calMonth <= CALENDAR_START ? 'disabled' : ''}>◀ 이전 달</button>
+      <select class="search" data-cal="year" aria-label="연도" style="min-width:0">${yearOpts.join('')}</select>
+      <select class="search" data-cal="month" aria-label="월" style="min-width:0">${monthOpts}</select>
+      <button type="button" class="btn ghost small" data-act="calShift" data-d="1">다음 달 ▶</button>
+      ${ui.calMonth !== today.slice(0, 7) ? '<button type="button" class="btn ghost small" data-act="calToday">이번 달로</button>' : ''}
+    </div>
+    <div class="chips">${CAL_CATS.map((c) => `<button type="button" class="chip ${ui.calHidden.has(c.id) ? '' : 'active'}" data-act="calCat" data-id="${c.id}" aria-pressed="${!ui.calHidden.has(c.id)}">${c.icon} ${esc(c.label)}</button>`).join('')}</div>
+    <div class="cal-grid" role="grid" aria-label="${y}년 ${m}월">
+      ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
+      ${cells.join('')}
+    </div>
+    <p class="meta" style="margin-top:12px">${summary ? `${y}년 ${m}월의 기록: ${summary}` : `${y}년 ${m}월에는 아직 기록이 없어요.`}</p>
+    ${older ? `<p class="meta">${startYear}년 이전 기록 ${older}개는 달력에 나타나지 않아요. (각 메뉴의 목록에서는 볼 수 있어요.)</p>` : ''}`;
+}
+
+// 날짜를 누르면 그날의 기록을 한 창에 모아 보여줘요
+function openDay(date) {
+  ui.dayOpen = date;
+  const list = records.filter((r) => r.date === date && catOf(r)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const card = { workout: workoutCard, violin: violinCard, study: studyCard, invest: investCard, art: artCard };
+  const add = [['workout', '운동'], ['violin', '바이올린'], ['study', '경제 공부'], ['invest', '투자 기록'], ['art', '그림']]
+    .map(([t, l]) => `<button type="button" class="btn ghost small" data-act="addOn" data-type="${t}" data-date="${date}">＋ ${l}</button>`).join('');
+  openDlg(`
+    <h2>${esc(dayLabel(date))}</h2>
+    <div class="day-list">${list.length ? list.map((r) => card[r.type](r)).join('') : '<div class="empty">이 날은 아직 기록이 없어요.</div>'}</div>
+    <div class="label" style="margin:14px 0 6px">이 날짜에 기록 더하기</div>
+    <div class="row actions-row">${add}</div>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
+}
+
+// 날짜 창 안에서 지우거나 체크했을 때 창의 내용을 새로 고쳐요
+function refreshDay() {
+  if (ui.dayOpen && dlg.open && dlg.querySelector('.day-list')) openDay(ui.dayOpen);
+}
+
+/* ---------------------------------------------------------------------
    11. 입력 창 (추가/수정)
    --------------------------------------------------------------------- */
 function openDlg(html, wide) {
@@ -759,9 +888,17 @@ function updateImagePreview() {
     : '';
 }
 
-function openForm(type, existing) {
+// 저장하고 나면: 캘린더의 '날짜 창'에서 온 거라면 그 창으로 돌아가고, 아니면 창을 닫아요
+function afterSave() {
+  const back = ui.backToDay;
+  render();
+  if (back) openDay(back); else closeDlg();
+}
+
+function openForm(type, existing, presetDate) {
   const schema = SCHEMAS[type];
-  const rec = existing ? { ...existing } : { date: todayStr() };
+  ui.backToDay = dlg.open && dlg.querySelector('.day-list') ? ui.dayOpen : null;
+  const rec = existing ? { ...existing } : { date: presetDate || todayStr() };
   // 종류 칸이 없던 예전 바이올린 기록은 '연습'으로 봐요
   if (schema.kindKey && !rec[schema.kindKey]) rec[schema.kindKey] = schema.fields.find((f) => f.key === schema.kindKey).options[0];
   formImage = rec.image || null;
@@ -850,14 +987,15 @@ async function submitForm(form) {
     type,
     createdAt: old ? old.createdAt : Date.now(),
     updatedAt: Date.now(),
+    ...(old && old.minutes !== undefined ? { minutes: old.minutes } : {}), // 예전 기록의 분 값은 숨기기만 하고 보관
     ...data,
   }; // 예시 표시(sample)는 직접 고치면 사라져요. 내 기록이 되었다는 뜻이에요.
   if (relaxed && !complete) rec.quick = true; // 아직 덜 채웠으면 '간단 기록' 표시 유지
-  if (await saveRecord(rec)) { closeDlg(); render(); }
+  if (await saveRecord(rec)) afterSave();
 }
 
 /* ---------------------------------------------------------------------
-   빠른 기록 (날짜, 종류, 시간, 한 줄 메모만 적는 짧은 입력 창)
+   빠른 기록 (날짜, 종류, 한 줄 메모만 적는 짧은 입력 창)
    --------------------------------------------------------------------- */
 function openQuick(menu) {
   const q = QUICK[menu];
@@ -868,7 +1006,6 @@ function openQuick(menu) {
     <form id="quickForm" data-menu="${menu}" novalidate>
       <div class="field"><label for="q_date">날짜 <span class="req">*</span></label><input id="q_date" name="date" type="date" value="${todayStr()}"></div>
       <div class="field"><label for="q_kind">종류 <span class="req">*</span></label><select id="q_kind" name="kind">${opts}</select></div>
-      <div class="field" id="q_minutesWrap"><label for="q_minutes">시간 (분)${q.minutesRequired ? ' <span class="req">*</span>' : ' - 선택'}</label><input id="q_minutes" name="minutes" type="number" min="1" step="1" inputmode="numeric"></div>
       <div class="field"><label for="q_memo">한 줄 메모${q.memoRequired ? ' <span class="req">*</span>' : ' - 선택'}</label><input id="q_memo" name="memo" type="text" maxlength="200"></div>
       <div class="error" id="formError" role="alert"></div>
       <div class="dlg-actions">
@@ -877,7 +1014,7 @@ function openQuick(menu) {
       </div>
     </form>`);
   syncQuick();
-  $('#q_minutes').focus();
+  $('#q_memo').focus();
 }
 
 // 고른 종류에 맞게 시간 칸을 보이거나 숨기고, 메모 칸 안내 글을 바꿔요
@@ -885,7 +1022,6 @@ function syncQuick() {
   const form = $('#quickForm');
   if (!form) return;
   const k = QUICK[form.dataset.menu].kinds[form.elements.kind.value];
-  $('#q_minutesWrap').hidden = k.minutes === false;
   $('#q_memo').placeholder = k.hint || '';
 }
 
@@ -895,21 +1031,135 @@ async function submitQuick(form) {
   const err = $('#formError');
   const date = form.elements.date.value;
   const memo = form.elements.memo.value.trim();
-  const minRaw = form.elements.minutes.value.trim();
-  const showMin = k.minutes !== false;
   if (!date) { err.textContent = "'날짜' 칸을 채워 주세요."; return; }
-  let minutes;
-  if (showMin && minRaw) {
-    minutes = Number(minRaw);
-    if (!Number.isFinite(minutes) || minutes < 1) { err.textContent = "'시간(분)' 칸에는 1 이상의 숫자를 써 주세요."; return; }
-  } else if (showMin && q.minutesRequired) {
-    err.textContent = "'시간(분)' 칸을 채워 주세요."; return;
-  }
   if (q.memoRequired && !memo) { err.textContent = "'한 줄 메모' 칸을 채워 주세요."; return; }
   const rec = { id: newId(), type: k.type, createdAt: Date.now(), updatedAt: Date.now(), quick: true, date, ...k.data };
-  if (minutes !== undefined) rec.minutes = minutes;
   if (memo) rec[k.memoKey] = memo;
-  if (await saveRecord(rec)) { closeDlg(); render(); }
+  if (await saveRecord(rec)) afterSave();
+}
+
+/* ---------------------------------------------------------------------
+   자동 저장 (내 컴퓨터의 파일에 저장)
+   --------------------------------------------------------------------- */
+const autosaveSupported = () => 'showSaveFilePicker' in window && Store.mode === 'indexeddb';
+
+function backupPayload() {
+  return { app: 'my-journal', version: 1, exportedAt: new Date().toISOString(), records };
+}
+
+// 백업 파일에서 쓸 수 있는 기록만 골라요 (형식이 다르면 null)
+function validRecords(payload) {
+  if (!payload || payload.app !== 'my-journal' || !Array.isArray(payload.records)) return null;
+  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string');
+}
+
+async function refreshAutosaveState() {
+  if (!autosave.handle) { autosave.status = 'off'; return; }
+  try {
+    autosave.status = (await autosave.handle.queryPermission({ mode: 'readwrite' })) === 'granted' ? 'on' : 'paused';
+  } catch (e) { autosave.status = 'paused'; }
+}
+
+function scheduleAutosave() {
+  if (autosave.status !== 'on') return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(runAutosave, 1200); // 짧은 시간에 여러 번 바꿔도 한 번에 저장해요
+}
+
+async function runAutosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  if (!autosave.handle || autosave.status !== 'on') return;
+  try {
+    const w = await autosave.handle.createWritable(); // 다 쓴 뒤에 바뀌어서, 저장 도중 멈춰도 예전 파일이 남아요
+    await w.write(JSON.stringify(backupPayload()));
+    await w.close();
+    autosave.lastSavedAt = new Date();
+  } catch (e) {
+    autosave.status = 'paused';
+  }
+  renderBackupBar();
+  refreshSettings();
+}
+
+function refreshSettings() {
+  if (dlg.open && dlg.querySelector('.settings-list')) openSettings();
+}
+
+async function enableAutosave() {
+  let handle;
+  try {
+    handle = await window.showSaveFilePicker({
+      suggestedName: '나의기록장-자동저장.json',
+      types: [{ description: '기록장 파일', accept: { 'application/json': ['.json'] } }],
+    });
+  } catch (e) { return; } // 파일 고르기를 취소함
+  // 이미 기록이 들어 있는 파일이면 먼저 합쳐요. (빈 기록으로 덮어써서 잃어버리지 않도록)
+  try {
+    const text = await (await handle.getFile()).text();
+    if (text.trim()) {
+      const good = validRecords(JSON.parse(text));
+      if (good === null) throw new Error('형식 오류');
+      if (good.length) {
+        if (!confirm(`이 파일에 기록이 ${good.length}개 들어 있어요.\n지금 기록과 합쳐서 계속 사용할까요?\n(취소하면 자동 저장을 켜지 않아요)`)) return;
+        const mine = new Map(records.map((r) => [r.id, r]));
+        await Store.putMany(good.filter((r) => !mine.has(r.id) || (mine.get(r.id).updatedAt || 0) < (r.updatedAt || 0)));
+        records = await loadRecords();
+      }
+    }
+  } catch (e) {
+    if (!confirm('이 파일은 기록장 파일이 아니에요. 그래도 이 파일에 자동 저장할까요?\n(파일의 기존 내용은 지워져요)')) return;
+  }
+  autosave.handle = handle;
+  autosave.name = handle.name || '';
+  autosave.status = 'on';
+  try {
+    await Store.putMany([{ id: '__meta_autosave', type: 'meta', handle, name: autosave.name }]);
+  } catch (e) { /* 저장 못 하면 이번 사용 중에만 켜져 있어요 */ }
+  await runAutosave();
+  render();
+  refreshSettings();
+}
+
+async function reconnectAutosave() {
+  try {
+    if ((await autosave.handle.requestPermission({ mode: 'readwrite' })) === 'granted') autosave.status = 'on';
+  } catch (e) { /* 허락하지 않으면 그대로 멈춰 있어요 */ }
+  if (autosave.status === 'on') await runAutosave();
+  render();
+  refreshSettings();
+}
+
+async function disableAutosave() {
+  autosave.status = 'off';
+  autosave.handle = null;
+  autosave.name = '';
+  clearTimeout(autosaveTimer);
+  await Store.remove(['__meta_autosave']);
+  render();
+  refreshSettings();
+}
+
+function autosaveCardHTML() {
+  const t = autosave.lastSavedAt ? `${pad(autosave.lastSavedAt.getHours())}:${pad(autosave.lastSavedAt.getMinutes())}` : null;
+  let state;
+  if (!autosaveSupported()) {
+    state = '<p class="meta">이 브라우저에서는 자동 저장을 쓸 수 없어요. 크롬이나 엣지(컴퓨터)에서 열면 쓸 수 있어요. 지금은 아래의 백업 파일을 가끔 내려받아 주세요.</p>';
+  } else if (autosave.status === 'on') {
+    state = `<p class="meta"><b>켜져 있어요</b> · 저장 파일: ${esc(autosave.name)}${t ? ` · 마지막 저장 ${t}` : ''}</p>
+      <button type="button" class="btn ghost small" data-act="autosaveOff">자동 저장 끄기</button>`;
+  } else if (autosave.handle) {
+    state = `<p class="meta"><b>잠시 멈춰 있어요</b> · 저장 파일: ${esc(autosave.name)}<br>브라우저를 다시 열면 한 번 눌러 주세요.</p>
+      <button type="button" class="btn red" data-act="autosaveReconnect">다시 연결</button>
+      <button type="button" class="btn ghost small" data-act="autosaveOff">자동 저장 끄기</button>`;
+  } else {
+    state = '<p class="meta">아직 꺼져 있어요. 켜면서 저장할 파일 위치를 한 번만 골라 주세요.</p><button type="button" class="btn" data-act="autosaveOn">자동 저장 켜기</button>';
+  }
+  return `<div class="card" style="margin:0">
+    <h3>💾 자동 저장 (내 컴퓨터의 파일)</h3>
+    <p class="meta">기록을 바꿀 때마다 내가 고른 파일에도 저장해요. 브라우저의 "쿠키 및 사이트 데이터"를 지워서 기록이 사라져도, 이 파일을 <b>백업 파일 불러오기</b>로 불러오면 되살아나요.</p>
+    ${state}
+  </div>`;
 }
 
 /* ---------------------------------------------------------------------
@@ -932,14 +1182,19 @@ function renderBackupBar() {
   const last = settings.lastBackupAt;
   const days = last ? daysSince(last) : null;
   const snoozed = settings.snoozeUntil && todayStr() < settings.snoozeUntil;
-  const show = records.length > 0 && !snoozed && (last === null || days >= BACKUP_REMIND_DAYS);
-  bar.hidden = !show;
-  bar.innerHTML = !show ? '' : `
-    <span>🔔 ${last === null ? '아직 백업한 적이 없어요' : `마지막 백업 후 ${days}일이 지났어요`}</span>
-    <span class="row">
-      <button type="button" class="btn red small" data-act="backupNow">지금 백업</button>
-      <button type="button" class="btn ghost small" data-act="snooze">나중에</button>
-    </span>`;
+  let html = '';
+  if (autosave.handle && autosave.status === 'paused') {
+    html = `<span>💾 자동 저장이 멈춰 있어요 (브라우저를 다시 열면 한 번 연결이 필요해요)</span>
+      <span class="row"><button type="button" class="btn red small" data-act="autosaveReconnect">다시 연결</button></span>`;
+  } else if (autosave.status !== 'on' && records.length > 0 && !snoozed && (last === null || days >= BACKUP_REMIND_DAYS)) {
+    html = `<span>🔔 ${last === null ? '아직 백업한 적이 없어요' : `마지막 백업 후 ${days}일이 지났어요`}</span>
+      <span class="row">
+        <button type="button" class="btn red small" data-act="backupNow">지금 백업</button>
+        <button type="button" class="btn ghost small" data-act="snooze">나중에</button>
+      </span>`;
+  }
+  bar.hidden = !html;
+  bar.innerHTML = html;
 }
 
 /* ---------------------------------------------------------------------
@@ -952,6 +1207,7 @@ function openSettings() {
     <h2>⚙ 백업·설정</h2>
     <p class="meta">기록 ${records.length}개 · 저장 방식: ${esc(modeText)}</p>
     <div class="settings-list">
+      ${autosaveCardHTML()}
       <div class="card" style="margin:0">
         <h3>백업 파일 만들기</h3>
         <p class="meta">모든 기록(그림 포함)을 파일 하나로 저장해요. 브라우저 기록을 지우기 전이나 컴퓨터를 바꿀 때 꼭 해 두세요.</p>
@@ -978,7 +1234,7 @@ function openSettings() {
 }
 
 async function exportBackup() {
-  const payload = { app: 'my-journal', version: 1, exportedAt: new Date().toISOString(), records };
+  const payload = backupPayload();
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -997,8 +1253,8 @@ async function exportBackup() {
 async function importBackup(file) {
   try {
     const payload = JSON.parse(await file.text());
-    if (!payload || payload.app !== 'my-journal' || !Array.isArray(payload.records)) throw new Error('형식 오류');
-    const good = payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string');
+    const good = validRecords(payload);
+    if (!good) throw new Error('형식 오류');
     if (!good.length) throw new Error('가져올 기록이 없어요');
     if (!confirm(`기록 ${good.length}개를 불러올까요?`)) return;
     await Store.putMany(good);
@@ -1036,10 +1292,20 @@ document.addEventListener('click', async (e) => {
     case 'del': {
       const r = records.find((x) => x.id === id);
       const name = r ? (r.topic || r.piece || r.asset || r.kind || '이 기록') : '이 기록';
-      if (confirm(`'${name}' 기록을 지울까요?\n지운 기록은 되돌릴 수 없어요.`)) { await deleteRecord(id); render(); }
+      if (confirm(`'${name}' 기록을 지울까요?\n지운 기록은 되돌릴 수 없어요.`)) { await deleteRecord(id); render(); refreshDay(); }
       break;
     }
-    case 'closeDlg': closeDlg(); break;
+    case 'closeDlg':
+      if (ui.backToDay && dlg.querySelector('#recForm')) openDay(ui.backToDay); else closeDlg();
+      break;
+    case 'calDay': openDay(el.dataset.date); break;
+    case 'addOn': openForm(type, undefined, el.dataset.date); break;
+    case 'calShift': ui.calMonth = shiftMonth(ui.calMonth, Number(el.dataset.d)); render(); break;
+    case 'calToday': ui.calMonth = todayStr().slice(0, 7); render(); break;
+    case 'calCat':
+      if (ui.calHidden.has(id)) ui.calHidden.delete(id); else ui.calHidden.add(id);
+      render();
+      break;
     case 'clearImage': formImage = null; updateImagePreview(); break;
     case 'zoom': {
       const r = records.find((x) => x.id === id);
@@ -1054,6 +1320,9 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'cmp-first-last': ui.cmpA = null; ui.cmpB = null; render(); break;
+    case 'autosaveOn': await enableAutosave(); break;
+    case 'autosaveReconnect': await reconnectAutosave(); break;
+    case 'autosaveOff': await disableAutosave(); break;
     case 'quick': openQuick(el.dataset.menu); break;
     case 'tempo': openTempo(el.dataset.piece); break;
     case 'backupNow': case 'export': exportBackup(); break;
@@ -1089,7 +1358,13 @@ document.addEventListener('change', async (e) => {
   else if (t.id === 'f_kind' && t.form && t.form.id === 'recForm') { syncKindFields(t.form); }
   else if (t.id === 'q_kind') { syncQuick(); }
   else if (t.dataset.act === 'bodyRange') { ui.bodyAllRange = !t.checked; render(); }
-  else if (t.id === 'artOrder') { ui.artOrder = t.value; render(); }
+  else if (t.dataset.cal) {
+    const [cy, cm] = ui.calMonth.split('-').map(Number);
+    const ny = t.dataset.cal === 'year' ? Number(t.value) : cy;
+    const nm = t.dataset.cal === 'month' ? Number(t.value) : cm;
+    ui.calMonth = `${ny}-${pad(nm)}`;
+    render();
+  } else if (t.id === 'artOrder') { ui.artOrder = t.value; render(); }
   else if (t.dataset.cmp) { ui[t.dataset.cmp === 'a' ? 'cmpA' : 'cmpB'] = t.value; render(); }
   else if (t.id === 'importFile' && t.files[0]) { await importBackup(t.files[0]); }
   else if (t.id === 'f_image' && t.files[0]) {
@@ -1105,7 +1380,7 @@ document.addEventListener('input', (e) => {
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
-dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; });
+dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; ui.dayOpen = null; ui.backToDay = null; });
 
 /* ---------------------------------------------------------------------
    14. 시작
@@ -1113,6 +1388,8 @@ dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; });
 async function loadRecords() {
   const all = await Store.all();
   const st = all.find((r) => r.id === '__meta_settings');
+  const as = all.find((r) => r.id === '__meta_autosave');
+  if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
   if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null };
   seeded = all.some((r) => r.id === '__meta_seeded');
   return all.filter((r) => r.type !== 'meta');
@@ -1121,6 +1398,7 @@ async function loadRecords() {
 async function start() {
   await Store.init();
   records = await loadRecords();
+  await refreshAutosaveState();
   if (!seeded && records.length === 0) {
     const samples = buildSamples();
     await Store.putMany([...samples, { id: '__meta_seeded', type: 'meta' }]);
@@ -1135,6 +1413,8 @@ async function start() {
   }
   render();
 }
+
+document.addEventListener('visibilitychange', () => { if (document.hidden && autosaveTimer) runAutosave(); }); // 탭을 닫기 직전에도 저장
 
 start().catch((err) => {
   view.innerHTML = `<div class="notice" style="max-width:none">시작하는 중 문제가 생겼어요: ${esc(err.message)}<br>크롬 같은 다른 브라우저로 열어 보세요.</div>`;
