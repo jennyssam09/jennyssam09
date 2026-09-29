@@ -13,6 +13,9 @@
 /* ---------------------------------------------------------------------
    1. 설정 (항목 이름과 선택지)
    --------------------------------------------------------------------- */
+// 화면에서는 뺐지만, 예전에 적어 둔 값은 지우지 않고 보관하는 칸
+const HIDDEN_KEYS = ['minutes', 'distance', 'tempo'];
+
 const SCHEMAS = {
   // 운동 기록
   workout: {
@@ -20,7 +23,6 @@ const SCHEMAS = {
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
-      { key: 'distance', label: '거리 (km) - 선택', type: 'number', min: 0, step: 0.01 },
       { key: 'condition', label: '컨디션', type: 'select', options: ['좋음', '보통', '피곤함'] },
       { key: 'memo', label: '메모', type: 'textarea' },
     ],
@@ -33,7 +35,6 @@ const SCHEMAS = {
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['연습', '레슨'], required: true },
       { key: 'piece', label: '곡 이름', type: 'text', required: true, only: '연습', suggest: true },
-      { key: 'tempo', label: '템포 (BPM) - 선택', type: 'number', min: 1, step: 1, only: '연습', hint: '메트로놈 숫자예요. 곡 이름을 누르면 템포 변화를 그래프로 볼 수 있어요.' },
       { key: 'part', label: '연습한 부분', type: 'textarea', only: '연습' },
       { key: 'hard', label: '어려웠던 점', type: 'textarea', only: '연습' },
       { key: 'next', label: '다음 연습 목표', type: 'textarea', only: '연습' },
@@ -138,7 +139,6 @@ const shortDay = (s) => { const d = parseDate(s); return `${d.getMonth() + 1}월
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-const fmtNum = (n) => (Math.round(n * 100) / 100).toString();
 const byNewest = (a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0);
 const byOldest = (a, b) => (a.date || '').localeCompare(b.date || '') || (a.createdAt || 0) - (b.createdAt || 0);
 
@@ -305,14 +305,14 @@ function buildSamples() {
   const mk = (type, date, data) => ({ id: newId(), type, date, sample: true, createdAt: now + (seq++), updatedAt: now, ...data });
   return [
     mk('workout', d(1), { kind: '요가', condition: '좋음', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
-    mk('workout', d(2), { kind: '슬로조깅', distance: 3.1, condition: '보통', memo: '대화할 수 있는 속도로 천천히. (예시 기록)' }),
+    mk('workout', d(2), { kind: '슬로조깅', condition: '보통', memo: '대화할 수 있는 속도로 천천히. (예시 기록)' }),
     mk('workout', d(4), { kind: '요가', condition: '피곤함', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
-    mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, condition: '좋음', memo: '' }),
+    mk('workout', d(8), { kind: '슬로조깅', condition: '좋음', memo: '' }),
     mk('workout', d(9), { kind: '요가', condition: '보통', memo: '' }),
-    mk('violin', d(1), { kind: '연습', tempo: 60, piece: '바흐 미뉴에트 G장조', part: '1~8마디 운지', hard: '3포지션으로 옮길 때 음정이 흔들렸다.', next: '메트로놈 60에 맞춰 9~16마디 연습하기 (예시 기록)' }),
-    mk('violin', d(3), { kind: '연습', tempo: 52, piece: '바흐 미뉴에트 G장조', part: '활 쓰는 법(다운-업)', hard: '활이 줄 위에서 미끄러졌다.', next: '활을 줄에 수직으로 유지하기' }),
-    mk('violin', d(9), { kind: '연습', tempo: 76, piece: '스즈키 1권 - 반짝반짝 변주곡', part: '변주 A, B', hard: '리듬이 자꾸 빨라진다.', next: '천천히 박자 세며 치기' }),
-    mk('violin', d(6), { kind: '연습', tempo: 48, piece: '바흐 미뉴에트 G장조', part: '9~16마디', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
+    mk('violin', d(1), { kind: '연습', piece: '바흐 미뉴에트 G장조', part: '1~8마디 운지', hard: '3포지션으로 옮길 때 음정이 흔들렸다.', next: '메트로놈 60에 맞춰 9~16마디 연습하기 (예시 기록)' }),
+    mk('violin', d(3), { kind: '연습', piece: '바흐 미뉴에트 G장조', part: '활 쓰는 법(다운-업)', hard: '활이 줄 위에서 미끄러졌다.', next: '활을 줄에 수직으로 유지하기' }),
+    mk('violin', d(9), { kind: '연습', piece: '스즈키 1권 - 반짝반짝 변주곡', part: '변주 A, B', hard: '리듬이 자꾸 빨라진다.', next: '천천히 박자 세며 치기' }),
+    mk('violin', d(6), { kind: '연습', piece: '바흐 미뉴에트 G장조', part: '9~16마디', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
     mk('violin', d(5), { kind: '레슨', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '미뉴에트 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습', done: false }] }),
     mk('workout', d(3), { kind: '요가', memo: '퇴근 후 짧게 (간단 기록 예시)', quick: true }),
     mk('study', d(2), { topic: '금리와 물가의 관계', learned: '물가가 오르면 중앙은행이 금리를 올려 소비를 조금 식히려고 한다는 흐름을 알게 되었다. 예금·대출 금리에도 영향을 준다. (예시 기록)', links: 'https://www.bok.or.kr' }),
@@ -360,7 +360,6 @@ function actionButtons(type, id) {
    --------------------------------------------------------------------- */
 function workoutCard(r) {
   const parts = [];
-  if (r.distance) parts.push(`${esc(fmtNum(r.distance))}km`);
   if (r.condition) parts.push(`컨디션 ${esc(r.condition)}`);
   return `<div class="card">
     <div class="item-head">
@@ -406,8 +405,6 @@ function lessonPanel() {
   </section>`;
 }
 
-const pieceButton = (p) => `<button type="button" class="piece-link" data-act="tempo" data-piece="${esc(p)}">${esc(p)}</button>`;
-
 function violinCard(r) {
   if (r.kind === '레슨') {
     return `<div class="card">
@@ -421,7 +418,7 @@ function violinCard(r) {
   }
   return `<div class="card">
     <div class="item-head">
-      <div><span class="tag violin">바이올린</span> ${r.piece ? `<b>${pieceButton(r.piece)}</b>` : '<span class="meta">(곡 이름 미입력)</span>'}${r.tempo ? ` · 템포 ${esc(r.tempo)} BPM` : ''} ${quickTag(r)}</div>
+      <div><span class="tag violin">바이올린</span> ${r.piece ? `<b>${esc(r.piece)}</b>` : '<span class="meta">(곡 이름 미입력)</span>'}${quickTag(r)}</div>
       ${actionButtons('violin', r.id)}
     </div>
     ${textBlock('연습한 부분', r.part)}
@@ -440,64 +437,11 @@ function knownPieces() {
   return out;
 }
 
-// 곡별 템포 변화 그래프 (외부 도구 없이 SVG로 그려요)
-function tempoChartSVG(pts) {
-  const W = 600, H = 280, L = 48, R = 36, T = 28, B = 44;
-  const vals = pts.map((p) => p.tempo);
-  let lo = Math.min(...vals);
-  let hi = Math.max(...vals);
-  if (lo === hi) { lo -= 10; hi += 10; } else { const g = Math.max(5, Math.round((hi - lo) * 0.15)); lo -= g; hi += g; }
-  const step = [1, 2, 5, 10, 20, 25, 50, 100].find((n) => n >= (hi - lo) / 4) || 100; // 눈금은 5·10 단위처럼 딱 떨어지게
-  lo = Math.max(0, Math.floor(lo / step) * step);
-  hi = Math.ceil(hi / step) * step;
-  const t0 = parseDate(pts[0].date).getTime();
-  const t1 = parseDate(pts[pts.length - 1].date).getTime();
-  const x = (d) => (t1 === t0 ? (L + W - R) / 2 : L + ((parseDate(d).getTime() - t0) / (t1 - t0)) * (W - L - R));
-  const y = (v) => T + ((hi - v) / (hi - lo)) * (H - T - B);
-  let grid = '';
-  for (let v = lo; v <= hi; v += step) {
-    grid += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="axis-label" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${Math.round(v)}</text>`;
-  }
-  let xlabels = '';
-  let lastX = -999;
-  pts.forEach((p, i) => {
-    const px = x(p.date);
-    if (i === 0 || i === pts.length - 1 || px - lastX >= 70) {
-      if (i === pts.length - 1 && px - lastX < 70 && i !== 0) return; // 겹치면 마지막 날짜는 표 쪽에서 봐요
-      xlabels += `<text class="axis-label" x="${px}" y="${H - 16}" text-anchor="middle">${esc(shortDay(p.date))}</text>`;
-      lastX = px;
-    }
-  });
-  const line = pts.length > 1 ? `<polyline class="line" points="${pts.map((p) => `${x(p.date)},${y(p.tempo)}`).join(' ')}"/>` : '';
-  const dots = pts.map((p) => `<circle class="dot" cx="${x(p.date)}" cy="${y(p.tempo)}" r="5"/><text class="val" x="${x(p.date)}" y="${y(p.tempo) - 12}" text-anchor="middle">${p.tempo}</text>`).join('');
-  const alt = pts.map((p) => `${shortDay(p.date)} ${p.tempo}BPM`).join(', ');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="템포 변화: ${esc(alt)}">${grid}${line}${dots}${xlabels}</svg>`;
-}
-
-function openTempo(piece) {
-  const byDay = new Map(); // 같은 날 여러 번 연습했으면 마지막 기록을 써요
-  ofType('violin').filter((r) => r.piece === piece && Number(r.tempo) > 0).sort(byOldest)
-    .forEach((r) => byDay.set(r.date, { date: r.date, tempo: Number(r.tempo) }));
-  const pts = [...byDay.values()];
-  let body;
-  if (!pts.length) {
-    body = '<div class="empty">이 곡은 아직 템포(BPM)가 적힌 기록이 없어요. 연습 기록에 템포를 적으면 여기에 그래프가 그려져요.</div>';
-  } else {
-    body = `${tempoChartSVG(pts)}
-      ${pts.length === 1 ? '<p class="meta">템포가 적힌 기록이 하나뿐이에요. 두 번 이상 적으면 선으로 이어져요.</p>' : ''}
-      <table class="tempo-table"><thead><tr><th>날짜</th><th>템포 (BPM)</th></tr></thead>
-      <tbody>${pts.map((p) => `<tr><td>${esc(dayLabel(p.date))}</td><td>${p.tempo}</td></tr>`).join('')}</tbody></table>`;
-  }
-  openDlg(`<h2>🎼 ${esc(piece)} - 템포 변화</h2>${body}
-    <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
-}
-
 function weekSummaryHTML(start) {
   const end = addDays(start, 6);
   const inWeek = (r) => r.date >= start && r.date <= end;
   const ws = ofType('workout').filter(inWeek);
   const vs = ofType('violin').filter(inWeek);
-  const sum = (list, k) => list.reduce((a, r) => a + (Number(r[k]) || 0), 0);
   const count = (list, k, v) => list.filter((r) => r[k] === v).length;
   const prac = vs.filter((r) => r.kind !== '레슨'); // 연습 기록만 (레슨은 따로 세요)
   const lessons = vs.length - prac.length;
@@ -508,7 +452,6 @@ function weekSummaryHTML(start) {
   const condText = condOptions.map((c) => `${c} ${count(ws, 'condition', c)}`).join(' · ');
   const pieces = [...new Set(prac.map((r) => r.piece).filter(Boolean))];
   const lastNext = prac.filter((r) => r.next).sort(byNewest)[0];
-  const km = sum(ws, 'distance');
 
   const label = ui.weekOffset === 0 ? '이번 주' : ui.weekOffset === -1 ? '지난 주' : '';
   return `<section class="card">
@@ -520,12 +463,11 @@ function weekSummaryHTML(start) {
     </div>
     <div class="stats">
       <div class="stat"><b>${ws.length}회</b><span>운동 횟수</span></div>
-      <div class="stat"><b>${esc(fmtNum(km))}km</b><span>이동 거리</span></div>
       <div class="stat"><b>${violinDays}일</b><span>바이올린 연습한 날</span></div>
     </div>
     ${ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)} · 컨디션: ${esc(condText)}</p>` : ''}
     ${lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
-    ${pieces.length ? `<p class="meta" style="margin:4px 0 0">이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}</p>` : ''}
+    ${pieces.length ? `<p class="meta" style="margin:4px 0 0">이 주에 연습한 곡: ${pieces.map(esc).join(', ')}</p>` : ''}
     ${lastNext ? `<p class="meta" style="margin:4px 0 0">가장 최근에 적은 다음 연습 목표: ${esc(lastNext.next)}</p>` : ''}
     ${!ws.length && !vs.length ? '<p class="meta" style="margin:10px 0 0">이 주에는 아직 기록이 없어요.</p>' : ''}
   </section>`;
@@ -1114,7 +1056,7 @@ async function submitForm(form) {
     type,
     createdAt: old ? old.createdAt : Date.now(),
     updatedAt: Date.now(),
-    ...(old && old.minutes !== undefined ? { minutes: old.minutes } : {}), // 예전 기록의 분 값은 숨기기만 하고 보관
+    ...Object.fromEntries(HIDDEN_KEYS.filter((k) => old && old[k] !== undefined).map((k) => [k, old[k]])), // 화면에서 뺀 예전 칸(분·거리·템포)은 숨기기만 하고 값은 보관
     ...data,
   }; // 예시 표시(sample)는 직접 고치면 사라져요. 내 기록이 되었다는 뜻이에요.
   if (relaxed && !complete) rec.quick = true; // 아직 덜 채웠으면 '간단 기록' 표시 유지
@@ -1451,7 +1393,6 @@ document.addEventListener('click', async (e) => {
     case 'autosaveReconnect': await reconnectAutosave(); break;
     case 'autosaveOff': await disableAutosave(); break;
     case 'quick': openQuick(el.dataset.menu); break;
-    case 'tempo': openTempo(el.dataset.piece); break;
     case 'backupNow': case 'export': exportBackup(); break;
     case 'snooze':
       settings.snoozeUntil = addDays(todayStr(), BACKUP_SNOOZE_DAYS);
