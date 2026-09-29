@@ -726,14 +726,22 @@ function renderArt() {
 /* ---------------------------------------------------------------------
    10-2. 메뉴 4: 캘린더 (2026년부터, 한눈에 보기)
    --------------------------------------------------------------------- */
-// 달력에 표시할 종류 (icon: 달력에 보이는 그림, label: 이름)
+// 달력에 표시할 종류 (icon: 달력에 보이는 그림, label: 이름, chip: 위쪽 종류 버튼)
 const CAL_CATS = [
-  { id: 'workout', icon: '🧘', label: '운동', test: (r) => r.type === 'workout' },
-  { id: 'practice', icon: '🎻', label: '바이올린 연습', test: (r) => r.type === 'violin' && r.kind !== '레슨' },
-  { id: 'lesson', icon: '🎓', label: '레슨', test: (r) => r.type === 'violin' && r.kind === '레슨' },
-  { id: 'study', icon: '📚', label: '경제 공부', test: (r) => r.type === 'study' },
-  { id: 'invest', icon: '📊', label: '투자 기록', test: (r) => r.type === 'invest' },
-  { id: 'art', icon: '🎨', label: '그림', test: (r) => r.type === 'art' },
+  { id: 'workout', chip: 'workout', icon: '🧘', label: '운동', test: (r) => r.type === 'workout' },
+  { id: 'practice', chip: 'violin', icon: '🎻', label: '바이올린 연습', test: (r) => r.type === 'violin' && r.kind !== '레슨' },
+  { id: 'lesson', chip: 'violin', icon: '🎓', label: '레슨', test: (r) => r.type === 'violin' && r.kind === '레슨' },
+  { id: 'study', chip: 'study', icon: '📚', label: '경제 공부', test: (r) => r.type === 'study' },
+  { id: 'invest', chip: 'invest', icon: '📊', label: '투자 기록', test: (r) => r.type === 'invest' },
+  { id: 'art', chip: 'art', icon: '🎨', label: '그림', test: (r) => r.type === 'art' },
+];
+// 달력 위쪽의 종류 버튼 (바이올린 버튼 하나가 연습과 레슨을 함께 켜고 꺼요)
+const CAL_CHIPS = [
+  { id: 'workout', icon: '🧘', label: '운동' },
+  { id: 'violin', icon: '🎻', label: '바이올린' },
+  { id: 'study', icon: '📚', label: '경제 공부' },
+  { id: 'invest', icon: '📊', label: '투자 기록' },
+  { id: 'art', icon: '🎨', label: '그림' },
 ];
 const catOf = (r) => CAL_CATS.find((c) => c.test(r));
 
@@ -769,7 +777,7 @@ function renderCalendar() {
     const c = catOf(r);
     if (!c) return;
     monthCount.set(c.id, (monthCount.get(c.id) || 0) + 1);
-    if (ui.calHidden.has(c.id)) return;
+    if (ui.calHidden.has(c.chip)) return;
     if (!byDate.has(r.date)) byDate.set(r.date, new Map());
     const g = byDate.get(r.date);
     if (!g.has(c.id)) g.set(c.id, []);
@@ -807,7 +815,7 @@ function renderCalendar() {
       <button type="button" class="btn ghost small" data-act="calShift" data-d="1">다음 달 ▶</button>
       ${ui.calMonth !== today.slice(0, 7) ? '<button type="button" class="btn ghost small" data-act="calToday">이번 달로</button>' : ''}
     </div>
-    <div class="chips">${CAL_CATS.map((c) => `<button type="button" class="chip ${ui.calHidden.has(c.id) ? '' : 'active'}" data-act="calCat" data-id="${c.id}" aria-pressed="${!ui.calHidden.has(c.id)}">${c.icon} ${esc(c.label)}</button>`).join('')}</div>
+    <div class="chips">${CAL_CHIPS.map((c) => `<button type="button" class="chip ${ui.calHidden.has(c.id) ? '' : 'active'}" data-act="calCat" data-id="${c.id}" aria-pressed="${!ui.calHidden.has(c.id)}">${c.icon} ${esc(c.label)}</button>`).join('')}</div>
     <div class="cal-grid" role="grid" aria-label="${y}년 ${m}월">
       ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
       ${cells.join('')}
