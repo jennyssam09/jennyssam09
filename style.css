@@ -447,3 +447,16 @@ dialog { border-radius: 22px; }
 .cal-cell:hover { border-color: var(--purple); }
 .more { background: var(--bg); border-color: var(--line); border-style: solid; }
 .copy-text, .search { background: var(--bg); border-color: transparent; }
+
+/* 아이맥 24인치(가로로 넓은 데스크톱) 전용 레이아웃 */
+html { font-size: 18px; }
+main { max-width: 1320px; padding: 32px 40px 100px; }
+.top { padding-left: 40px; padding-right: 40px; }
+.top-inner, .top > * { max-width: 1320px; }
+.backup-bar { width: min(1320px, calc(100% - 80px)); }
+dialog.wide { width: min(1240px, 92vw); }
+dialog.roomy { width: min(900px, 92vw); }
+@media (min-width: 1500px) { html { font-size: 19px; } }
+.notice { max-width: 1320px; }
+.top { padding-left: max(40px, calc((100% - 1240px) / 2)); padding-right: max(40px, calc((100% - 1240px) / 2)); }
+.backup-bar, .notice { width: min(1240px, calc(100% - 80px)); max-width: none; }
