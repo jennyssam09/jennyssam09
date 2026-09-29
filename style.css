@@ -11,6 +11,11 @@
   --warm-soft: #f6e6d8;
   --danger: #a8402f;
   --radius: 12px;
+  /* 새 기능용 강조색: 딥 레드(중요) 와 보라(일반) 두 가지만 써요 */
+  --red: #a3152f;
+  --red-soft: #f8e7ea;
+  --purple: #78579e;
+  --purple-soft: #efe9f5;
 }
 
 * { box-sizing: border-box; }
@@ -154,4 +159,63 @@ dialog.wide { width: min(1000px, 96vw); }
   html { font-size: 16px; }
   .compare { grid-template-columns: 1fr; }
   .top { padding: 8px 12px; }
+  .top h1 { flex: 1; }
+  .tabs { order: 3; flex: 1 1 100%; gap: 4px; }
+  .tab { flex: 1 1 0; padding: 6px 4px; font-size: .85rem; line-height: 1.25; text-align: center; }
+  /* 휴대폰: 버튼과 입력 칸을 손가락으로 누르기 편하게 */
+  .btn { min-height: 46px; padding: 10px 16px; }
+  .btn.small { min-height: 40px; padding: 6px 12px; }
+  .field input, .field select { min-height: 46px; }
+  .field input, .field select, .field textarea { font-size: 16px; padding: 10px 12px; }
+  .field textarea { min-height: 96px; }
+  .search { min-height: 44px; font-size: 16px; }
+  .tab, .chip { min-height: 42px; }
+  .actions-row { width: 100%; }
+  .actions-row .btn { flex: 1 1 150px; }
+  .hw label { min-height: 46px; align-items: center; padding: 6px 0; }
+  .hw input { width: 24px; height: 24px; margin-top: 0; }
+  .piece-link { padding: 8px 0; }
+  .backup-bar .row { width: 100%; }
+  .backup-bar .row .btn { flex: 1; }
 }
+
+/* ---------- 새 기능: 색 버튼, 알림 줄, 간단 기록, 레슨, 그래프 ---------- */
+.field[hidden] { display: none; }
+.btn.red { background: var(--red); border-color: var(--red); }
+.btn.purple { background: var(--purple); border-color: var(--purple); }
+.btn.ghost.purple { background: transparent; color: var(--purple); }
+.btn.ghost.purple:hover { background: var(--purple-soft); }
+
+.backup-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px;
+  width: min(980px, calc(100% - 32px)); margin: 12px auto 0; padding: 10px 14px;
+  background: var(--red-soft); color: var(--red); font-weight: 700;
+  border: 1px solid var(--red); border-left-width: 5px; border-radius: var(--radius);
+}
+.backup-bar[hidden] { display: none; }
+.backup-bar .btn.ghost { color: var(--red); border-color: var(--red); }
+.backup-bar .btn.ghost:hover { background: #f1d3d9; }
+
+.tag.quick, .tag.lesson { background: var(--purple-soft); color: var(--purple); }
+
+.piece-link {
+  border: 0; background: none; padding: 2px 0; font: inherit; font-weight: 700;
+  color: var(--purple); text-decoration: underline; cursor: pointer;
+}
+.piece-link:hover { filter: brightness(.85); }
+
+.lesson-panel { border-left: 5px solid var(--purple); }
+.hw { list-style: none; margin: 6px 0 0; padding: 0; }
+.hw label { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+.hw input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
+.hw .done { text-decoration: line-through; color: var(--muted); }
+
+.chart { width: 100%; height: auto; display: block; margin-bottom: 8px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis-label { fill: var(--muted); font-size: 12px; }
+.chart .line { fill: none; stroke: var(--purple); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--purple); stroke: #fff; stroke-width: 2; }
+.chart .val { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.tempo-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.tempo-table th, .tempo-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.tempo-table th { color: var(--muted); font-weight: 700; }
