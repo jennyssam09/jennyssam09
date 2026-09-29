@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>나의 기록장</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>📓 나의 기록장</h1>
+    <nav id="tabs" class="tabs" aria-label="메뉴"></nav>
+    <button id="settingsBtn" class="btn ghost" type="button">⚙ 백업·설정</button>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+  <main id="view"></main>
+
+  <!-- 기록 입력/수정, 설정, 이미지 확대 창이 이 안에서 열려요 -->
+  <dialog id="dlg"></dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
