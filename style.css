@@ -138,6 +138,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(40, 32, 20, .45); }
 dialog.wide { width: min(1000px, 96vw); }
+dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여유 있게 */
 .dlg-body { padding: 20px 22px; max-height: 88vh; overflow: auto; }
 .dlg-body h2 { margin-bottom: 12px; font-size: 1.2rem; }
 .field { margin-bottom: 12px; }
@@ -195,7 +196,7 @@ dialog.wide { width: min(1000px, 96vw); }
 .backup-bar .btn.ghost { color: var(--red); border-color: var(--red); }
 .backup-bar .btn.ghost:hover { background: #f1d3d9; }
 
-.tag.quick, .tag.lesson { background: var(--purple-soft); color: var(--purple); }
+.tag.quick, .tag.lesson, .tag.rest { background: var(--purple-soft); color: var(--purple); }
 
 .lesson-panel { border-left: 5px solid var(--purple); }
 .hw { list-style: none; margin: 6px 0 0; padding: 0; }
@@ -215,6 +216,11 @@ dialog.wide { width: min(1000px, 96vw); }
 .cal-cell:hover { border-color: var(--accent); }
 .cal-cell.blank { background: transparent; border-color: transparent; cursor: default; }
 .cal-cell.has { background: var(--accent-soft); }
+/* 연습량이 적힌 날: 그날 가장 높은 연습량에 따라 보라색 배경이 조금씩 진해져요 (첫 줄은 color-mix를 못 쓰는 브라우저용) */
+.cal-cell.amt1 { background: var(--purple-soft); }
+.cal-cell.amt2 { background: var(--purple-soft); background: color-mix(in srgb, var(--purple-soft) 82%, var(--purple)); }
+.cal-cell.amt3 { background: var(--purple-soft); background: color-mix(in srgb, var(--purple-soft) 66%, var(--purple)); }
+.cal-cell.rest-only { background: var(--card); } /* 쉰 날은 색 없이 😴만 조용히 */
 .cal-cell.today { outline: 2px solid var(--purple); outline-offset: -1px; }
 .cal-cell:disabled { cursor: default; }
 .cal-num { font-weight: 700; font-size: .85rem; }
@@ -249,6 +255,7 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
   font-size: 1.3rem; font-weight: 700; color: var(--purple); text-align: center; padding: 20px;
 }
 .drop-overlay[hidden], .toast[hidden] { display: none; }
+.toast:not([hidden]) { display: flex; align-items: center; gap: 10px; }
 .toast {
   position: fixed; inset: auto auto 24px 50%; margin: 0; border: 0; transform: translateX(-50%); z-index: 30;
   width: max-content; height: auto; max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px; overflow: visible;
@@ -268,3 +275,67 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .copy-text { width: 100%; min-height: 300px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; line-height: 1.55; }
 .copy-state { min-height: 1.5em; margin: 6px 0 0; color: var(--accent); font-weight: 700; font-size: .9rem; }
 .total-card h3 { font-size: .95rem; color: var(--accent); }
+
+/* ---------- 연습량·기분 버튼, 카드의 작은 표시 ---------- */
+.choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-btn {
+  border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  padding: 6px 16px; border-radius: 999px; cursor: pointer; font-weight: 600;
+}
+.choice-btn:hover { border-color: var(--purple); }
+.choice-btn.on { border-color: var(--purple); background: var(--purple-soft); color: var(--purple); }
+.choice-btn .ci { letter-spacing: 1px; }
+.amt { margin-right: 6px; color: var(--purple); letter-spacing: 2px; font-size: .85rem; }
+.mood { margin-right: 6px; font-size: 1rem; }
+
+/* ---------- ✏️ 오늘 탭 ---------- */
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 14px; }
+.today-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 100px; padding: 12px; cursor: pointer; font-weight: 700; font-size: 1.05rem;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+}
+.today-btn .ti { font-size: 2.1rem; line-height: 1; }
+.today-btn:hover { border-color: var(--accent); }
+.today-btn.on { border-color: var(--purple); background: var(--purple-soft); color: var(--purple); }
+.today-panel { border-left: 5px solid var(--purple); }
+.today-panel h3 { margin-bottom: 10px; }
+.rec-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rec-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card); font-weight: 600;
+}
+.rec-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.rec-chip .amt, .rec-chip .mood { margin-right: 0; }
+
+/* 그때의 나 */
+.memory { margin-top: 22px; }
+.memory h3 { font-size: .95rem; color: var(--accent); margin-bottom: 8px; }
+.memory-body {
+  display: flex; gap: 14px; align-items: flex-start; width: 100%; padding: 0; text-align: left;
+  border: 0; background: transparent; cursor: pointer; font: inherit; color: inherit;
+}
+.memory-img { width: 140px; height: 105px; object-fit: contain; border-radius: 8px; background: var(--bg); flex-shrink: 0; }
+.memory-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.memory-line { color: var(--muted); font-size: .92rem; }
+
+/* 도장 토스트 */
+.toast .stamp { display: inline-block; font-size: 1.7rem; line-height: 1; transform: rotate(-8deg); }
+.toast-btn {
+  border: 1px solid var(--card); background: transparent; color: var(--card); cursor: pointer;
+  padding: 4px 12px; border-radius: 8px; font-weight: 700; white-space: nowrap;
+}
+.toast-btn:hover { background: var(--card); color: var(--ink); }
+
+/* ---------- 📖 돌아보기 창 ---------- */
+.recap-sec { margin-top: 16px; }
+.recap-sec h3 { font-size: .95rem; color: var(--accent); margin-bottom: 6px; }
+.recap-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.recap-chip { padding: 4px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.recap-big { margin: 0 0 4px; font-size: 1.1rem; font-weight: 700; }
+.recap-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.recap-fig { margin: 0; }
+.recap-img { cursor: default; aspect-ratio: auto; max-height: 260px; }
+.recap-fig figcaption { margin-top: 6px; font-size: .88rem; color: var(--muted); }
+.recap-quote { padding: 8px 12px; margin-bottom: 8px; border-left: 4px solid var(--purple); background: var(--purple-soft); border-radius: 0 10px 10px 0; }
+@media (max-width: 640px) { .recap-figs { grid-template-columns: 1fr; } }
