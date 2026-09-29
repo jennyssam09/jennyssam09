@@ -25,6 +25,8 @@ const SCHEMAS = {
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
       { key: 'condition', label: '컨디션', type: 'select', options: ['좋음', '보통', '피곤함'] },
       { key: 'memo', label: '메모', type: 'textarea' },
+      { key: 'shots', label: '워치 캡처', type: 'images', noun: '워치 캡처', hint: '갤럭시 워치·삼성 헬스 화면을 캡처해서 붙여 두세요.' },
+      { key: 'claude', label: '클로드 피드백', type: 'textarea', hint: '클로드가 해 준 말을 그대로 붙여넣어 두세요. 나중에 카드나 캘린더의 날짜 창에서 다시 볼 수 있어요.' },
     ],
   },
   // 바이올린 기록
@@ -120,6 +122,12 @@ const BACKUP_SNOOZE_DAYS = 3;
 
 // 사진을 저장할 때 긴 변의 최대 크기(픽셀). 커질수록 선명하지만 저장 공간을 더 써요.
 const IMAGE_MAX_SIZE = 1600;
+
+// 운동 기록 하나에 붙일 수 있는 워치 캡처의 최대 장수
+const SHOT_MAX = 4;
+
+// '클로드에게 보낼 요약'의 맨 아래에 붙는 부탁 글이에요. 마음에 드는 말로 바꿔도 돼요.
+const CLAUDE_REQUEST = '위 기록을 참고해서, 함께 올리는 갤럭시 워치 캡처를 보고 이번 주를 돌아보는 피드백을 부탁해요. 잘했는지 점수를 매기기보다, 눈에 띄는 변화와 다음 주에 해 볼 만한 작은 제안을 알려 주세요.';
 
 /* ---------------------------------------------------------------------
    2. 작은 도구들 (날짜, 글자 처리)
@@ -235,7 +243,7 @@ const Store = {
    --------------------------------------------------------------------- */
 let records = [];   // 전체 기록 (메모리에 복사해 두고 화면에 사용)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
-let settings = { lastBackupAt: null, snoozeUntil: null }; // 마지막 백업 날짜, 알림 미루기
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false }; // 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -358,6 +366,13 @@ function actionButtons(type, id) {
 /* ---------------------------------------------------------------------
    8. 메뉴 1: 운동·바이올린
    --------------------------------------------------------------------- */
+// 워치 캡처 작은 그림들 (누르면 크게 보여요)
+function shotsHTML(r) {
+  const list = Array.isArray(r.shots) ? r.shots : [];
+  if (!list.length) return '';
+  return `<div class="shot-row">${list.map((src, i) => `<img class="shot-img" src="${esc(src)}" alt="워치 캡처 ${i + 1}" data-act="zoomShot" data-id="${esc(r.id)}" data-i="${i}">`).join('')}</div>`;
+}
+
 function workoutCard(r) {
   const parts = [];
   if (r.condition) parts.push(`컨디션 ${esc(r.condition)}`);
@@ -367,6 +382,8 @@ function workoutCard(r) {
       ${actionButtons('workout', r.id)}
     </div>
     ${r.memo ? `<p class="pre">${esc(r.memo)}</p>` : ''}
+    ${shotsHTML(r)}
+    ${r.claude ? `<details class="claude-fb"><summary>💬 클로드 피드백</summary><p class="pre">${esc(r.claude)}</p></details>` : ''}
   </div>`;
 }
 
@@ -437,22 +454,29 @@ function knownPieces() {
   return out;
 }
 
-function weekSummaryHTML(start) {
+// 한 주의 숫자들 (화면의 주간 요약과 '클로드에게 보낼 요약'이 함께 써요)
+function weekStats(start) {
   const end = addDays(start, 6);
   const inWeek = (r) => r.date >= start && r.date <= end;
   const ws = ofType('workout').filter(inWeek);
   const vs = ofType('violin').filter(inWeek);
   const count = (list, k, v) => list.filter((r) => r[k] === v).length;
   const prac = vs.filter((r) => r.kind !== '레슨'); // 연습 기록만 (레슨은 따로 세요)
-  const lessons = vs.length - prac.length;
-  const violinDays = new Set(prac.map((r) => r.date)).size;
   const wOptions = SCHEMAS.workout.fields.find((f) => f.key === 'kind').options;
-  const kindText = wOptions.map((k) => `${k} ${count(ws, 'kind', k)}회`).join(' · ');
   const condOptions = SCHEMAS.workout.fields.find((f) => f.key === 'condition').options;
-  const condText = condOptions.map((c) => `${c} ${count(ws, 'condition', c)}`).join(' · ');
-  const pieces = [...new Set(prac.map((r) => r.piece).filter(Boolean))];
-  const lastNext = prac.filter((r) => r.next).sort(byNewest)[0];
+  return {
+    end, ws, vs, prac,
+    lessons: vs.length - prac.length,
+    violinDays: new Set(prac.map((r) => r.date)).size,
+    kindText: wOptions.map((k) => `${k} ${count(ws, 'kind', k)}회`).join(' · '),
+    condText: condOptions.map((c) => `${c} ${count(ws, 'condition', c)}`).join(' · '),
+    pieces: [...new Set(prac.map((r) => r.piece).filter(Boolean))],
+    lastNext: prac.filter((r) => r.next).sort(byNewest)[0],
+  };
+}
 
+function weekSummaryHTML(start) {
+  const { end, ws, vs, lessons, violinDays, kindText, condText, pieces, lastNext } = weekStats(start);
   const label = ui.weekOffset === 0 ? '이번 주' : ui.weekOffset === -1 ? '지난 주' : '';
   return `<section class="card">
     <div class="week-head">
@@ -469,7 +493,99 @@ function weekSummaryHTML(start) {
     ${lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
     ${pieces.length ? `<p class="meta" style="margin:4px 0 0">이 주에 연습한 곡: ${pieces.map(esc).join(', ')}</p>` : ''}
     ${lastNext ? `<p class="meta" style="margin:4px 0 0">가장 최근에 적은 다음 연습 목표: ${esc(lastNext.next)}</p>` : ''}
-    ${!ws.length && !vs.length ? '<p class="meta" style="margin:10px 0 0">이 주에는 아직 기록이 없어요.</p>' : ''}
+    ${!ws.length && !vs.length ? '<p class="meta" style="margin:10px 0 0">이 주에는 아직 기록이 없어요.</p>' : `<div class="row" style="margin-top:12px">
+      <button type="button" class="btn ghost purple small" data-act="copyWeek">📋 클로드에게 보낼 요약 복사</button>
+    </div>`}
+  </section>`;
+}
+
+// 클로드에게 붙여넣을 한 주의 글 (워치 캡처는 그림이라 글에 들어가지 않아요. 대화창에 따로 올려 주세요)
+const oneLine = (s) => String(s || '').trim().replace(/\s*\n\s*/g, ' / ');
+const mdLabel = (s) => { const d = parseDate(s); return `${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})`; };
+
+function weekTextForClaude(start) {
+  const { end, ws, vs, violinDays, lessons, kindText, condText } = weekStats(start);
+  const L = [
+    `📓 주간 기록 요약 (${shortDay(start)} ~ ${shortDay(end)})`,
+    '',
+    '■ 한눈에',
+    `- 운동 ${ws.length}회${ws.length ? ` (${kindText}) · 컨디션: ${condText}` : ''}`,
+    `- 바이올린 연습한 날 ${violinDays}일${lessons ? `, 레슨 ${lessons}회` : ''}`,
+  ];
+  if (ws.length) {
+    L.push('', '■ 운동');
+    ws.sort(byOldest).forEach((r) => L.push(`- ${[mdLabel(r.date), r.kind || '운동', r.condition && `컨디션 ${r.condition}`, r.memo && `메모: ${oneLine(r.memo)}`].filter(Boolean).join(' · ')}`));
+  }
+  if (vs.length) {
+    L.push('', '■ 바이올린');
+    vs.sort(byOldest).forEach((r) => {
+      if (r.kind === '레슨') {
+        const hw = (Array.isArray(r.homework) ? r.homework : []).map((t) => `${t.done ? '[완료]' : '[미완료]'} ${t.text}`).join(' / ');
+        L.push(`- ${[mdLabel(r.date), '레슨', r.feedback && `선생님 피드백: ${oneLine(r.feedback)}`, hw && `과제: ${hw}`].filter(Boolean).join(' · ')}`);
+      } else {
+        L.push(`- ${[mdLabel(r.date), '연습', r.piece && `곡: ${r.piece}`, r.part && `연습한 부분: ${oneLine(r.part)}`, r.hard && `어려웠던 점: ${oneLine(r.hard)}`, r.next && `다음 목표: ${oneLine(r.next)}`].filter(Boolean).join(' · ')}`);
+      }
+    });
+  }
+  L.push('', '■ 부탁', CLAUDE_REQUEST);
+  return L.join('\n');
+}
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch (e) { /* 아래의 예전 방식으로 다시 해 봐요 */ }
+  try {
+    const ta = $('#copyText');
+    ta.focus(); ta.select();
+    return document.execCommand('copy');
+  } catch (e) { return false; }
+}
+
+async function copyFromBox() {
+  const ta = $('#copyText');
+  if (!ta) return;
+  const ok = await copyToClipboard(ta.value);
+  $('#copyState').textContent = ok
+    ? '✓ 복사했어요. 클로드 대화창에 붙여넣고(Ctrl+V), 워치 캡처는 함께 올려 주세요. 글을 고친 뒤 다시 복사해도 돼요.'
+    : '자동으로 복사하지 못했어요. 아래 글을 직접 선택해서 복사해 주세요. (Ctrl+C)';
+  if (!ok) { ta.focus(); ta.select(); }
+}
+
+function openWeekCopy() {
+  const start = addDays(mondayOf(todayStr()), ui.weekOffset * 7);
+  openDlg(`
+    <h2>📋 클로드에게 보낼 요약</h2>
+    <p class="meta" style="margin-top:0">고른 주의 기록을 글로 정리했어요. 열면서 자동으로 복사돼요. 마지막의 부탁 글은 <b>app.js 맨 위의 CLAUDE_REQUEST</b>에서 바꿀 수 있어요.</p>
+    <textarea id="copyText" class="copy-text" spellcheck="false">${esc(weekTextForClaude(start))}</textarea>
+    <p class="copy-state" id="copyState" role="status"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-act="closeDlg">닫기</button>
+      <button type="button" class="btn purple" data-act="copyAgain">📋 다시 복사</button>
+    </div>`, true);
+  copyFromBox();
+}
+
+// 운동 탭: 지금까지 쌓인 기록 (예시 기록은 세지 않아요)
+function totalsCardHTML() {
+  const real = records.filter((r) => !r.sample);
+  const w = real.filter((r) => r.type === 'workout');
+  const v = real.filter((r) => r.type === 'violin');
+  const prac = v.filter((r) => r.kind !== '레슨');
+  const lessons = v.length - prac.length;
+  const pieces = new Set(prac.map((r) => (r.piece || '').trim()).filter(Boolean)).size;
+  const sampleNote = records.some((r) => r.sample) ? ' 예시 기록은 세지 않았어요.' : '';
+  if (!w.length && !v.length) {
+    return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3>
+      <p class="meta" style="margin:4px 0 0">첫 기록을 남기면 여기에 차곡차곡 쌓여요.${sampleNote}</p></section>`;
+  }
+  return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><b>${w.length}회</b><span>운동</span></div>
+      <div class="stat"><b>${new Set(prac.map((r) => r.date)).size}일</b><span>바이올린 연습한 날</span></div>
+      <div class="stat"><b>${pieces}곡</b><span>연습한 곡</span></div>
+      ${lessons ? `<div class="stat"><b>${lessons}회</b><span>레슨</span></div>` : ''}
+    </div>${sampleNote ? `<p class="meta" style="margin:8px 0 0">${sampleNote.trim()}</p>` : ''}
   </section>`;
 }
 
@@ -498,6 +614,7 @@ function renderBody() {
     <p class="page-sub">몸과 손을 쓴 날을 가볍게 남겨요. 잘했는지 못했는지 점수는 매기지 않아요.</p>
     ${lessonPanel()}
     ${weekSummaryHTML(start)}
+    ${totalsCardHTML()}
     <div class="row actions-row" style="margin:14px 0">
       <button type="button" class="btn purple" data-act="quick" data-menu="body">⚡ 빠른 기록</button>
       <button type="button" class="btn" data-act="add" data-type="workout">＋ 운동 기록</button>
@@ -749,6 +866,7 @@ function renderCalendar() {
   const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''}>${i + 1}월</option>`).join('');
   const summary = CAL_CATS.filter((c) => monthCount.get(c.id)).map((c) => `${c.icon} ${c.label} ${monthCount.get(c.id)}`).join(' · ');
   const older = records.filter((r) => r.date && r.date.slice(0, 7) < CALENDAR_START).length;
+  const filled = filledDaysHTML(y, m);
 
   view.innerHTML = `
     <h2 class="page-title">캘린더</h2>
@@ -760,6 +878,7 @@ function renderCalendar() {
       <button type="button" class="btn ghost small" data-act="calShift" data-d="1">다음 달 ▶</button>
       ${ui.calMonth !== today.slice(0, 7) ? '<button type="button" class="btn ghost small" data-act="calToday">이번 달로</button>' : ''}
     </div>
+    ${filled}
     <div class="chips">${CAL_CHIPS.map((c) => `<button type="button" class="chip ${ui.calHidden.has(c.id) ? '' : 'active'}" data-act="calCat" data-id="${c.id}" aria-pressed="${!ui.calHidden.has(c.id)}">${c.icon} ${esc(c.label)}</button>`).join('')}</div>
     <div class="cal-grid" role="grid" aria-label="${y}년 ${m}월">
       ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
@@ -767,6 +886,26 @@ function renderCalendar() {
     </div>
     <p class="meta" style="margin-top:12px">${summary ? `${y}년 ${m}월의 기록: ${summary}` : `${y}년 ${m}월에는 아직 기록이 없어요.`}</p>
     ${older ? `<p class="meta">${startYear}년 이전 기록 ${older}개는 달력에 나타나지 않아요. (각 메뉴의 목록에서는 볼 수 있어요.)</p>` : ''}`;
+}
+
+// 기록한 날이 며칠인지 (하루에 여러 개를 남겨도 1일이에요. 예시 기록은 세지 않아요)
+function filledDaysHTML(y, m) {
+  const real = records.filter((r) => !r.sample && r.date && catOf(r));
+  const days = (list) => new Set(list.map((r) => r.date)).size;
+  const sampleNote = records.some((r) => r.sample) ? ' (예시 기록은 세지 않아요)' : '';
+  if (!real.length) {
+    return `<section class="card total-card"><p class="meta" style="margin:0">🌱 첫 기록을 남기면 여기에 기록한 날이 쌓여요.${sampleNote}</p></section>`;
+  }
+  const first = real.map((r) => r.date).sort()[0];
+  const since = daysSince(first);
+  return `<section class="card total-card">
+    <div class="stats">
+      <div class="stat"><b>${days(real.filter((r) => r.date.slice(0, 7) === ui.calMonth))}일</b><span>${m}월에 기록한 날</span></div>
+      <div class="stat"><b>${days(real.filter((r) => r.date.slice(0, 4) === String(y)))}일</b><span>${y}년에 기록한 날</span></div>
+      <div class="stat"><b>${days(real)}일</b><span>지금까지 기록한 날</span></div>
+    </div>
+    <p class="meta" style="margin:8px 0 0">🌱 ${since > 0 ? `${esc(dayLabel(first))}에 처음 남긴 뒤로 ${since}일이 지났어요.` : '오늘 첫 기록을 남겼어요.'}${sampleNote}</p>
+  </section>`;
 }
 
 // 날짜를 누르면 그날의 기록을 한 창에 모아 보여줘요
@@ -797,8 +936,41 @@ function toast(msg, ms = 6000) {
   const el = $('#toast');
   el.textContent = msg;
   el.hidden = false;
+  // popover로 띄우면 열려 있는 창(날짜 창 등) 위에도 보여요. 못 쓰는 브라우저에서는 그냥 아래쪽에 떠요.
+  try { if (el.showPopover) { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); } } catch (e) { /* 괜찮아요 */ }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
+  toastTimer = setTimeout(() => {
+    el.hidden = true;
+    try { if (el.hidePopover && el.matches(':popover-open')) el.hidePopover(); } catch (e) { /* 괜찮아요 */ }
+  }, ms);
+}
+
+/* ---------------------------------------------------------------------
+   축하 한 줄 (새 기록을 저장한 뒤 잠깐 나타나요. 점수나 평가가 아니라 '남겼다'는 사실만 알려줘요)
+   --------------------------------------------------------------------- */
+const isMilestone = (n) => [5, 10, 20, 30, 50].includes(n) || (n >= 100 && n % 50 === 0);
+
+function celebrationText(rec) {
+  const c = catOf(rec);
+  if (!c || !rec.date) return '';
+  const real = records.filter((r) => !r.sample && r.date && catOf(r)); // 예시 기록은 세지 않아요
+  const dayCount = (list) => new Set(list.map((r) => r.date)).size;
+  if (real.length === 1) return '🌱 첫 기록을 남겼어요. 여기서부터 차곡차곡 쌓여요.';
+  const newDay = real.filter((r) => r.date === rec.date).length === 1; // 이 날의 첫 기록인지
+  const allDays = dayCount(real);
+  if (newDay && isMilestone(allDays)) return `🎉 기록한 날이 모두 ${allDays}일이 되었어요.`;
+  const nth = real.filter((r) => catOf(r).id === c.id).length;
+  if (isMilestone(nth)) return `${c.icon} ${c.label} ${nth}번째${c.label.endsWith('기록') ? '예요' : ' 기록이에요'} 🎉`;
+  const ym = rec.date.slice(0, 7);
+  const monthDays = dayCount(real.filter((r) => r.date.slice(0, 7) === ym));
+  const head = rec.date === todayStr() ? '오늘도 남겼어요' : `${shortDay(rec.date)} 기록을 남겼어요`;
+  return `🌱 ${head}${newDay && monthDays >= 2 ? ` · ${Number(ym.slice(5))}월에 ${monthDays}일 기록했어요` : ''}`;
+}
+
+function celebrate(rec) {
+  if (settings.celebrateOff) return;
+  const msg = celebrationText(rec);
+  if (msg) toast(msg, 5000);
 }
 
 // 사진 파일 하나 → 새 그림 입력 창(사진이 붙은 채로 열림), 여러 장 → 한 장씩 "간단 기록"으로 만들기
@@ -833,9 +1005,22 @@ async function addArtFromFiles(files) {
 }
 
 const hasFiles = (e) => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
-const artFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone');
-const canDropNewArt = () => ui.tab === 'art' && !dlg.open;
+const imgFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone');
+const multiFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone[data-multi]');
+// 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 그림 화면(그림 기록), 운동·바이올린 화면(운동 기록에 워치 캡처)
+const dropTarget = () => (dlg.open ? null : ui.tab === 'art' ? 'art' : ui.tab === 'body' ? 'body' : null);
+const DROP_HINT = { art: '🖼 여기에 놓으면 새 그림 기록이 만들어져요', body: '🖼 여기에 놓으면 새 운동 기록에 워치 캡처가 붙어요' };
 let dragTimer = null;
+
+// 운동 기록 입력 창을 열고 워치 캡처를 붙여 줘요 (날짜는 사진 파일의 날짜)
+async function addWorkoutFromFiles(files) {
+  const imgs = files.filter(isImage);
+  if (!imgs.length) { toast('이미지 파일(사진)만 올릴 수 있어요.'); return; }
+  openForm('workout');
+  const dateInput = $('#f_date');
+  if (dateInput) dateInput.value = dateOfFile(imgs[0]);
+  await attachShots(imgs);
+}
 
 function endDrag() {
   clearTimeout(dragTimer);
@@ -849,7 +1034,12 @@ document.addEventListener('dragover', (e) => {
   e.preventDefault(); // 이렇게 해야 브라우저가 사진을 열어 버리면서 기록장이 사라지지 않아요
   const z = $('#dropZone');
   if (z) z.classList.toggle('over', !!(e.target.closest && e.target.closest('#dropZone')));
-  if (canDropNewArt()) $('#dropOverlay').hidden = false;
+  const target = dropTarget();
+  if (target) {
+    const box = $('#dropOverlay');
+    box.firstElementChild.textContent = DROP_HINT[target];
+    box.hidden = false;
+  }
   clearTimeout(dragTimer);
   dragTimer = setTimeout(endDrag, 250); // 끌고 있는 동안만 안내를 보여줘요
 });
@@ -859,16 +1049,20 @@ document.addEventListener('drop', async (e) => {
   e.preventDefault();
   endDrag();
   const files = [...e.dataTransfer.files];
-  if (artFormOpen()) {
+  const target = dropTarget();
+  if (imgFormOpen()) {
     const imgs = files.filter(isImage);
     if (!imgs.length) { $('#formError').textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return; }
-    if (await attachImage(imgs[0]) && imgs.length > 1) {
+    if (multiFormOpen()) await attachShots(imgs);
+    else if (await attachImage(imgs[0]) && imgs.length > 1) {
       $('#imgNote').textContent = '한 기록에는 그림을 한 장만 넣을 수 있어서 첫 번째만 넣었어요. 여러 장은 그림 화면에 한꺼번에 놓아 보세요.';
     }
-  } else if (canDropNewArt()) {
+  } else if (target === 'art') {
     await addArtFromFiles(files);
+  } else if (target === 'body') {
+    await addWorkoutFromFiles(files);
   } else if (!dlg.open) {
-    toast('그림 사진은 🎨 그림 기록 화면에 끌어다 놓아 주세요.');
+    toast('사진은 🎨 그림 기록 화면이나 🧘 운동·바이올린 화면에 끌어다 놓아 주세요.');
   }
 });
 
@@ -876,8 +1070,10 @@ document.addEventListener('drop', async (e) => {
 document.addEventListener('paste', async (e) => {
   const imgs = [...(e.clipboardData ? e.clipboardData.files : [])].filter(isImage);
   if (!imgs.length) return;
-  if (artFormOpen()) { e.preventDefault(); await attachImage(imgs[0]); }
-  else if (canDropNewArt()) { e.preventDefault(); await addArtFromFiles([imgs[0]]); }
+  const target = dropTarget();
+  if (imgFormOpen()) { e.preventDefault(); if (multiFormOpen()) await attachShots(imgs); else await attachImage(imgs[0]); }
+  else if (target === 'art') { e.preventDefault(); await addArtFromFiles([imgs[0]]); }
+  else if (target === 'body') { e.preventDefault(); await addWorkoutFromFiles(imgs); }
 });
 
 /* ---------------------------------------------------------------------
@@ -891,6 +1087,7 @@ function openDlg(html, wide) {
 function closeDlg() { if (dlg.open) dlg.close(); }
 
 let formImage = null; // 입력 창에서 선택한 이미지(데이터 주소)
+let formShots = []; // 입력 창에서 고른 워치 캡처들
 
 function fieldHTML(f, value) {
   const id = `f_${f.key}`;
@@ -905,6 +1102,12 @@ function fieldHTML(f, value) {
   } else if (f.type === 'select') {
     const opts = (f.options || []).map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('');
     input = `<select id="${id}" name="${f.key}">${f.required ? '' : '<option value="">(선택 안 함)</option>'}${opts}</select>`;
+  } else if (f.type === 'images') { // 여러 장 (워치 캡처)
+    input = `<input id="${id}" type="file" accept="image/*" multiple class="sr-only">
+      <label class="dropzone" id="dropZone" data-multi="1" for="${id}"><span>🖼 여기에 ${esc(f.noun || '사진')}를 끌어다 놓거나, 눌러서 고르세요</span>
+        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${SHOT_MAX}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
+      <div class="hint" id="imgNote"></div>
+      <div id="imgPreviewBox"></div>`;
   } else if (f.type === 'image') {
     input = `<input id="${id}" type="file" accept="image/*" class="sr-only">
       <label class="dropzone" id="dropZone" for="${id}"><span>🖼 여기에 그림을 끌어다 놓거나, 눌러서 고르세요</span>
@@ -930,6 +1133,12 @@ function syncKindFields(form) {
 function updateImagePreview() {
   const box = $('#imgPreviewBox');
   if (!box) return;
+  if ($('#dropZone').dataset.multi) { // 여러 장: 작은 그림들과 '빼기' 버튼
+    box.innerHTML = formShots.length
+      ? `<div class="shot-row">${formShots.map((src, i) => `<div class="shot"><img class="shot-img" src="${esc(src)}" alt="고른 사진 ${i + 1}"><button type="button" class="btn ghost small" data-act="removeShot" data-i="${i}">빼기</button></div>`).join('')}</div>`
+      : '';
+    return;
+  }
   box.innerHTML = formImage
     ? `<img class="preview" src="${esc(formImage)}" alt="선택한 그림"><button type="button" class="btn ghost small" data-act="clearImage" style="margin-top:6px">이미지 빼기</button>`
     : '';
@@ -949,6 +1158,7 @@ function openForm(type, existing, presetDate) {
   // 종류 칸이 없던 예전 바이올린 기록은 '연습'으로 봐요
   if (schema.kindKey && !rec[schema.kindKey]) rec[schema.kindKey] = schema.fields.find((f) => f.key === schema.kindKey).options[0];
   formImage = rec.image || null;
+  formShots = Array.isArray(rec.shots) ? [...rec.shots] : [];
   const datalist = type === 'violin'
     ? `<datalist id="pieceList">${knownPieces().map((p) => `<option value="${esc(p)}">`).join('')}</datalist>` : '';
   openDlg(`
@@ -994,6 +1204,24 @@ async function attachImage(file) {
   }
 }
 
+// 입력 창에 워치 캡처 여러 장 붙이기 (SHOT_MAX장까지)
+async function attachShots(files) {
+  const err = $('#formError');
+  const note = $('#imgNote');
+  const imgs = files.filter(isImage);
+  if (!imgs.length) { if (err) err.textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return false; }
+  const room = SHOT_MAX - formShots.length;
+  if (room <= 0) { if (note) note.textContent = `캡처는 한 기록에 ${SHOT_MAX}장까지 넣을 수 있어요. 필요 없는 것은 '빼기'를 눌러 주세요.`; return false; }
+  let added = 0;
+  for (const f of imgs.slice(0, room)) {
+    try { formShots.push(await readImage(f)); added += 1; } catch (e) { if (err) err.textContent = '이미지로 열 수 없는 파일은 건너뛰었어요.'; }
+  }
+  updateImagePreview();
+  if (added && err) err.textContent = '';
+  if (note) note.textContent = imgs.length > room ? `${SHOT_MAX}장까지만 넣을 수 있어서 ${room}장만 넣었어요.` : '';
+  return added > 0;
+}
+
 // 사진을 적당한 크기로 줄여서 저장해요 (저장 공간 절약)
 function readImage(file) {
   return new Promise((resolve, reject) => {
@@ -1031,6 +1259,7 @@ async function submitForm(form) {
   for (const f of schema.fields) {
     if (f.only && f.only !== kind) continue; // 다른 종류의 칸은 저장하지 않아요
     if (f.type === 'image') { data[f.key] = formImage || ''; continue; }
+    if (f.type === 'images') { data[f.key] = [...formShots]; continue; }
     if (f.type === 'tasks') {
       const prev = new Map((old && Array.isArray(old[f.key]) ? old[f.key] : []).map((t) => [t.text, !!t.done]));
       data[f.key] = form.elements[f.key].value.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -1060,7 +1289,7 @@ async function submitForm(form) {
     ...data,
   }; // 예시 표시(sample)는 직접 고치면 사라져요. 내 기록이 되었다는 뜻이에요.
   if (relaxed && !complete) rec.quick = true; // 아직 덜 채웠으면 '간단 기록' 표시 유지
-  if (await saveRecord(rec)) afterSave();
+  if (await saveRecord(rec)) { afterSave(); if (!old) celebrate(rec); }
 }
 
 /* ---------------------------------------------------------------------
@@ -1104,7 +1333,7 @@ async function submitQuick(form) {
   if (q.memoRequired && !memo) { err.textContent = "'한 줄 메모' 칸을 채워 주세요."; return; }
   const rec = { id: newId(), type: k.type, createdAt: Date.now(), updatedAt: Date.now(), quick: true, date, ...k.data };
   if (memo) rec[k.memoKey] = memo;
-  if (await saveRecord(rec)) afterSave();
+  if (await saveRecord(rec)) { afterSave(); celebrate(rec); }
 }
 
 /* ---------------------------------------------------------------------
@@ -1289,6 +1518,11 @@ function openSettings() {
         <input type="file" id="importFile" accept=".json,application/json">
       </div>
       <div class="card" style="margin:0">
+        <h3>🎉 축하 한 줄</h3>
+        <p class="meta">새 기록을 저장하면 화면 아래에 잠깐 나타나는 한 줄이에요. 점수나 평가가 아니라, 남겼다는 사실만 알려줘요. 예시 기록은 세지 않아요.</p>
+        <label class="meta"><input type="checkbox" data-act="celebrate" ${settings.celebrateOff ? '' : 'checked'}> 새 기록을 저장할 때 축하 한 줄 보이기</label>
+      </div>
+      <div class="card" style="margin:0">
         <h3>예시 기록 지우기</h3>
         <p class="meta">처음에 들어 있던 예시 기록 ${sampleCount}개를 한 번에 지워요. 내가 쓴 기록은 그대로 남아요. (예시를 직접 수정했다면 내 기록으로 바뀐 거라 남아요.)</p>
         <button type="button" class="btn danger" data-act="clearSamples" ${sampleCount ? '' : 'disabled'}>예시 기록만 지우기</button>
@@ -1376,6 +1610,15 @@ document.addEventListener('click', async (e) => {
       render();
       break;
     case 'clearImage': formImage = null; updateImagePreview(); break;
+    case 'removeShot': formShots.splice(Number(el.dataset.i), 1); updateImagePreview(); { const n = $('#imgNote'); if (n) n.textContent = ''; } break;
+    case 'zoomShot': {
+      const r = records.find((x) => x.id === id);
+      const src = r && Array.isArray(r.shots) ? r.shots[Number(el.dataset.i)] : null;
+      if (src) openDlg(`<img class="zoom-img" src="${esc(src)}" alt="워치 캡처"><p class="meta" style="text-align:center">${esc(dayLabel(r.date))} · ${esc(r.kind || '운동')} · 워치 캡처 ${Number(el.dataset.i) + 1}/${r.shots.length}</p><div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
+      break;
+    }
+    case 'copyWeek': openWeekCopy(); break;
+    case 'copyAgain': await copyFromBox(); break;
     case 'zoom': {
       const r = records.find((x) => x.id === id);
       if (r) openDlg(`<img class="zoom-img" src="${esc(r.image)}" alt="${esc(r.topic)}"><p class="meta" style="text-align:center">${esc(artOptionLabel(r))}</p><div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
@@ -1436,6 +1679,8 @@ document.addEventListener('change', async (e) => {
   else if (t.dataset.cmp) { ui[t.dataset.cmp === 'a' ? 'cmpA' : 'cmpB'] = t.value; render(); }
   else if (t.id === 'importFile' && t.files[0]) { await importBackup(t.files[0]); }
   else if (t.id === 'f_image' && t.files[0]) { await attachImage(t.files[0]); t.value = ''; }
+  else if (t.id === 'f_shots' && t.files.length) { const files = [...t.files]; t.value = ''; await attachShots(files); }
+  else if (t.dataset.act === 'celebrate') { settings.celebrateOff = !t.checked; await saveSettings(); }
   else if (t.id === 'artMulti' && t.files.length) { const files = [...t.files]; t.value = ''; await addArtFromFiles(files); }
 });
 
@@ -1446,7 +1691,7 @@ document.addEventListener('input', (e) => {
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
-dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; ui.dayOpen = null; ui.backToDay = null; });
+dlg.addEventListener('close', () => { dlg.innerHTML = ''; formImage = null; formShots = []; ui.dayOpen = null; ui.backToDay = null; });
 
 /* ---------------------------------------------------------------------
    14. 시작
@@ -1456,7 +1701,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff };
   seeded = all.some((r) => r.id === '__meta_seeded');
   return all.filter((r) => r.type !== 'meta');
 }

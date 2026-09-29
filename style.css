@@ -250,7 +250,21 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 }
 .drop-overlay[hidden], .toast[hidden] { display: none; }
 .toast {
-  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 30;
-  max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px;
+  position: fixed; inset: auto auto 24px 50%; margin: 0; border: 0; transform: translateX(-50%); z-index: 30;
+  width: max-content; height: auto; max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px; overflow: visible;
   background: #2f2a24; color: #fff; box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
 }
+
+/* ---------- 워치 캡처, 클로드 피드백, 요약 복사, 쌓인 기록 ---------- */
+.shot-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.shot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.shot-img {
+  display: block; height: 96px; width: auto; max-width: 100%; object-fit: contain;
+  border: 1px solid var(--line); border-radius: 8px; background: #efe9db; cursor: zoom-in;
+}
+.shot .shot-img { cursor: default; }
+.claude-fb { margin-top: 8px; padding: 4px 12px 8px; border-radius: 10px; background: var(--purple-soft); }
+.claude-fb summary { color: var(--purple); }
+.copy-text { width: 100%; min-height: 300px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; line-height: 1.55; }
+.copy-state { min-height: 1.5em; margin: 6px 0 0; color: var(--accent); font-weight: 700; font-size: .9rem; }
+.total-card h3 { font-size: .95rem; color: var(--accent); }
