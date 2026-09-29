@@ -247,3 +247,27 @@ dialog.wide { width: min(1000px, 96vw); }
   .cal-t { display: none; }
   .cal-mark { font-size: .85rem; }
 }
+
+/* ---------- 그림 올리기 (끌어다 놓기 상자, 안내, 알림) ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-only:focus-visible + label { outline: 2px solid var(--purple); outline-offset: 2px; }
+.field .dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 84px; margin: 0; padding: 14px 12px; text-align: center; cursor: pointer;
+  font-size: .95rem; font-weight: 700; color: var(--purple);
+  background: var(--purple-soft); border: 2px dashed var(--purple); border-radius: 12px;
+}
+.field .dropzone small { font-weight: 400; font-size: .8rem; color: var(--muted); }
+.field .dropzone:hover, .field .dropzone.over { background: #e4d9ef; border-style: solid; }
+label.btn { display: inline-flex; align-items: center; justify-content: center; }
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+  background: rgba(120, 87, 158, .16); border: 4px dashed var(--purple); pointer-events: none;
+  font-size: 1.3rem; font-weight: 700; color: var(--purple); text-align: center; padding: 20px;
+}
+.drop-overlay[hidden], .toast[hidden] { display: none; }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 30;
+  max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px;
+  background: #2f2a24; color: #fff; box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
+}

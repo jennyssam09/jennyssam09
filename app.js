@@ -718,8 +718,11 @@ function renderArt() {
       <div class="row actions-row">
         <button type="button" class="btn purple" data-act="quick" data-menu="art">⚡ 빠른 기록</button>
         <button type="button" class="btn" data-act="add" data-type="art">＋ 그림 기록 추가</button>
+        <input id="artMulti" type="file" accept="image/*" multiple class="sr-only">
+        <label class="btn ghost purple" for="artMulti">🖼 사진 여러 장 올리기</label>
       </div>
     </div>
+    <p class="meta" style="margin:-4px 0 12px">💡 컴퓨터에서는 사진을 이 화면에 끌어다 놓거나 Ctrl+V로 붙여넣어도 돼요. 여러 장을 한꺼번에 올리면 한 장씩 "간단 기록"이 만들어져요.</p>
     ${body}`;
 }
 
@@ -845,6 +848,97 @@ function refreshDay() {
 }
 
 /* ---------------------------------------------------------------------
+   10-3. 그림 올리기 편하게 (끌어다 놓기 · 붙여넣기 · 여러 장 한 번에)
+   --------------------------------------------------------------------- */
+let toastTimer = null;
+function toast(msg, ms = 6000) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
+}
+
+// 사진 파일 하나 → 새 그림 입력 창(사진이 붙은 채로 열림), 여러 장 → 한 장씩 "간단 기록"으로 만들기
+async function addArtFromFiles(files) {
+  const imgs = files.filter(isImage);
+  if (!imgs.length) { toast('이미지 파일(사진)만 올릴 수 있어요.'); return; }
+  if (imgs.length === 1) {
+    openForm('art');
+    const dateInput = $('#f_date');
+    if (dateInput) dateInput.value = dateOfFile(imgs[0]); // 사진 파일의 날짜를 미리 넣어 둬요 (바꿀 수 있어요)
+    await attachImage(imgs[0]);
+    return;
+  }
+  let added = 0;
+  let skipped = 0;
+  for (let i = 0; i < imgs.length; i += 1) {
+    toast(`올리는 중이에요… ${i + 1}/${imgs.length}`, 60000);
+    try {
+      const image = await readImage(imgs[i]);
+      const saved = await saveRecord({
+        id: newId(), type: 'art', createdAt: Date.now() + i, updatedAt: Date.now(),
+        quick: true, date: dateOfFile(imgs[i]), topic: '', image,
+      });
+      if (!saved) break; // 저장 공간이 모자라면 saveRecord가 이미 알려 줬어요
+      added += 1;
+    } catch (e) { skipped += 1; }
+  }
+  render();
+  toast(added
+    ? `${added}장을 "간단 기록"으로 추가했어요. 카드의 '수정'에서 주제와 메모를 채워 보세요.${skipped ? ` (${skipped}장은 이미지로 열 수 없어 건너뛰었어요)` : ''}`
+    : '올리지 못했어요. 이미지 파일인지 확인해 주세요.');
+}
+
+const hasFiles = (e) => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
+const artFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone');
+const canDropNewArt = () => ui.tab === 'art' && !dlg.open;
+let dragTimer = null;
+
+function endDrag() {
+  clearTimeout(dragTimer);
+  $('#dropOverlay').hidden = true;
+  const z = $('#dropZone');
+  if (z) z.classList.remove('over');
+}
+
+document.addEventListener('dragover', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); // 이렇게 해야 브라우저가 사진을 열어 버리면서 기록장이 사라지지 않아요
+  const z = $('#dropZone');
+  if (z) z.classList.toggle('over', !!(e.target.closest && e.target.closest('#dropZone')));
+  if (canDropNewArt()) $('#dropOverlay').hidden = false;
+  clearTimeout(dragTimer);
+  dragTimer = setTimeout(endDrag, 250); // 끌고 있는 동안만 안내를 보여줘요
+});
+
+document.addEventListener('drop', async (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  endDrag();
+  const files = [...e.dataTransfer.files];
+  if (artFormOpen()) {
+    const imgs = files.filter(isImage);
+    if (!imgs.length) { $('#formError').textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return; }
+    if (await attachImage(imgs[0]) && imgs.length > 1) {
+      $('#imgNote').textContent = '한 기록에는 그림을 한 장만 넣을 수 있어서 첫 번째만 넣었어요. 여러 장은 그림 화면에 한꺼번에 놓아 보세요.';
+    }
+  } else if (canDropNewArt()) {
+    await addArtFromFiles(files);
+  } else if (!dlg.open) {
+    toast('그림 사진은 🎨 그림 기록 화면에 끌어다 놓아 주세요.');
+  }
+});
+
+// Ctrl+V(붙여넣기): 캡처하거나 복사한 그림을 바로 넣어요
+document.addEventListener('paste', async (e) => {
+  const imgs = [...(e.clipboardData ? e.clipboardData.files : [])].filter(isImage);
+  if (!imgs.length) return;
+  if (artFormOpen()) { e.preventDefault(); await attachImage(imgs[0]); }
+  else if (canDropNewArt()) { e.preventDefault(); await addArtFromFiles([imgs[0]]); }
+});
+
+/* ---------------------------------------------------------------------
    11. 입력 창 (추가/수정)
    --------------------------------------------------------------------- */
 function openDlg(html, wide) {
@@ -870,7 +964,10 @@ function fieldHTML(f, value) {
     const opts = (f.options || []).map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('');
     input = `<select id="${id}" name="${f.key}">${f.required ? '' : '<option value="">(선택 안 함)</option>'}${opts}</select>`;
   } else if (f.type === 'image') {
-    input = `<input id="${id}" type="file" accept="image/*">
+    input = `<input id="${id}" type="file" accept="image/*" class="sr-only">
+      <label class="dropzone" id="dropZone" for="${id}"><span>🖼 여기에 그림을 끌어다 놓거나, 눌러서 고르세요</span>
+        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 휴대폰은 카메라나 앨범에서 고를 수 있어요</small></label>
+      <div class="hint" id="imgNote"></div>
       <div id="imgPreviewBox"></div>`;
   } else {
     const extra = f.type === 'number' ? ` min="${f.min ?? ''}" step="${f.step ?? 1}" inputmode="decimal"` : '';
@@ -931,6 +1028,28 @@ function openForm(type, existing, presetDate) {
   updateImagePreview();
   const first = dlg.querySelector('input:not([type=file]):not([type=date]), textarea');
   if (first && !existing) first.focus();
+}
+
+const isImage = (f) => !!f && typeof f.type === 'string' && f.type.startsWith('image/');
+// 사진 파일의 날짜 (미래 날짜는 오늘로)
+function dateOfFile(f) {
+  const t = toStr(new Date(f.lastModified || Date.now()));
+  return t > todayStr() ? todayStr() : t;
+}
+
+// 입력 창에 그림 한 장 붙이기
+async function attachImage(file) {
+  const err = $('#formError');
+  if (!isImage(file)) { if (err) err.textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return false; }
+  try {
+    formImage = await readImage(file);
+    updateImagePreview();
+    if (err) err.textContent = '';
+    return true;
+  } catch (e) {
+    if (err) err.textContent = '이 파일은 이미지로 열 수 없어요. 다른 파일을 골라 주세요.';
+    return false;
+  }
 }
 
 // 사진을 적당한 크기로 줄여서 저장해요 (저장 공간 절약)
@@ -1375,10 +1494,8 @@ document.addEventListener('change', async (e) => {
   } else if (t.id === 'artOrder') { ui.artOrder = t.value; render(); }
   else if (t.dataset.cmp) { ui[t.dataset.cmp === 'a' ? 'cmpA' : 'cmpB'] = t.value; render(); }
   else if (t.id === 'importFile' && t.files[0]) { await importBackup(t.files[0]); }
-  else if (t.id === 'f_image' && t.files[0]) {
-    try { formImage = await readImage(t.files[0]); updateImagePreview(); $('#formError').textContent = ''; }
-    catch (err) { $('#formError').textContent = '이 파일은 이미지로 열 수 없어요. 다른 파일을 골라 주세요.'; }
-  }
+  else if (t.id === 'f_image' && t.files[0]) { await attachImage(t.files[0]); t.value = ''; }
+  else if (t.id === 'artMulti' && t.files.length) { const files = [...t.files]; t.value = ''; await addArtFromFiles(files); }
 });
 
 document.addEventListener('input', (e) => {
