@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="top">
-    <h1>📓 나의 기록장</h1>
+    <h1>📓 나의 기록장 <span id="seasonIcon" class="season-icon" aria-hidden="true"></span></h1>
     <nav id="tabs" class="tabs" aria-label="메뉴"></nav>
     <button id="settingsBtn" class="btn ghost" type="button">⚙ 백업·설정</button>
   </header>
@@ -25,6 +25,9 @@
 
   <div id="dropOverlay" class="drop-overlay" hidden><div>🖼 여기에 놓으면 새 그림 기록이 만들어져요</div></div>
   <div id="toast" class="toast" popover="manual" role="status" aria-live="polite" hidden></div>
+
+  <!-- 🍂 계절 장식 (오른쪽 아래 모서리. 눌리지 않고 글자를 가리지 않아요) -->
+  <div id="seasonCorner" class="season-corner" aria-hidden="true" hidden></div>
 
   <script src="app.js"></script>
 </body>

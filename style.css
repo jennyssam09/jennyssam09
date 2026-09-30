@@ -460,3 +460,107 @@ dialog.roomy { width: min(900px, 92vw); }
 .notice { max-width: 1320px; }
 .top { padding-left: max(40px, calc((100% - 1240px) / 2)); padding-right: max(40px, calc((100% - 1240px) / 2)); }
 .backup-bar, .notice { width: min(1240px, calc(100% - 80px)); max-width: none; }
+
+/* ---------- 🎙 녹음 (끌어다 놓는 상자, 올릴 목록, 곡 노트의 녹음 칸) ---------- */
+.audio-drop, .field .audio-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 72px; margin: 0; padding: 12px; text-align: center; cursor: pointer;
+  font-size: .95rem; font-weight: 700; color: color-mix(in srgb, var(--purple) 65%, var(--ink)); /* 연보라 바탕 위에서도 또렷하게 */
+  background: var(--purple-soft); border: 2px dashed var(--purple); border-radius: 12px;
+}
+.audio-drop small { font-weight: 400; font-size: .8rem; color: var(--muted); }
+.audio-drop:hover, .audio-drop.over { background: color-mix(in srgb, var(--purple) 10%, var(--purple-soft)); border-style: solid; }
+.sr-only:focus-visible + .audio-drop { outline: 2px solid var(--purple); outline-offset: 2px; }
+.audio-sec { margin-top: 16px; }
+.audio-h { font-size: .95rem; color: var(--accent); margin: 0 0 8px; }
+.audio-stage:empty { display: none; }
+.stage-list { display: grid; gap: 8px; margin-top: 8px; }
+.stage-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 10px; padding: 8px 12px; border-radius: 12px; background: var(--purple-soft); }
+.stage-name { flex: 1 1 100%; word-break: break-all; }
+.stage-f { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.stage-f.grow { flex: 1 1 180px; }
+.stage-f input, .field .stage-f input { width: 100%; padding: 6px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--card); }
+.rec-list { display: grid; gap: 10px; margin-top: 10px; }
+.rec-list:empty { display: none; }
+.rec-row { padding: 8px 12px 10px; border-radius: 12px; background: var(--bg); }
+.rec-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 6px; }
+.rec-date { font-weight: 700; font-size: .9rem; }
+.rec-memo, .field .rec-memo { flex: 1 1 160px; width: auto; min-width: 0; padding: 4px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--card); font-size: .9rem; }
+.rec-player { display: block; width: 100%; height: 40px; }
+.tag.first-rec { background: var(--purple-soft); color: color-mix(in srgb, var(--purple) 65%, var(--ink)); margin-right: 0; }
+.rec-pair { margin: 12px 0 4px; padding: 10px 12px 12px; border-radius: 14px; background: var(--purple-soft); }
+.rec-pair-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rec-pair-col .label { color: color-mix(in srgb, var(--purple) 65%, var(--ink)); }
+.rec-play {
+  border: 1px solid var(--purple); background: var(--purple-soft); color: inherit; border-radius: 999px;
+  padding: 0 8px; margin-right: 4px; cursor: pointer; font-size: .85rem; line-height: 1.6; vertical-align: 1px;
+}
+.rec-play:hover, .rec-play.on { background: var(--purple); }
+.piece-head { margin-bottom: 12px; }
+.piece-head h2, .dlg-body .piece-head h2 { margin: 0; }
+
+/* ---------- 📚 레퍼토리 책장 ---------- */
+.shelf-h { margin: 20px 0 8px; font-size: 1rem; }
+.shelf-empty { margin: 6px 0 0; }
+.desk { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+.book {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; min-height: 132px; padding: 0; overflow: hidden;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+  border: 1px solid var(--line); border-radius: 6px 16px 16px 6px; background: var(--card);
+  box-shadow: 0 1px 2px rgba(38, 35, 31, .04), 0 6px 16px rgba(38, 35, 31, .06);
+}
+.book::before { /* 책 가운데 접힌 자국 */
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 18px; transform: translateX(-50%); pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 10%, transparent) 50%, transparent);
+}
+.book:hover { border-color: var(--purple); }
+.book-page { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 18px; }
+.book-page.left { background: var(--purple-soft); }
+.book-page b { word-break: keep-all; }
+.book-mic { align-self: flex-start; font-size: .9rem; }
+.shelf {
+  display: flex; align-items: flex-end; gap: 5px; min-height: 96px; padding: 18px 20px 0; overflow-x: auto;
+  background: var(--card); border-radius: 16px 16px 4px 4px; border-bottom: 14px solid color-mix(in srgb, var(--muted) 35%, var(--line));
+  box-shadow: 0 1px 2px rgba(38, 35, 31, .04), 0 6px 20px rgba(38, 35, 31, .05);
+}
+.spine {
+  position: relative; flex: 0 0 auto; width: 46px; height: 168px; padding: 8px 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px;
+  color: var(--ink); font: inherit; font-weight: 700; font-size: .82rem;
+  border: 1px solid var(--line); border-bottom: 0; border-radius: 5px 5px 0 0;
+}
+.spine:nth-child(3n + 2) { height: 154px; }
+.spine:nth-child(3n) { height: 144px; }
+.spine.c0 { background: var(--purple-soft); border-top: 5px solid var(--purple); }
+.spine.c1 { background: var(--red-soft); border-top: 5px solid var(--red); }
+.spine.c2 { background: var(--line); border-top: 5px solid var(--muted); }
+.spine:hover { transform: translateY(-6px); }
+.spine-title { writing-mode: vertical-rl; max-height: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+.spine-month { font-size: .68rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.spine-mic { font-size: .72rem; line-height: 1; }
+
+/* ---------- 🎴 도장 모음판 ---------- */
+.board-nav { margin-bottom: 12px; }
+.board { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 16px 14px; min-height: 120px; padding: 22px 20px; border-radius: 18px; background: var(--bg); }
+.board.mini { gap: 10px 8px; min-height: 0; padding: 14px; }
+.board-stamp {
+  display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; padding: 0; cursor: pointer;
+  font-size: 1.75rem; line-height: 1; color: inherit;
+  border: 2px solid var(--purple); border-radius: 50%; background: var(--purple-soft); transform: rotate(var(--rot, 0deg));
+}
+.board-stamp.t1 { border-color: var(--red); background: var(--red-soft); }
+.board-stamp:hover, .board-stamp:focus-visible { transform: rotate(0deg) scale(1.1); outline: none; }
+.board.mini .board-stamp { width: 38px; height: 38px; font-size: 1.1rem; border-width: 1.5px; }
+.stamp-tip {
+  position: fixed; z-index: 10; max-width: min(320px, 90vw); padding: 5px 12px; border-radius: 9px; pointer-events: none;
+  background: var(--ink); color: var(--card); font-size: .82rem; font-weight: 600; line-height: 1.4;
+}
+.stamp-tip[hidden] { display: none; }
+
+/* ---------- 🍂 계절 장식 (움직이지 않고, 눌리지 않고, 카드 뒤에 은은하게) ---------- */
+.season-icon { margin-left: 2px; font-size: .95em; }
+.season-corner {
+  position: fixed; right: 28px; bottom: 6px; z-index: -1; font-size: 8.5rem; line-height: 1; opacity: .13;
+  pointer-events: none; user-select: none;
+}
+.season-corner[hidden] { display: none; }
