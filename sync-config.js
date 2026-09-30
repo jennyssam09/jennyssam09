@@ -15,7 +15,7 @@
    💡 앱을 새 버전으로 바꿀 때 이 파일은 그대로 두거나, 내 값을 다시 적어 주세요.
    ===================================================================== */
 window.SYNC_CONFIG = {
-  clientId: '',
-  deployUrl: '',
+clientId: '518165670220-vbm451i3ll55obj0fvg88tmt98ak73rd.apps.googleusercontent.com',
+deployUrl: 'https://jennyssam09.github.io/my-journal/',
   folderName: '나의 기록장 (동기화)',
 };
