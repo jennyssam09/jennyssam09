@@ -3119,7 +3119,7 @@ function openDlg(html, size) {
   renderStaged();
   syncPlayButtons();
 }
-function closeDlg() { if (dlg.open) dlg.close(); }
+function closeDlg() { if (dlg2.open) dlg2.close(); if (dlg.open) dlg.close(); }
 
 let formImages = {}; // 입력 창에서 선택한 이미지들 (칸 이름 → 데이터 주소). 그림 기록은 '내 그림'과 '원본 이미지' 두 칸이에요
 let formShots = []; // 입력 창에서 고른 워치 캡처들
