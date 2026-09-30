@@ -606,3 +606,50 @@ dialog.roomy { width: min(900px, 92vw); }
 .rt-day-item { font-weight: 600; }
 .cal-mark.routine .cal-ico { margin-right: 2px; }
 .routine-panel .rt-list { margin-top: 8px; }
+
+/* ---------- 📰 영어 ---------- */
+.week-mark { margin-top: 6px; padding: 5px 14px; border-radius: 999px; background: var(--bg); color: var(--muted); font-weight: 600; font-size: .9rem; white-space: nowrap; }
+.en-card h3 { margin: 4px 0 6px; }
+.en-sum { margin: 4px 0 6px; padding-left: 1.6em; }
+.en-sum li { margin: 3px 0; }
+.en-dom { color: var(--purple); font-weight: 600; }
+.phrase-item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 16px; text-align: left; cursor: pointer; font: inherit; color: inherit; border: 1px solid transparent; }
+.phrase-item:hover { border-color: var(--purple); }
+.speak-item .pre { margin-top: 6px; }
+.chk-line { display: flex !important; align-items: center; gap: 10px; font-weight: 600 !important; cursor: pointer; }
+.chk-line input { width: 20px !important; height: 20px; margin: 0; accent-color: var(--purple); }
+.multi-in, .field .multi-in { margin-bottom: 6px; }
+.cal-mark.icon-only .cal-ico { margin-right: 2px; }
+
+/* ---------- 🤖 클로드에게 보내기 · 💬 받은 피드백 ---------- */
+.claude-box { margin-top: 26px; }
+.claude-box h3 { margin-bottom: 10px; }
+.cl-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cl-row .chip-label { min-width: 2.4em; }
+.claude-box .copy-text { margin-top: 10px; min-height: 260px; }
+.fb-fold { margin-top: 14px; padding: 10px 14px; border-radius: 14px; background: var(--bg); }
+.fb-fold > summary { color: var(--purple); font-weight: 700; }
+.fb-input { margin-top: 10px; }
+.fb-text-in { width: 100%; min-height: 150px; padding: 10px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); resize: vertical; line-height: 1.55; }
+.fb-todo-in { width: 100%; padding: 9px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); }
+.fb-box { margin-top: 12px; padding: 12px 16px; border-radius: 14px; background: var(--purple-soft); }
+.fb-attached { margin-top: 10px; display: grid; gap: 8px; }
+.fb-item.compact { margin: 0; box-shadow: none; background: var(--bg); }
+.fb-item .fb-q { margin: 4px 0; }
+.fb-todo { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; cursor: pointer; }
+.fb-todo input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
+.fb-todo .done { color: var(--muted); }
+.fb-answer.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fb-todo-card { padding: 10px 16px; margin-bottom: 8px; }
+.fb-badge { color: var(--purple); }
+.fb-done { margin: 6px 0 0; padding: 4px 12px; border-radius: 10px; background: var(--purple-soft); color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-size: .9rem; }
+.fb-done-mark { color: var(--purple); font-weight: 700; font-size: .85rem; }
+.fb-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 14px; padding: 8px 14px; border-radius: 12px; background: var(--purple-soft); font-size: .92rem; }
+.fb-hint-t { flex: 1 1 260px; min-width: 0; color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-weight: 600; }
+.fb-hint-c { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+.fb-hint-c input { width: 18px; height: 18px; margin: 0; accent-color: var(--purple); }
+.routine-hint { margin: 14px 0 0; }
+.fb-lines { display: grid; gap: 4px; margin: 10px 0 0; }
+.fb-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; font-size: .88rem; color: var(--muted); }
+.fb-line .fb-scope { font-size: 1rem; }
+.card-btns { align-items: center; }
