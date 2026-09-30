@@ -366,7 +366,7 @@ function linksBlock(text, label = '참고 링크') {
       ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(line)}</a>`
       : esc(line);
   }).join('<br>');
-  return `<div class="label">${esc(label)}</div><p class="pre">${html}</p>`;
+  return `<div class="label">${esc(label)}</div><p class="pre links">${html}</p>`;
 }
 
 // 칸에 값이 들어 있는지 (글자·목록·숫자 모두)
@@ -429,17 +429,30 @@ const Store = {
     });
   },
 
-  _lsRead() { try { return JSON.parse(localStorage.getItem('journal.records') || '[]'); } catch (e) { return []; } },
-  _lsWrite(list) { localStorage.setItem('journal.records', JSON.stringify(list)); },
+  // 다른 사이트와 같은 주소(예: 내아이디.github.io)를 쓰더라도 섞이지 않도록 이름에 앱 이름을 넣어요. (예전 이름 'journal.records'는 읽어서 옮겨요)
+  _lsRead() {
+    try {
+      const cur = localStorage.getItem('my-journal.records');
+      return JSON.parse(cur !== null ? cur : (localStorage.getItem('journal.records') || '[]'));
+    } catch (e) { return []; }
+  },
+  _lsWrite(list) { localStorage.setItem('my-journal.records', JSON.stringify(list)); try { localStorage.removeItem('journal.records'); } catch (e) { /* 괜찮아요 */ } },
   _mem: [],
 
   async all() {
     if (this.mode === 'indexeddb') return this._tx('readonly', (s) => s.getAll());
     return this.mode === 'localstorage' ? this._lsRead() : this._mem.slice();
   },
-  async putMany(list) {
+  async get(id) { // 한 줄만 꺼내요 (동기화 정보 같은 작은 것용)
+    if (this.mode === 'indexeddb') return this._tx('readonly', (s) => s.get(id));
+    return (this.mode === 'localstorage' ? this._lsRead() : this._mem).find((r) => r.id === id);
+  },
+  async putMany(list, opts = {}) {
     await this._putMany(list);
-    if (list.some((r) => r.type !== 'meta')) scheduleAutosave(); // 설정 저장만으로는 자동 저장하지 않아요
+    if (list.some((r) => r.type !== 'meta')) { // 설정 저장만으로는 자동 저장·동기화를 하지 않아요
+      scheduleAutosave();
+      if (!opts.silent && window.Sync) window.Sync.notify(); // ☁ 동기화(sync.js). silent 는 동기화가 가져온 것을 쓸 때예요
+    }
   },
   async remove(ids) {
     await this._remove(ids);
@@ -541,22 +554,66 @@ const ofType = (type) => records.filter((r) => r.type === type);
 /* ---------------------------------------------------------------------
    5. 기록 저장/수정/삭제
    --------------------------------------------------------------------- */
+// 기록을 저장해요. 바꾼 시각(updatedAt)은 여기서 항상 새로 정해요. (☁ 동기화가 "어느 쪽이 바뀌었나"를 알아보는 기준이에요)
 async function saveRecord(rec) {
+  const i = records.findIndex((r) => r.id === rec.id);
+  const prev = i >= 0 ? records[i].updatedAt || 0 : 0;
+  rec.updatedAt = Math.max(Date.now(), prev + 1);
   try {
     await Store.putMany([rec]);
   } catch (err) {
     alert('저장하지 못했어요. 저장 공간이 부족할 수 있어요. (그림 파일이 너무 크지 않은지 확인해 주세요.)');
     return false;
   }
-  const i = records.findIndex((r) => r.id === rec.id);
   if (i >= 0) records[i] = rec; else records.push(rec);
+  if (tombstones.length) tombstones = tombstones.filter((t) => t.id !== rec.id); // 지웠던 흔적 위에 다시 저장한 경우
   return true;
 }
 
+/* 지운 기록의 흔적("삭제 표시"). 지운 기록은 저장소에서 없애지 않고, 같은 id 자리에 이 작은 표시만 남겨요.
+   ☁ 동기화에서 "지운 것"과 "아직 못 받은 것"을 구분하려고요. 화면과 백업 파일에는 나타나지 않고, 60일 뒤 정리돼요. */
+let tombstones = [];
+const isTomb = (r) => !!(r && r.deletedAt);
+function makeTomb(r) {
+  const at = Math.max(Date.now(), (r.updatedAt || 0) + 1);
+  return { id: r.id, type: r.type, date: r.date, deletedAt: at, updatedAt: at };
+}
+const isSyncedRecord = (r) => !!r && !r.sample && !!SCHEMAS[r.type];
+
 async function deleteRecord(id) {
-  await Store.remove([id]);
+  const old = records.find((r) => r.id === id);
+  if (old && isSyncedRecord(old)) {
+    const t = makeTomb(old);
+    await Store.putMany([t]); // 같은 id 자리를 삭제 표시로 바꿔요
+    tombstones = [...tombstones.filter((x) => x.id !== id), t];
+  } else {
+    await Store.remove([id]); // 예시 기록처럼 동기화하지 않는 것은 흔적 없이 지워요
+  }
   records = records.filter((r) => r.id !== id);
 }
+
+// ☁ 동기화가 가져온 변경을 저장소와 화면에 반영해요. put: 기록, tombs: 삭제 표시, drop: 흔적 없이 지울 id
+async function applySyncChanges({ put = [], tombs = [], drop = [] }) {
+  const rows = [...put, ...tombs];
+  if (rows.length) await Store.putMany(rows, { silent: true });
+  if (drop.length) await Store.remove(drop);
+  const ids = new Set([...put.map((r) => r.id), ...tombs.map((r) => r.id), ...drop]);
+  records = records.filter((r) => !ids.has(r.id)).concat(put);
+  tombstones = tombstones.filter((t) => !ids.has(t.id)).concat(tombs);
+}
+
+// 입력 중이면 잠깐 미뤘다가 그려요 (동기화가 가져온 변경 때문에 쓰던 글이 사라지지 않게)
+let renderDeferred = false;
+const typingInView = () => { const a = document.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !!view.contains(a); };
+function renderSoon() {
+  if (typingInView()) { renderDeferred = true; return; }
+  render();
+  refreshDay();
+}
+document.addEventListener('focusout', () => {
+  if (!renderDeferred) return;
+  setTimeout(() => { if (renderDeferred && !typingInView()) { renderDeferred = false; render(); refreshDay(); } }, 250);
+});
 
 /* ---------------------------------------------------------------------
    6. 예시 기록 (처음 한 번만 들어가요. ⚙ 백업·설정 에서 한 번에 지울 수 있어요)
@@ -2843,7 +2900,9 @@ async function saveFeedback({ scope, period, rangeStart, rangeEnd, targetId = ''
   text = text.trim();
   todo = todo.trim();
   if (!text && !todo) { toast('붙여 넣은 답변이나 해볼 것을 적어 주세요.', 3000); return null; }
-  const rec = { id: newId(), type: 'claudeFeedback', date: todayStr(), scope, period, rangeStart, rangeEnd, targetId, question, text, todo, todoDone: false, createdAt: Date.now(), updatedAt: Date.now() };
+  const lastAt = ofType('claudeFeedback').reduce((m, f) => Math.max(m, f.createdAt || 0), 0);
+  const at = Math.max(Date.now(), lastAt + 1); // 받은 순서가 항상 구분되게 (아주 짧은 사이에 저장해도)
+  const rec = { id: newId(), type: 'claudeFeedback', date: todayStr(), scope, period, rangeStart, rangeEnd, targetId, question, text, todo, todoDone: false, createdAt: at, updatedAt: at };
   if (!(await saveRecord(rec))) return null;
   if (settings.celebrateOff) toast('피드백을 저장했어요', 3000);
   else { const s = feedbackStamp(); toast(s.text, 4000, { stamp: s.icon }); }
@@ -3673,6 +3732,7 @@ function openSettings() {
     <p class="meta">기록 ${records.length}개 · 저장 방식: ${esc(modeText)}</p>
     <div class="settings-list">
       ${autosaveCardHTML()}
+      ${window.Sync ? Sync.cardHTML() : ''}
       <div class="card" style="margin:0">
         <h3>백업 파일 만들기</h3>
         <p class="meta">모든 기록(그림 포함)을 파일 하나로 저장해요. 브라우저 기록을 지우기 전이나 컴퓨터를 바꿀 때 꼭 해 두세요.</p>
@@ -3741,6 +3801,8 @@ async function importBackup(file) {
     if (!good.length) throw new Error('가져올 기록이 없어요');
     const audioCount = Array.isArray(payload.audios) ? payload.audios.length : 0;
     if (!confirm(`기록 ${good.length}개${audioCount ? `와 녹음 ${audioCount}개` : ''}를 불러올까요?`)) return;
+    const goneIds = new Set(tombstones.map((t) => t.id)); // 지웠던 기록을 백업에서 되살리는 경우는 "새로 고친 것"으로 봐요 (☁ 동기화에서 삭제가 다시 덮어쓰지 않게)
+    good.forEach((r) => { if (goneIds.has(r.id)) r.updatedAt = Date.now(); });
     await Store.putMany(good);
     records = await loadRecords();
     const addedAudio = await importAudios(payload); // 이 브라우저에 있던 녹음은 그대로 두고, 없던 것만 더해요
@@ -3910,8 +3972,11 @@ document.addEventListener('click', async (e) => {
       }
       break;
     case 'clearAll':
-      if (confirm(`정말 모든 기록을 지울까요? 되돌릴 수 없어요.${audios.length ? '\n곡에 붙여 둔 녹음도 함께 지워져요.' : ''}`)) {
-        await Store.remove(records.map((r) => r.id));
+      if (confirm(`정말 모든 기록을 지울까요? 되돌릴 수 없어요.${audios.length ? '\n곡에 붙여 둔 녹음도 함께 지워져요.' : ''}${window.Sync && Sync.isEnabled() ? '\n\n☁ 동기화가 켜져 있어서 Drive와 다른 기기에서도 지워져요.\n(이 기기에서만 지우려면 먼저 ☁ 에서 로그아웃해 주세요.)' : ''}`)) {
+        const tombs = records.filter(isSyncedRecord).map(makeTomb); // 지운 흔적을 남겨서 다른 기기도 따라 지워요
+        if (tombs.length) await Store.putMany(tombs);
+        await Store.remove(records.filter((r) => !isSyncedRecord(r)).map((r) => r.id));
+        tombstones = [...tombstones.filter((t) => !tombs.some((x) => x.id === t.id)), ...tombs];
         records = [];
         if (audios.length) { try { await AudioStore.clear(); } catch (err) { /* 괜찮아요 */ } audios = []; audioB64.clear(); }
         closeDlg(); render();
@@ -4007,7 +4072,16 @@ async function loadRecords() {
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
   if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2 };
   seeded = all.some((r) => r.id === '__meta_seeded');
-  return all.filter((r) => r.type !== 'meta').map(normalizeRecord);
+  const rows = all.filter((r) => r.type !== 'meta');
+  tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
+  const live = rows.filter((r) => !isTomb(r)).map(normalizeRecord);
+  // 바꾼 시각(updatedAt)이 없던 예전 기록은 만든 시각으로 한 번 채워 둬요 (☁ 동기화가 기준으로 써요)
+  const missing = live.filter((r) => !r.updatedAt);
+  if (missing.length) {
+    missing.forEach((r) => { r.updatedAt = r.createdAt || Date.parse(`${r.date}T12:00:00`) || Date.now(); });
+    try { await Store._putMany(missing); } catch (e) { /* 저장하지 못해도 이번 사용에는 문제없어요 */ }
+  }
+  return live;
 }
 
 async function start() {
@@ -4029,8 +4103,23 @@ async function start() {
     n.textContent = '⚠ 이 브라우저에서는 기록을 저장할 수 없어요. 창을 닫으면 사라지니, 다른 브라우저(크롬 등)로 열어 주세요.';
   }
   render();
-  setTimeout(() => { runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ }); }, 500); // 화면이 먼저 보인 뒤에 물어봐요
+  window.__journalReady = true;
+  document.dispatchEvent(new Event('journal:ready')); // ☁ 동기화(sync.js)가 이때부터 시작해요
+  setTimeout(() => { // 화면이 먼저 보인 뒤에 물어봐요
+    runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ }).finally(() => {
+      window.__cleanupDone = true;
+      document.dispatchEvent(new Event('journal:cleanup-done')); // 정리 확인이 끝난 뒤에 첫 동기화를 해요
+    });
+  }, 500);
 }
+
+// 휴대폰: 입력 칸을 누르면 화면 키보드가 올라와도 그 칸이 가려지지 않게 가운데로 보여줘요. (컴퓨터 화면에서는 아무 일도 하지 않아요)
+document.addEventListener('focusin', (e) => {
+  const t = e.target;
+  if (!t || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select')) return;
+  if (!window.matchMedia('(max-width: 900px)').matches) return;
+  setTimeout(() => { try { if (document.activeElement === t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { /* 괜찮아요 */ } }, 300);
+});
 
 document.addEventListener('visibilitychange', () => { if (document.hidden) { flushRoutineNote(); if (autosaveTimer) runAutosave(); } }); // 탭을 닫기 직전에도 저장
 document.addEventListener('visibilitychange', () => {

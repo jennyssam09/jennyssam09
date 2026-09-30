@@ -653,3 +653,88 @@ dialog.roomy { width: min(900px, 92vw); }
 .fb-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; font-size: .88rem; color: var(--muted); }
 .fb-line .fb-scope { font-size: 1rem; }
 .card-btns { align-items: center; }
+
+/* ---------- ☁ 구글 드라이브 동기화 (색은 위쪽 :root 의 변수만 써요) ---------- */
+.sync-chip {
+  border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  border-radius: 999px; padding: 6px 14px; font-weight: 600; font-size: .85rem; cursor: pointer; white-space: nowrap;
+}
+.sync-chip[hidden] { display: none; }
+.sync-chip:hover { filter: brightness(.97); }
+.sync-chip.ok { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.sync-chip.busy { color: var(--purple); background: var(--purple-soft); border-color: transparent; }
+.sync-chip.warn { color: var(--red); background: var(--red-soft); border-color: transparent; }
+.sync-chip.err { color: var(--red); background: var(--red-soft); border-color: rgba(178, 58, 82, .35); }
+.sync-chip.off { color: var(--muted); }
+.sync-rows { display: grid; gap: 6px; margin: 4px 0 10px; }
+.sync-rows > div { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.sync-rows .meta { min-width: 7.5em; }
+.fl-opts { display: grid; gap: 6px; margin: 8px 0; }
+.fl-opts .btn { justify-self: start; }
+.fl-opts .meta { margin: 0 0 8px; }
+.fl-opts small { font-weight: 400; opacity: .85; }
+/* 충돌 창: 왼쪽 "이 기기" | 오른쪽 "Drive" 나란히 */
+.cf-card { padding: 12px 14px; }
+.cf-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
+.cf-cols, .cf-row { display: grid; grid-template-columns: 8.5em 1fr 1fr; gap: 6px 12px; align-items: start; }
+.cf-colh { font-size: .8rem; font-weight: 700; color: var(--accent); grid-column: span 1; }
+.cf-cols .cf-colh:first-child { grid-column: 2; }
+.cf-cols .cf-colh:last-child { grid-column: 3; }
+.cf-row { padding: 6px 0; border-top: 1px dashed var(--line); }
+.cf-k { font-size: .82rem; font-weight: 700; color: var(--muted); }
+.cf-l, .cf-r { padding: 6px 8px; border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.cf-l { background: var(--accent-soft); }
+.cf-r { background: var(--purple-soft); }
+.cf-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.cf-thumbs img { width: 84px; height: 64px; object-fit: cover; border-radius: 6px; background: var(--bg); }
+
+/* ---------- 📱 휴대폰·폴드 화면 (CSS 화면 폭 기준. 넓은 화면은 위의 데스크톱 모양 그대로예요) ----------
+   커버 화면(좁은 세로): 560px 이하 / 펼친 화면(4:3): 561~900px / 데스크톱: 901px 이상은 바뀌지 않아요.
+   접거나 펼쳐서 화면 폭이 바뀌어도 화면을 다시 만들지 않아서, 보던 탭·열어 둔 창·쓰던 글은 그대로 남아요. */
+@media (max-width: 900px) {
+  html { font-size: 16px; }
+  main { padding: 16px 12px 96px; }
+  .top { padding: 8px 12px; gap: 6px 10px; }
+  .top h1 { flex: 1 1 auto; font-size: 1.05rem; }
+  .tabs { order: 3; flex: 1 1 100%; gap: 4px; }
+  .backup-bar, .notice { width: calc(100% - 24px); }
+  /* 손가락으로 누르는 것은 모두 44px 이상 */
+  .btn, .btn.small, .chip, .chip.small, .tab, .choice-btn, .rec-chip, .today-btn, .sync-chip, .search { min-height: 44px; }
+  .btn.small { padding: 6px 12px; }
+  .btn { padding: 10px 16px; }
+  .tab { padding: 8px 14px; display: inline-flex; align-items: center; justify-content: center; }
+  .link-btn { min-height: 44px; display: inline-flex; align-items: center; padding: 0 6px; }
+  label:has(input[type=checkbox]), label:has(input[type=radio]) { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+  input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex-shrink: 0; }
+  .field input, .field select, .field textarea, .search, .rt-note-in, .copy-text { font-size: 16px; } /* 16px 미만이면 폰이 저절로 확대해요 */
+  .field input, .field select { min-height: 46px; }
+  .sync-chip { display: inline-flex; align-items: center; white-space: normal; text-align: left; line-height: 1.25; max-width: 100%; }
+  /* 창: 화면 높이(키보드가 올라오면 그만큼 줄어드는 dvh)에 맞춰요 */
+  dialog, dialog.wide, dialog.roomy { width: min(96vw, 820px); max-height: 96vh; max-height: 96dvh; }
+  .dlg-body { max-height: 94vh; max-height: 94dvh; padding: 16px 16px 20px; scroll-padding-bottom: 96px; }
+  .dlg-actions { position: sticky; bottom: -20px; background: var(--card); padding: 10px 0 4px; flex-wrap: wrap; }
+  .cal-cell { min-height: 64px; }
+  .btn, .btn.small { min-width: 44px; }
+  summary { padding: 11px 0; }
+  .piece-link { display: inline-flex; align-items: center; min-height: 44px; }
+  .wk-dot { height: 44px; }
+  .links a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media (max-width: 560px) {
+  .top h1 { flex: 1 1 100%; }
+  .sync-chip { flex: 1 1 60%; }
+  #settingsBtn { flex: 0 0 auto; }
+  /* 위쪽 메뉴: 글자가 뭉개지지 않게 옆으로 밀어서 봐요 */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; margin: 0 -12px; padding: 0 12px 2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; scroll-snap-align: center; font-size: .92rem; word-break: keep-all; }
+  dialog, dialog.wide, dialog.roomy { width: calc(100vw - 12px); }
+  .art-grid { grid-template-columns: 1fr; }
+  .compare { grid-template-columns: 1fr; }
+  .cf-cols, .cf-row { grid-template-columns: 1fr 1fr; }
+  .cf-cols .cf-colh:first-child { grid-column: 1; }
+  .cf-cols .cf-colh:last-child { grid-column: 2; }
+  .cf-k { grid-column: 1 / -1; }
+  .actions-row { width: 100%; }
+  .actions-row .btn { flex: 1 1 150px; }
+}
