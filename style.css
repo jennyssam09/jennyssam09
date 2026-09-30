@@ -86,7 +86,6 @@ main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
   background: var(--accent-soft); color: var(--accent); margin-right: 6px;
 }
 .tag.violin { background: var(--warm-soft); color: var(--warm); }
-.tag.todo { background: #eee8d6; color: #7a6a2c; }
 .empty { text-align: center; color: var(--muted); padding: 30px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
 
 /* 서브 메뉴(칩) */
@@ -391,8 +390,6 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .chips .chip-label { align-self: center; }
 .chip.small { padding: 3px 12px; font-size: .88rem; }
 .chip-sep { display: inline-block; width: 1px; height: 22px; background: var(--line); margin: 0 6px; align-self: center; }
-.filter-box { margin-bottom: 10px; }
-.filter-box .chips { margin-bottom: 6px; }
 .tag.art-kind { background: var(--purple-soft); color: var(--purple); vertical-align: 2px; }
 
 /* 레슨 패널, 물어볼 것 */
@@ -401,26 +398,10 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .ask-box { padding: 10px 14px; border: 1px solid var(--purple); border-radius: 10px; background: var(--purple-soft); }
 .ask-box .meta { font-weight: 400; }
 
-/* 투자 복기 · 교훈 */
-.review-box { margin-top: 8px; padding: 8px 12px; border-left: 4px solid var(--purple); background: var(--purple-soft); border-radius: 0 10px 10px 0; }
-.rv-row { margin: 2px 0; }
-.rv-lesson { font-weight: 700; color: var(--purple); margin-top: 4px; }
-.review-ref { padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
-.stat-line { padding: 8px 14px; }
-
-/* 📒 용어장 · 링크 모양 버튼 */
-.term-initial { margin: 14px 0 4px; color: var(--accent); font-size: 1rem; }
-.term { padding: 10px 14px; margin-bottom: 8px; }
-.term-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 2px 0; }
+/* 링크 모양 버튼 · 이동했을 때 잠깐 표시 */
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--purple); cursor: pointer; text-align: left; }
 .link-btn:hover { text-decoration: underline; }
 .flash { outline: 3px solid var(--purple); outline-offset: 2px; transition: outline-color .3s; }
-
-/* 📺 강의별 보기 */
-.course-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; margin-top: 6px; }
-.course-item { flex: 0 0 200px; margin: 0; }
-.course-img { aspect-ratio: 4 / 3; }
-.course-item figcaption { margin-top: 4px; font-size: .88rem; word-break: keep-all; }
 
 /* ---------- 깔끔한 분위기: 얇은 선 대신 은은한 그림자, 둥근 모서리, 넉넉한 여백 ---------- */
 body { letter-spacing: -0.01em; -webkit-font-smoothing: antialiased; }
@@ -564,3 +545,64 @@ dialog.roomy { width: min(900px, 92vw); }
   pointer-events: none; user-select: none;
 }
 .season-corner[hidden] { display: none; }
+
+/* ---------- 🎻 교재 관리 (입력 창 위에 겹쳐 열리는 작은 창) ---------- */
+#dlg2 { width: min(520px, 92vw); }
+.manage-btn { align-self: center; }
+.bk-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.bk-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; border-radius: 12px; background: var(--bg); }
+.bk-list.dim .bk-name { color: var(--muted); }
+.bk-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ---------- 🎨 그림: 원본 | 내 그림 나란히, 연대기, 가져갈 것 모음 ---------- */
+.art-fig { margin: 0; }
+.art-fig figcaption { margin-top: 3px; text-align: center; }
+.art-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.art-pair.one { grid-template-columns: 1fr; }
+.art-card.has-src { grid-column: span 2; }
+.tag.art-kind.small { font-size: .72rem; padding: 0 8px; }
+.chrono { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 22px 18px; }
+.chrono-item { margin: 0; }
+.chrono-imgs { display: flex; align-items: flex-end; gap: 8px; }
+.chrono-img { flex: 1 1 auto; min-width: 0; aspect-ratio: 4 / 3; }
+.chrono-src { flex: 0 0 84px; width: 84px; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); cursor: zoom-in; }
+.chrono-item figcaption { margin-top: 6px; }
+.carry-item .carry-text { font-size: 1.02rem; }
+
+/* ---------- ✅ 경제 루틴 ---------- */
+.routine { padding: 28px 32px 30px; }
+.rt-date { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 18px; }
+.rt-list { display: grid; gap: 14px; }
+.rt-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; min-height: 76px; padding: 12px 22px;
+  border-radius: 18px; background: var(--bg);
+}
+.rt-row.on { background: var(--purple-soft); }
+.rt-main { display: flex; align-items: center; gap: 16px; cursor: pointer; flex: 0 1 auto; }
+.rt-check { width: 34px; height: 34px; margin: 0; cursor: pointer; accent-color: var(--purple); flex-shrink: 0; }
+.rt-icon { font-size: 1.7rem; line-height: 1; }
+.rt-label { font-size: 1.15rem; font-weight: 700; }
+.rt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rt-chips.faint { opacity: .55; }
+.rt-note { margin-top: 30px; }
+.rt-h { display: block; font-weight: 700; font-size: .95rem; margin-bottom: 8px; }
+.rt-note-in { display: block; width: 100%; padding: 12px 16px; border: 1px solid transparent; border-radius: 14px; background: var(--bg); }
+.rt-note-in:focus { outline: 2px solid var(--accent); background: var(--card); }
+.rt-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; }
+.rt-find { margin-left: 8px; }
+.tag-panel { margin-top: 10px; padding: 12px 16px; border-radius: 14px; background: var(--bg); }
+.tag-panel .note-list { max-height: 260px; overflow: auto; }
+.wk { margin-top: 32px; }
+.wk-grid { display: grid; gap: 4px; width: max-content; max-width: 100%; }
+.wk-row { display: grid; grid-template-columns: 44px repeat(7, 44px); align-items: center; }
+.wk-lab { font-size: 1.25rem; text-align: center; }
+.wk-d { text-align: center; font-size: .82rem; color: var(--muted); }
+.wk-d.today { color: var(--ink); font-weight: 800; }
+.wk-dot { height: 38px; border: 0; background: transparent; cursor: pointer; font-size: 1.15rem; line-height: 1; color: var(--muted); opacity: .45; border-radius: 10px; }
+.wk-dot.on { color: var(--purple); opacity: 1; }
+.wk-dot:hover:not(:disabled) { background: var(--bg); }
+.wk-dot:disabled { cursor: default; }
+.wk-note { margin: 8px 0 0; }
+.rt-day-item { font-weight: 600; }
+.cal-mark.routine .cal-ico { margin-right: 2px; }
+.routine-panel .rt-list { margin-top: 8px; }
