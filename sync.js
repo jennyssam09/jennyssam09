@@ -360,7 +360,11 @@
       else if (isRef(v)) jobs.push(imgLimit(() => downloadImage(v.$img)).then((u) => { out[f.key] = u; }));
     });
     await Promise.all(jobs);
-    return typeof workoutLiteCopy === 'function' ? workoutLiteCopy(out, true) : out; // 아직 업데이트하지 않은 기기가 올린 운동 기록의 없어진 칸은 받을 때 정리해요 (바뀐 기록은 바꾼 시각이 새로워져서 정리된 모습이 Drive에도 올라가요)
+    // 아직 업데이트하지 않은 기기가 올린 기록의 없어진 칸(운동의 옛 칸, 빠른 기록의 "간단 기록" 표시)은 받을 때 정리해요 (바뀐 기록은 바꾼 시각이 새로워져서 정리된 모습이 Drive에도 올라가요)
+    let clean = out;
+    if (typeof workoutLiteCopy === 'function') clean = workoutLiteCopy(clean, true);
+    if (typeof stripQuick === 'function') clean = stripQuick(clean, true);
+    return clean;
   }
 
   /* ---------------------------------------------------------------------
