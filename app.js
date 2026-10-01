@@ -32,6 +32,12 @@ const MOODS = [
   { v: 'tired', icon: '😮‍💨', label: '지쳤어요' },
 ];
 
+// 🎨 그림 종류와 한 기록에 붙일 수 있는 사진 수
+//   예전 기록의 "단계"는 종류로 읽어요: 그대로 모작·조금 바꿔 그리기 → 모작, 창작 → 창작, 값이 없으면 모작
+const ART_KINDS = ['크로키', '모작', '창작'];
+const ART_STAGE_TO_KIND = { '그대로 모작': '모작', '조금 바꿔 그리기': '모작', '창작': '창작' };
+const ART_MAX_PHOTOS = 30;
+
 /* ---------------------------------------------------------------------
    ✏️ 칩(눌러서 고르는 버튼) 선택지 - 메모장으로 고쳐도 돼요
    - 따옴표 안의 글자만 바꾸거나, 쉼표로 이어서 더하거나 빼세요. (따옴표와 쉼표는 지우지 마세요)
@@ -45,9 +51,6 @@ const CHIPS = {
   pace: ['여유', '적당', '조금 벅참'],
   // 🎻 바이올린 (기본기 = 스케일·에튀드·개방현·포지션 이동을 모두 포함해요)
   violinDid: ['활', '기본기', '곡'],
-  // 🎨 그림
-  artStage: ['그대로 모작', '조금 바꿔 그리기', '창작'],
-  artNext: ['표정', '머리', '옷', '각도'],
 };
 
 // 🎻 교재 칩의 처음 목록이에요. 그 뒤로는 바이올린 기록 창의 "⚙︎ 교재 관리"에서 더하고·숨기고·순서를 바꿔요. (그 목록은 백업에 함께 들어가요)
@@ -122,33 +125,30 @@ const SCHEMAS = {
     ],
   },
   // ✅ 오늘의 경제 루틴: 하루에 기록 하나. 입력 창 없이 경제 화면·오늘 탭에서 바로 체크해요.
-  //   checks: { 항목id: true } (한 것만) / letters: 읽은 뉴스레터 / note: 오늘 한 줄 / tags: 태그
+  //   checks: { 항목id: true } (한 것만) / letters: 읽은 뉴스레터 / note: 오늘 한 줄
   econRoutine: {
     label: '경제 루틴',
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
     ],
   },
-  // 🎨 그림 기록 (한 장 = 작은 프로젝트. 며칠에 나눠 그려도 기록은 하나이고, 수정으로 이어 써요)
+  // 🎨 그림 기록 (사진 여러 장 = 기록 하나. 종류는 크로키 / 모작 / 창작)
+  //   예전 칸(image·stage·origin·diff·carry·nextChips·course·refs)은 화면에서 입력 칸으로는 없지만 지우지 않고 보관해요. (상세 창 맨 아래 "예전 메모"로 읽기만 해요)
   art: {
     label: '그림 기록',
+    kindKey: 'artKind', // 종류에 따라 "원본 사진" 칸이 보이거나 숨겨져요
+    keep: ['stage', 'origin', 'diff', 'carry', 'nextChips', 'course', 'refs', 'mood', 'srcImage'], // 예전 칸과, 이 창에서 안 고치는 값은 그대로 보관해요
     fields: [
-      { key: 'date', label: '날짜', type: 'date', required: true },
-      { key: 'image', label: '내 그림', type: 'image', noun: '내 그림' },
-      { key: 'srcImage', label: '원본 이미지 - 선택', type: 'image', noun: '원본 그림', optional: true, hint: '모작이면 원본을 같이 올려 두세요. 카드에서 "원본 | 내 그림"으로 나란히 볼 수 있어요.' },
-      { key: 'origin', label: '원작자 - 선택', type: 'text', suggest: true, placeholder: '예: 작가 이름 (전에 쓴 것이 제안돼요)' },
-      { key: 'topic', label: '그린 것 (제목·주제) - 선택', type: 'text', placeholder: '예: 손 그리기' },
-      { key: 'stage', label: '단계 - 선택', type: 'choice', choices: CHIPS.artStage, hint: '조금 바꿔 그리기 = 원본에서 표정·머리·옷·각도 중 하나만 바꿔 보기' },
+      { key: 'images', label: '사진', type: 'images', noun: '그림 사진', max: ART_MAX_PHOTOS, hint: '여러 장을 한 번에 올리면 기록 하나로 묶여요. ◀ ▶ 로 순서를 바꾸고, 빼기로 한 장씩 뺄 수 있어요.' },
+      { key: 'artKind', label: '종류', type: 'choice', choices: ART_KINDS },
       AMOUNT_FIELD,
-      MOOD_FIELD,
-      // ✍ 더 적기 - 마음에 드는 곳을 가장 먼저
+      { key: 'topic', label: '한 줄 - 선택', type: 'text', placeholder: '예: 손 크로키 1분씩' },
+      { key: 'date', label: '날짜', type: 'date', required: true, small: true },
+      // ✍ 더 적기
+      { key: 'srcImage', label: '원본 사진', type: 'image', noun: '원본 그림', optional: true, only: '모작', more: true, hint: '모작이면 원본을 같이 올려 두세요. 상세 창에서 "원본 | 내 그림"으로 나란히 보여요.' },
       { key: 'liked', label: '마음에 드는 곳 하나', type: 'text', more: true, placeholder: '예: 머리카락 흐름' },
-      { key: 'diff', label: '원본과 다른 점 하나', type: 'text', more: true, placeholder: '예: 원본은 선을 한 번에 긋는데 내 선은 여러 번 겹쳐서 흐려졌다' },
-      { key: 'carry', label: '내 그림에 가져갈 것 하나', type: 'text', more: true, placeholder: '예: 앞머리를 눈 위로 겹쳐서 그늘을 만드는 방식' },
-      { key: 'nextChips', label: '다음엔 이걸 바꿔 그려 보기 - 선택', type: 'chips', choices: CHIPS.artNext, more: true },
-      { key: 'next', label: '바꿔 그릴 것 한 줄', type: 'text', more: true, placeholder: '예: 표정만 웃는 얼굴로 바꿔 보기' },
-      { key: 'course', label: '참고한 강의·영상', type: 'text', suggest: true, more: true, placeholder: '예: 사이토 나오키 3개월 성장법 2강 (전에 쓴 것이 제안돼요)' },
-      { key: 'refs', label: '참고 링크', type: 'textarea', links: true, rows: 2, more: true, hint: '한 줄에 링크 하나씩 적어 주세요. 링크는 눌러서 열 수 있어요.' },
+      { key: 'next', label: '다음에 해볼 것 하나', type: 'text', more: true, placeholder: '예: 표정만 웃는 얼굴로 바꿔 보기' },
+      { key: 'image', label: '내 그림 (예전 칸)', type: 'image', hidden: true }, // 예전에 한 장만 넣던 칸. 동기화가 이미지를 올릴 수 있도록 남겨 두고, 화면에는 나오지 않아요.
     ],
   },
   // 📰 영어 기사 (주 1회, 읽고 세 줄로 정리해요)
@@ -230,19 +230,15 @@ const QUICK = {
       { label: '바이올린 연습', type: 'violin', data: { kind: '연습' }, memoKey: 'part', hint: '예: 비발디 1~8마디' },
     ],
   },
-  art: {
-    title: '빠른 기록 - 그림', memoRequired: false,
-    kinds: CHIPS.artStage.map((t) => ({ label: t, type: 'art', data: { stage: t }, memoKey: 'topic', hint: '그린 것을 한 줄로 (예: 손 그리기)' })),
-  },
 };
 
 // "오늘" 탭의 큰 버튼. 누르면 연습량을 고르고, 한 번 더 누르면 오늘 날짜로 '간단 기록'이 저장돼요. (routine 이 붙은 버튼은 경제 루틴 체크가 열려요)
-//   type/data: 만들어지는 기록의 종류, memoKey: 한 줄 메모가 들어갈 칸, hint: 메모 칸 안내 글
+//   type/data: 만들어지는 기록의 종류, memoKey: 한 줄 메모가 들어갈 칸, hint: 메모 칸 안내 글, form: 있으면 간단 기록 대신 그 값이 미리 채워진 입력 창이 열려요
 const TODAY_BUTTONS = [
   { key: 'yoga', icon: '🧘', label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: '예: 아침 스트레칭' },
   { key: 'jog', icon: '🏃', label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: '예: 동네 한 바퀴' },
   { key: 'violin', icon: '🎻', label: '바이올린', type: 'violin', data: { kind: '연습' }, memoKey: 'part', hint: '예: 미뉴에트 1~8마디' },
-  { key: 'art', icon: '🎨', label: '그림', type: 'art', data: {}, memoKey: 'topic', hint: '예: 명암 연습' },
+  { key: 'art', icon: '🎨', label: '그림', type: 'art', form: { artKind: '크로키' } }, // 누르면 종류 "크로키"가 골라진 그림 올리기 창이 바로 열려요
   { key: 'econ', icon: '📚', label: '경제 루틴', routine: true }, // 누르면 오늘의 경제 루틴 체크가 바로 열려요 (저장 버튼 없이 체크하면 저장)
 ];
 
@@ -284,8 +280,6 @@ const ECON_ROUTINES = [
   { id: 'podcast', icon: '🎧', label: '경제 팟캐스트 듣기' },
   { id: 'newsletter', icon: '📮', label: '뉴스레터 읽기', chips: ['잘쓸레터', '머니레터'] },
 ];
-// 오늘 한 줄에 붙이는 태그 (눌러서 그 태그가 붙은 한 줄만 모아 볼 수 있어요)
-const ECON_TAGS = ['금리', '인플레이션', '환율'];
 
 // 🎙 녹음: 한 곡에 붙일 수 있는 개수, 한 파일의 최대 길이(초)와 크기(바이트)
 //   곡마다 처음 올린 녹음("🌱 첫 녹음")은 항상 보관되고 백업 파일에도 들어가요. 나머지는 이 브라우저 안에만 저장돼요.
@@ -312,7 +306,7 @@ const CLAUDE_SCOPES = [
     info: '영어 강사라 영어는 능숙한 편. 주 1회 기사를 읽고 3줄 요약으로 감을 유지하는 중.',
     request: '요약을 더 자연스럽고 간결하게 고쳐 주고 바꾼 이유를 짧게 알려 줘. 가져갈 표현은 예문을 하나씩 만들어 줘. 기사를 직접 확인할 수 있으면 요약 내용이 맞는지도 봐 줘.' },
   { id: 'drawing', icon: '🎨', label: '그림',
-    info: '그림은 사이드 취미. 1년에 4번 정도 그리고 모작 위주. 창작할 실력을 키우는 게 목표.',
+    info: '그림은 사이드 취미. 이제 크로키부터 주 1~2회 그리려고 함. 모작 위주였고, 창작할 실력을 키우는 게 목표.',
     request: '원본과 내 그림(첨부)을 비교해서 다음에 연습할 것을 알려 줘.' },
 ];
 // 모든 범위의 요청 문구 끝에 자동으로 붙는 공통 문장
@@ -534,7 +528,7 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
 // 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false };
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -550,7 +544,8 @@ const ui = {
   econView: 'routine', // 경제 루틴: routine | feedback
   enView: 'list',     // 영어: list | phrases | speak | feedback
   fbMode: 'all',      // 💬 피드백 모음: all | todo
-  routineView: null,  // 오늘 루틴에서 모아 보고 있는 태그
+  noteDraft: null,    // 경제 루틴 "오늘 한 줄"에 쓰는 중이지만 아직 저장하지 않은 글 { date, text }
+  noteSavedUntil: 0,  // 한 줄을 저장한 직후 "저장됨 ✓"를 보여 주는 시각
   claudePeriod: 'day', // 🤖 클로드에게 보내기: 기간 day | week | month
   claudeScope: 'violin', // 범위 violin | exercise | econ | english
   claudeQuestion: {}, // 범위마다 "이번에 특히 물어볼 것" (피드백을 저장하면 비워져요)
@@ -559,10 +554,10 @@ const ui = {
   cardFbShown: new Set(), // 💬 N 을 눌러 피드백을 펼쳐 둔 카드
   fbOpenText: new Set(), // 답변 "더 보기"를 펼쳐 둔 피드백
   query: '',
-  artView: 'book',    // book | chrono | carry | compare | feedback
-  artOrder: 'newest', // newest | oldest
-  cmpA: null,
-  cmpB: null,
+  artView: 'gallery', // gallery | feedback
+  artFilter: 'all',   // all | 크로키 | 모작 | 창작
+  artOpen: null,      // 상세 창으로 열어 둔 그림 기록
+  artPhoto: 0,        // 상세 창에서 보고 있는 사진 번호
   calMonth: null,       // 캘린더에서 보고 있는 달 (예: '2026-09')
   calHidden: new Set(), // 캘린더에서 잠시 숨긴 종류
   dayOpen: null,        // 캘린더에서 열어 둔 날짜
@@ -652,7 +647,7 @@ function buildSamples() {
   const now = Date.now();
   let seq = 0;
   const mk = (type, date, data) => ({ id: newId(), type, date, sample: true, createdAt: now + (seq++), updatedAt: now, ...data });
-  const artA = mk('art', d(8), { stamp: '🎨', image: SAMPLE_IMAGES.shaded, stage: '그대로 모작', amount: 2, origin: '예시 작가', topic: '명암 연습', liked: '그림자 경계가 부드럽게 나왔다', diff: '원본은 선을 한 번에 긋는데 내 선은 여러 번 겹쳐서 흐려졌다', carry: '빛이 오는 방향을 먼저 정하고 그림자를 그리는 순서', nextChips: ['표정'], next: '표정만 웃는 얼굴로 바꿔 보기 (예시 기록)', course: '명암 기초 강의 (예시)', refs: '유튜브 - 명암 기초 강의 따라 하기 (예시)\nhttps://www.youtube.com' });
+  const artA = mk('art', d(8), { stamp: '🎨', artKind: '모작', images: [SAMPLE_IMAGES.shaded], srcImage: SAMPLE_IMAGES.color, amount: 2, topic: '명암 연습', liked: '그림자 경계가 부드럽게 나왔다', next: '표정만 웃는 얼굴로 바꿔 보기 (예시 기록)' });
   return [
     // 🧘 운동
     mk('workout', d(1), { stamp: '🍃', kind: '요가', amount: 2, mood: 'good', did: ['스트레칭', '호흡·명상'], relief: ['목·어깨'], bodyNote: '오른쪽 어깨가 더 뻣뻣했다', course: '아침 요가 20분 (예시)', refs: 'https://www.youtube.com', condition: '좋음', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
@@ -673,16 +668,16 @@ function buildSamples() {
     // 📚 레퍼토리 책장 예시: 비발디는 책상 위(연습 중), 자이츠 5번은 책장(마무리)
     mk('piecenote', d(2), { piece: '자이츠 협주곡 5번', memo: '', status: 'done', doneAt: d(2) }),
     // ✅ 경제 루틴 (며칠치. 오늘은 비워 두었으니 직접 체크해 보세요)
-    mk('econRoutine', d(1), { stamp: '📮', checks: { podcast: true, newsletter: true }, letters: ['잘쓸레터'], note: '환율이 올라 수입 물가가 걱정된다는 얘기 (예시)', tags: ['환율'] }),
-    mk('econRoutine', d(2), { checks: { podcast: true }, letters: [], note: '', tags: [] }),
-    mk('econRoutine', d(3), { stamp: '💡', checks: { newsletter: true }, letters: ['머니레터'], note: '금리를 내리면 대출 이자 부담이 줄어든다고 한다 (예시)', tags: ['금리'] }),
-    mk('econRoutine', d(5), { checks: { podcast: true, newsletter: true }, letters: ['잘쓸레터', '머니레터'], note: '물가가 오를 때 금리를 왜 올리는지 조금 이해됐다 (예시)', tags: ['인플레이션', '금리'] }),
-    mk('econRoutine', d(6), { checks: { podcast: true }, letters: [], note: '', tags: [] }),
+    mk('econRoutine', d(1), { stamp: '📮', checks: { podcast: true, newsletter: true }, letters: ['잘쓸레터'], note: '환율이 올라 수입 물가가 걱정된다는 얘기 (예시)' }),
+    mk('econRoutine', d(2), { checks: { podcast: true }, letters: [], note: '' }),
+    mk('econRoutine', d(3), { stamp: '💡', checks: { newsletter: true }, letters: ['머니레터'], note: '금리를 내리면 대출 이자 부담이 줄어든다고 한다 (예시)' }),
+    mk('econRoutine', d(5), { checks: { podcast: true, newsletter: true }, letters: ['잘쓸레터', '머니레터'], note: '물가가 오를 때 금리를 왜 올리는지 조금 이해됐다 (예시)' }),
+    mk('econRoutine', d(6), { checks: { podcast: true }, letters: [], note: '' }),
     // 📰 영어 (기사 하나)
     mk('englishArticle', d(4), { stamp: '📰', link: 'https://www.theguardian.com/business/2026/sep/20/rents-keep-rising-example', title: 'Rents keep rising in big cities (예시)', sum1: 'Rents in major cities rose again this quarter.', sum2: 'Housing costs now take a bigger share of monthly income.', sum3: 'Governments are looking at ways to crack down on sharp rent hikes.', phrases: ['crack down on', 'a wave of'], thought: '월세 얘기는 어느 나라나 비슷하다', speak: true }),
     // 🎨 그림 (원본 없이, 단계와 가져갈 것을 채운 예시)
     artA,
-    mk('art', d(1), { stamp: '🖌️', image: SAMPLE_IMAGES.color, stage: '조금 바꿔 그리기', amount: 3, mood: 'good', origin: '예시 작가', topic: '색 넣기 연습', liked: '따뜻한 색이 자연스럽게 섞였다', carry: '따뜻한 색 두 가지를 겹쳐 그러데이션을 만드는 방식', nextChips: ['머리', '옷'], next: '머리색만 차가운 색으로 바꿔 보기', course: '색연필 채색 입문 (예시)' }),
+    mk('art', d(1), { stamp: '🖌️', artKind: '크로키', images: [SAMPLE_IMAGES.color, SAMPLE_IMAGES.shaded, SAMPLE_IMAGES.color], amount: 3, mood: 'good', topic: '손 크로키 1분씩 (예시)', liked: '따뜻한 색이 자연스럽게 섞였다', next: '머리색만 차가운 색으로 바꿔 보기' }),
     // 💬 클로드 피드백 (바이올린 이번 주 1개 - 해볼 것 아직, 그림 카드 1개 - 해봤음)
     mk('claudeFeedback', d(1), { scope: 'violin', period: 'week', rangeStart: mondayOf(t), rangeEnd: addDays(mondayOf(t), 6), targetId: '', question: '3포지션에서 음정이 자꾸 높아지는 이유', text: '3포지션으로 옮길 때 손 전체가 앞으로 쏠리면서 음정이 높아지는 경우가 많아요.\n엄지 위치를 먼저 옮기고 손가락을 따라오게 하면 좋아요.\n이번 주는 활을 줄에 수직으로 두는 연습도 잘 이어졌어요. (예시)', todo: '비브라토는 개방현 옆 줄에서 4번 손가락으로 먼저', todoDone: false }),
     mk('claudeFeedback', d(7), { scope: 'drawing', period: 'card', rangeStart: d(8), rangeEnd: d(8), targetId: artA.id, question: '', text: '그림자 경계가 부드러워서 입체감이 잘 살았어요. 다음에는 빛이 오는 방향을 한 번 더 확인하고 그림자 색을 한 톤만 정해 보세요. (예시)', todo: '그림자 색을 한 톤으로 정해서 칠하기', todoDone: true }),
@@ -776,18 +771,19 @@ function monthsAgo(dateStr, n) {
 }
 
 // 그때의 나: 한 달 전 → 석 달 전 → 1년 전 중 기록이 있는 첫 날에서 하나 (그림이 있으면 그림 먼저)
+const hasArtPic = (r) => r.type === 'art' && artPhotos(r).length > 0;
 function memoryPick(today) {
   const pool = records.filter((r) => r.type !== 'rest' && r.date && catOf(r) && (r.type !== 'econRoutine' || hasValue(r.note))); // 경제 루틴은 한 줄을 남긴 날만
   for (const look of MEMORY_LOOKBACKS) {
     const date = monthsAgo(today, look.months);
-    const list = pool.filter((r) => r.date === date).sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || (b.createdAt || 0) - (a.createdAt || 0));
+    const list = pool.filter((r) => r.date === date).sort((a, b) => (hasArtPic(b) ? 1 : 0) - (hasArtPic(a) ? 1 : 0) || (b.createdAt || 0) - (a.createdAt || 0));
     if (list.length) return { label: look.label, date, rec: list[0] };
   }
   return null;
 }
 
 function memoryText(r) {
-  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.part || r.hard), econRoutine: r.note, englishArticle: r.thought || r.title, art: r.liked || r.carry || r.next }[r.type] || '';
+  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.part || r.hard), econRoutine: r.note, englishArticle: r.thought || r.title, art: r.liked || r.next || r.topic }[r.type] || '';
   const t = String(raw).replace(/\s+/g, ' ').trim();
   return t.length > 120 ? `${t.slice(0, 120)}…` : t;
 }
@@ -801,7 +797,7 @@ function memoryHTML(today) {
   return `<section class="card memory">
     <h3>🕰 그때의 나 <span class="meta">· ${esc(m.label)}</span></h3>
     <button type="button" class="memory-body" data-act="calDay" data-date="${m.date}" title="그날 기록 보기">
-      ${rec.image ? `<img class="memory-img" src="${esc(rec.image)}" alt="${esc(rec.topic || '그림')}">` : ''}
+      ${hasArtPic(rec) ? `<img class="memory-img" src="${esc(artPhotos(rec)[0])}" alt="${esc(rec.topic || '그림')}">` : ''}
       <span class="memory-text">
         <span class="meta">${esc(dayLabel(m.date))}</span>
         <span><b>${iconOf(rec)} ${esc(calTitle(rec))}</b> ${marksHTML(rec)}</span>
@@ -1429,7 +1425,7 @@ const routineIcons = (r) => ECON_ROUTINES.filter((x) => routineChecked(r, x.id))
 const dayWithDow = (s) => `${shortDay(s)} (${'일월화수목금토'[parseDate(s).getDay()]})`;
 const noteDay = (s) => (s.slice(0, 4) === String(new Date().getFullYear()) ? shortDay(s) : `${s.slice(0, 4)}년 ${shortDay(s)}`);
 
-// 한 날의 루틴 기록을 바꿔요. 순서대로 하나씩 실행해서, 한 줄 자동 저장과 체크가 서로 덮어쓰지 않아요.
+// 한 날의 루틴 기록을 바꿔요. 순서대로 하나씩 실행해서, 한 줄 저장과 체크가 서로 덮어쓰지 않아요.
 let routineQueue = Promise.resolve();
 function updateRoutine(date, patch) {
   const run = async () => {
@@ -1437,11 +1433,12 @@ function updateRoutine(date, patch) {
     const { sample, ...keep } = old || {}; // 예시를 고치면 내 기록이 돼요
     const rec = {
       ...keep, id: old ? old.id : newId(), type: 'econRoutine', date, createdAt: old ? old.createdAt : Date.now(),
-      checks: { ...(keep.checks || {}) }, letters: [...(keep.letters || [])], tags: [...(keep.tags || [])], note: keep.note || '',
+      checks: { ...(keep.checks || {}) }, letters: [...(keep.letters || [])], note: keep.note || '',
     };
+    delete rec.tags; // 예전 태그 값은 고칠 때 함께 정리돼요
     patch(rec);
     rec.updatedAt = Date.now();
-    const empty = !Object.values(rec.checks).some(Boolean) && !rec.letters.length && !rec.tags.length && !rec.note;
+    const empty = !Object.values(rec.checks).some(Boolean) && !rec.letters.length && !rec.note;
     if (empty) { if (old) await deleteRecord(old.id); return null; }
     if (!old) assignStamp(rec);
     return (await saveRecord(rec)) ? rec : undefined; // null: 비어서 지움, undefined: 저장 못 함
@@ -1461,7 +1458,6 @@ const refreshRoutineViews = () => { render(); refreshDay(); };
 
 async function setRoutineCheck(date, id, on) {
   if (date > todayStr() || !ECON_ROUTINES.some((x) => x.id === id)) return; // 미래 날짜는 체크할 수 없어요
-  await flushRoutineNote();
   const was = routineChecked(routineOn(date), id);
   const item = ECON_ROUTINES.find((x) => x.id === id);
   const rec = await updateRoutine(date, (r) => {
@@ -1477,7 +1473,6 @@ async function setRoutineCheck(date, id, on) {
 async function toggleRoutineChip(date, chip) {
   const cr = chipRoutine();
   if (!cr || date > todayStr()) return;
-  await flushRoutineNote();
   const was = routineChecked(routineOn(date), cr.id);
   const rec = await updateRoutine(date, (r) => {
     const i = r.letters.indexOf(chip);
@@ -1488,57 +1483,52 @@ async function toggleRoutineChip(date, chip) {
   if (!was && rec && routineChecked(rec, cr.id)) routineToast(rec);
 }
 
-// 오늘 한 줄: 입력을 멈추면 잠깐 뒤에 저절로 저장돼요
-let routineNoteTimer = null;
-let routineNotePending = null;
-function queueRoutineNote(date, text) {
-  routineNotePending = { date, text };
-  clearTimeout(routineNoteTimer);
-  routineNoteTimer = setTimeout(flushRoutineNote, 700);
+// 오늘 한 줄: 입력 칸 오른쪽의 [저장] 버튼이나 Enter 로 저장해요. (저절로 저장되지는 않아요)
+//   쓰는 중인 글은 ui.noteDraft 에 두어서, 체크를 눌러 화면이 다시 그려져도 사라지지 않아요.
+const noteSavedText = (date) => { const r = routineOn(date); return r && r.note ? r.note : ''; };
+const noteDraftText = (date) => (ui.noteDraft && ui.noteDraft.date === date ? ui.noteDraft.text : noteSavedText(date));
+const noteDirty = (date) => !!ui.noteDraft && ui.noteDraft.date === date && ui.noteDraft.text.trim() !== noteSavedText(date);
+
+// 저장 버튼 자리: 고친 글이 있으면 [저장], 방금 저장했으면 잠깐 "저장됨 ✓", 그 밖에는 눌리지 않는 흐린 [저장]
+function noteBtnHTML(date) {
+  if (noteDirty(date)) return '<button type="submit" class="btn small rt-save" id="rtSave">저장</button>';
+  if (ui.noteSavedUntil > Date.now()) return '<span class="rt-saved" id="rtSave" role="status">저장됨 ✓</span>';
+  return '<button type="submit" class="btn small rt-save" id="rtSave" disabled>저장</button>';
 }
-function flushRoutineNote() {
-  clearTimeout(routineNoteTimer);
-  routineNoteTimer = null;
-  const p = routineNotePending;
-  routineNotePending = null;
-  if (!p) return routineQueue;
-  const text = p.text.trim();
-  return updateRoutine(p.date, (r) => { r.note = text; }).then(() => { refreshTagPanel(); });
+function syncNoteBtn(date) {
+  const el = $('#rtSave');
+  if (el) el.outerHTML = noteBtnHTML(date);
 }
 
-// 태그: 눌러서 오늘 한 줄에 붙이고 떼요. 붙이면 그 태그가 붙은 한 줄들이 아래에 열려요.
-async function toggleRoutineTag(date, tag) {
-  if (date > todayStr()) return;
-  await flushRoutineNote();
-  const rec = await updateRoutine(date, (r) => {
-    const i = r.tags.indexOf(tag);
-    if (i >= 0) r.tags.splice(i, 1); else r.tags.push(tag);
-  });
-  if (rec === undefined) return;
-  const on = !!rec && rec.tags.includes(tag);
-  if (on) ui.routineView = tag; else if (ui.routineView === tag) ui.routineView = null;
+async function saveRoutineNote(date) {
+  const input = $('#rtNote');
+  const text = (input && input.dataset.date === date ? input.value : noteDraftText(date)).trim();
+  if (text === noteSavedText(date)) { ui.noteDraft = null; syncNoteBtn(date); return true; }
+  const rec = await updateRoutine(date, (r) => { r.note = text; });
+  if (rec === undefined) return false;
+  ui.noteDraft = null;
+  ui.noteSavedUntil = Date.now() + 2200;
+  setTimeout(() => { if (ui.noteSavedUntil <= Date.now()) syncNoteBtn(date); }, 2300);
   refreshRoutineViews();
+  return true;
 }
 
-function refreshTagPanel() {
-  const box = $('#tagPanel');
-  if (box) box.innerHTML = tagPanelHTML();
+// 다른 탭으로 가기 전에: 저장하지 않은 한 줄이 있으면 물어봐요. 저장하고 가면 true, 취소하면 그 자리에 머물러요(쓰던 글은 그대로).
+async function confirmLeaveNote() {
+  const date = todayStr();
+  if (ui.tab !== 'econ' || !noteDirty(date)) return true;
+  if (!confirm('저장하지 않은 한 줄이 있어요. 저장할까요?')) return false;
+  return saveRoutineNote(date);
 }
 
-// 태그 하나가 붙은 한 줄을 최신순으로 (검색·필터 정도의 작은 목록)
-function tagPanelHTML() {
-  const tag = ui.routineView;
-  if (!tag) return '';
-  const list = ofType('econRoutine').filter((r) => hasValue(r.note) && Array.isArray(r.tags) && r.tags.includes(tag)).sort(byNewest);
-  return `<div class="tag-panel">
-    <div class="row between">
-      <div class="chips" style="margin:0" role="group" aria-label="태그 고르기">${ECON_TAGS.map((t) => `<button type="button" class="chip small ${t === tag ? 'active' : ''}" data-act="routineView" data-tag="${esc(t)}" aria-pressed="${t === tag}">${esc(t)}</button>`).join('')}</div>
-      <button type="button" class="link-btn" data-act="routineViewClose">닫기</button>
-    </div>
+// 지난 한 줄 보기: 날짜 + 한 줄만 최신순 (작은 창)
+function openPastNotes() {
+  const list = ofType('econRoutine').filter((r) => hasValue(r.note)).sort(byNewest);
+  openDlg(`<h2>지난 한 줄</h2>
     ${list.length
     ? `<ul class="note-list">${list.map((r) => `<li><span class="meta">${esc(noteDay(r.date))}</span><span class="pre">${esc(r.note)}</span></li>`).join('')}</ul>`
-    : '<p class="meta" style="margin:8px 0 0">이 태그가 붙은 한 줄이 아직 없어요.</p>'}
-  </div>`;
+    : '<p class="meta">아직 적어 둔 한 줄이 없어요.</p>'}
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
 }
 
 // 체크 목록 (경제 화면과 오늘 탭이 함께 써요)
@@ -1558,14 +1548,12 @@ function routineRowsHTML(date) {
 }
 
 function routineNoteHTML(date) {
-  const rec = routineOn(date);
-  const tags = rec && Array.isArray(rec.tags) ? rec.tags : [];
   return `<div class="rt-note">
     <label class="rt-h" for="rtNote">오늘 한 줄 <span class="meta">(선택)</span></label>
-    <input id="rtNote" class="rt-note-in" type="text" maxlength="300" autocomplete="off" data-routine-note data-date="${date}" value="${esc(rec ? rec.note || '' : '')}" placeholder="오늘 기억나는 흐름 하나 (예: 환율이 올라 수입 물가가 걱정된다는 얘기)">
-    <div class="rt-tags" role="group" aria-label="태그"><span class="rt-h" style="margin:0">태그 <span class="meta">(선택)</span></span>${ECON_TAGS.map((t) => `<button type="button" class="chip small${tags.includes(t) ? ' active' : ''}" data-act="routineTag" data-date="${date}" data-tag="${esc(t)}" aria-pressed="${tags.includes(t)}">${esc(t)}</button>`).join('')}
-      <button type="button" class="link-btn rt-find" data-act="routineFind" aria-expanded="${!!ui.routineView}">🔎 태그별로 모아 보기</button></div>
-    <div id="tagPanel">${tagPanelHTML()}</div>
+    <form id="rtNoteForm" class="rt-note-form" data-date="${date}" novalidate>
+      <input id="rtNote" class="rt-note-in" type="text" maxlength="300" autocomplete="off" data-routine-note data-date="${date}" value="${esc(noteDraftText(date))}" placeholder="오늘 기억나는 흐름 하나 (예: 환율이 올라 수입 물가가 걱정된다는 얘기)">
+      ${noteBtnHTML(date)}
+    </form>
   </div>`;
 }
 
@@ -1584,6 +1572,7 @@ function routineWeekHTML() {
       }).join('')}</div>`).join('')}
     </div>
     <p class="meta wk-note">지난 날짜의 점을 누르면 그날 체크를 켜고 끌 수 있어요.</p>
+    <button type="button" class="link-btn past-notes" data-act="pastNotes">지난 한 줄 보기</button>
   </div>`;
 }
 
@@ -1622,7 +1611,7 @@ function goToRecord(id) {
   if (!r) return;
   closeDlg();
   if (r.type === 'econRoutine') { ui.tab = 'econ'; }
-  else if (r.type === 'art') { ui.tab = 'art'; ui.artView = 'book'; }
+  else if (r.type === 'art') { ui.tab = 'art'; ui.artView = 'gallery'; ui.artFilter = 'all'; }
   else if (r.type === 'englishArticle') { ui.tab = 'english'; ui.enView = 'list'; }
   else if (r.type === 'violin') { ui.tab = 'violin'; ui.vnView = 'records'; ui.bodyAllRange = true; }
   else { ui.tab = 'exercise'; ui.exView = 'records'; ui.bodyAllRange = true; }
@@ -1638,140 +1627,136 @@ function goToRecord(id) {
 }
 
 /* ---------------------------------------------------------------------
-   10. 메뉴 3: 그림 발전 기록
+   10. 메뉴 3: 🎨 그림 (갤러리 하나. 주(월~일)별로 묶어서 큰 썸네일 격자로 보여요)
    --------------------------------------------------------------------- */
-const artStageTag = (r) => (r.stage ? `<span class="tag art-kind">${esc(r.stage)}</span>` : '');
-const artTitle = (r) => r.topic || r.origin || '(제목 없음)';
+// 종류: 새 기록은 artKind 에, 예전 기록은 "단계"로 읽어요 (그대로 모작·조금 바꿔 그리기 → 모작, 창작 → 창작, 없으면 모작)
+const artKindOf = (r) => (ART_KINDS.includes(r.artKind) ? r.artKind : (ART_STAGE_TO_KIND[r.stage] || '모작'));
+// 사진: 새 기록은 images(여러 장), 예전 기록은 image(한 장)
+const artPhotos = (r) => (Array.isArray(r.images) && r.images.length ? r.images : (r.image ? [r.image] : []));
+const artCount = (r) => Math.max(1, artPhotos(r).length); // 그린 양은 사진 수로 세요 (사진이 없는 예전 기록은 1장)
+const artTitle = (r) => r.topic || artKindOf(r);
 
-// 카드 위쪽 그림: 원본이 있으면 "원본 | 내 그림"을 좌우로 나란히
-function artImagesHTML(r) {
-  const img = (key, alt, cap) => `<figure class="art-fig"><img class="art-img" src="${esc(r[key])}" alt="${esc(alt)}" data-act="zoom" data-id="${esc(r.id)}" data-key="${key}">${cap ? `<figcaption class="meta">${cap}</figcaption>` : ''}</figure>`;
-  if (r.srcImage && r.image) return `<div class="art-pair">${img('srcImage', '원본 그림', '원본')}${img('image', artTitle(r), '내 그림')}</div>`;
-  if (r.srcImage) return `<div class="art-pair one">${img('srcImage', '원본 그림', '원본 (내 그림은 아직 없어요)')}</div>`;
-  return r.image ? img('image', artTitle(r), '') : '<div class="art-noimg">이미지 없음</div>';
+// 한 주 묶음 제목: "이번 주 · 크로키 12장 · 모작 1장" (0장인 종류는 빼요)
+function artWeekTitle(mon, list) {
+  const thisMon = mondayOf(todayStr());
+  const label = mon === thisMon ? '이번 주' : mon === addDays(thisMon, -7) ? '지난주' : `${shortDay(mon)} ~ ${shortDay(addDays(mon, 6))}`;
+  const counts = ART_KINDS.map((k) => [k, list.filter((r) => artKindOf(r) === k).reduce((n, r) => n + artCount(r), 0)]).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}장`);
+  return `${label} · ${counts.join(' · ')}`;
 }
 
-function artCard(r) {
-  const details = guideHTML('art', r, ['topic', 'stage', 'origin']);
-  return `<article class="card art-card${r.srcImage ? ' has-src' : ''}" data-rid="${esc(r.id)}">
-    ${artImagesHTML(r)}
-    <h3>${artStageTag(r)}${esc(artTitle(r))}</h3>
-    <div class="meta">${esc(dayLabel(r.date))}${r.origin && r.topic ? ` · 원작자 ${esc(r.origin)}` : ''} ${marksHTML(r)} ${quickTag(r)}</div>
-    ${details ? `<details open><summary>돌아보기 메모</summary>${details}</details>` : ''}
+function artTileHTML(r) {
+  const photos = artPhotos(r);
+  const n = photos.length;
+  const say = `${dayLabel(r.date)}, ${artKindOf(r)}${n > 1 ? ` ${n}장` : ''}${r.topic ? `, ${r.topic}` : ''}`;
+  return `<button type="button" class="art-tile" data-act="artOpen" data-id="${esc(r.id)}" data-rid="${esc(r.id)}" aria-label="${esc(say)}">
+    <span class="art-thumb">${photos[0] ? `<img src="${esc(photos[0])}" alt="" loading="lazy" decoding="async">` : '<span class="art-noimg">사진 없음</span>'}${n > 1 ? `<span class="art-count">×${n}</span>` : ''}</span>
+    <span class="art-cap"><span>${esc(shortDay(r.date))}</span>${ui.artFilter === 'all' ? `<span class="tag art-kind small">${esc(artKindOf(r))}</span>` : ''}</span>
+  </button>`;
+}
+
+function artGalleryHTML() {
+  const all = ofType('art');
+  if (!all.length) return '<div class="empty">그린 그림을 올려 보세요. 사진을 끌어다 놓거나 붙여넣어도 돼요.</div>';
+  const list = all.filter((r) => ui.artFilter === 'all' || artKindOf(r) === ui.artFilter).sort(byNewest);
+  if (!list.length) return `<div class="empty">${esc(ui.artFilter)} 그림은 아직 없어요.</div>`;
+  const weeks = new Map(); // 주(월요일 날짜) → 그 주의 기록들. 기록이 없는 주는 만들어지지 않아요
+  list.forEach((r) => { const w = mondayOf(r.date); if (!weeks.has(w)) weeks.set(w, []); weeks.get(w).push(r); });
+  return [...weeks.keys()].sort().reverse().map((w) => `<section class="art-week" data-week="${w}">
+    <h3 class="art-week-h">${esc(artWeekTitle(w, weeks.get(w)))}</h3>
+    <div class="art-grid">${weeks.get(w).map(artTileHTML).join('')}</div>
+  </section>`).join('');
+}
+
+function renderArt() {
+  const feedback = ui.artView === 'feedback';
+  const chip = (id, text) => `<button type="button" class="chip ${ui.artFilter === id ? 'active' : ''}" data-act="artFilter" data-id="${esc(id)}" aria-pressed="${ui.artFilter === id}">${esc(text)}</button>`;
+  view.innerHTML = `
+    <h2 class="page-title">그림 기록</h2>
+    <p class="page-sub">매주 조금씩, 그린 만큼 쌓여요.</p>
+    <div class="row actions-row" style="margin:6px 0 14px">
+      <button type="button" class="btn" data-act="add" data-type="art">＋ 그림 올리기</button>
+    </div>
+    <div class="row between art-filter">
+      ${feedback ? '<button type="button" class="link-btn" data-act="artGallery">← 그림 보기</button>' : `<div class="chips" style="margin:0">${chip('all', '전체')}${ART_KINDS.map((k) => chip(k, k)).join('')}</div>`}
+      ${feedback ? '' : '<button type="button" class="link-btn art-fb-link" data-act="artFeedback">💬 피드백</button>'}
+    </div>
+    ${feedback ? feedbackViewHTML('drawing') : artGalleryHTML()}`;
+}
+
+// 예전에 적어 둔 값 (원작자·원본과 다른 점·가져갈 것·참고 강의 등). 지우지 않고 읽기만 해요.
+function legacyArtMemoHTML(r) {
+  const rows = [];
+  const add = (label, v) => { if (hasValue(v)) rows.push([label, Array.isArray(v) ? v.join('·') : v]); };
+  add('단계', r.stage); add('원작자', r.origin); add('원본과 다른 점', r.diff); add('내 그림에 가져갈 것', r.carry);
+  add('다음엔 바꿔 그려 보기', r.nextChips); add('참고한 강의·영상', r.course);
+  const refs = hasValue(r.refs) ? linksBlock(r.refs, '참고 링크') : '';
+  if (!rows.length && !refs) return '';
+  return `<div class="legacy-memo"><div class="label">예전 메모 <span class="meta">(읽기만 해요)</span></div>
+    ${rows.map(([l, v]) => `<p class="pre"><span class="meta">${esc(l)}</span> ${esc(v)}</p>`).join('')}${refs}</div>`;
+}
+
+// 썸네일을 누르면 열리는 상세 창: 사진 크게(여러 장이면 ◀ ▶), 원본이 있으면 "원본 | 내 그림" 나란히
+function openArt(id, i = 0) {
+  const r = records.find((x) => x.id === id && x.type === 'art');
+  if (!r) return;
+  const photos = artPhotos(r);
+  ui.artOpen = id;
+  ui.artPhoto = Math.min(Math.max(0, i), Math.max(0, photos.length - 1));
+  const fig = (src, alt, cap, extra = '') => `<figure class="art-fig"><img class="art-img" src="${esc(src)}" alt="${esc(alt)}" ${extra}><figcaption class="meta" ${extra.includes('id=') ? '' : ''}>${cap}</figcaption></figure>`;
+  const mine = photos.length
+    ? `<figure class="art-fig"><img class="art-img" id="artMainImg" src="${esc(photos[ui.artPhoto])}" alt="${esc(artTitle(r))}">
+        ${photos.length > 1 ? `<div class="art-nav"><button type="button" class="btn ghost small" data-act="artNav" data-d="-1" aria-label="이전 사진">◀</button><span class="meta" id="artNavNo">${ui.artPhoto + 1} / ${photos.length}</span><button type="button" class="btn ghost small" data-act="artNav" data-d="1" aria-label="다음 사진">▶</button></div>` : ''}
+        ${r.srcImage ? '<figcaption class="meta">내 그림</figcaption>' : ''}</figure>`
+    : '<div class="art-noimg">사진 없음</div>';
+  const src = r.srcImage ? fig(r.srcImage, '원본 그림', '원본') : '';
+  openDlg(`<div class="art-detail" data-rid="${esc(r.id)}">
+    <div class="item-head">
+      <div><span class="tag art-kind">${esc(artKindOf(r))}</span> <span class="meta">${esc(dayLabel(r.date))}</span> ${marksHTML(r)}</div>
+    </div>
+    ${r.topic ? `<h2 style="margin:6px 0 10px">${esc(r.topic)}</h2>` : ''}
+    <div class="art-pair${src ? '' : ' one'}">${src}${mine}</div>
+    ${textBlock('마음에 드는 곳', r.liked)}
+    ${textBlock('다음에 해볼 것', r.next)}
     ${feedbackDoneNote(r)}
-    <div class="row" style="margin-top:10px">
-      ${r.image ? `<button type="button" class="btn ghost small" data-act="compare-prev" data-id="${esc(r.id)}">이전 작업과 비교</button>` : ''}
+    <div class="row" style="margin-top:12px">
       <button type="button" class="btn ghost purple small" data-act="claudeCard" data-id="${esc(r.id)}" title="이 그림 기록을 클로드에게 보낼 글로 복사해요">🤖 클로드에게 보내기</button>
       ${feedbackBadge(r)}
       <button type="button" class="btn ghost small" data-act="edit" data-type="art" data-id="${esc(r.id)}">수정</button>
       <button type="button" class="btn danger small" data-act="del" data-type="art" data-id="${esc(r.id)}">삭제</button>
     </div>
     ${cardFeedbackHTML(r)}
-  </article>`;
+    ${legacyArtMemoHTML(r)}
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>
+  </div>`, 'roomy');
 }
+// 사진 넘기기: 창을 다시 그리지 않고 사진과 번호만 바꿔요
+function artNav(d) {
+  const r = records.find((x) => x.id === ui.artOpen);
+  const img = $('#artMainImg');
+  if (!r || !img) return;
+  const photos = artPhotos(r);
+  ui.artPhoto = (ui.artPhoto + d + photos.length) % photos.length;
+  img.src = photos[ui.artPhoto];
+  const no = $('#artNavNo');
+  if (no) no.textContent = `${ui.artPhoto + 1} / ${photos.length}`;
+}
+// 열려 있는 상세 창을 새로 그려요 (피드백을 붙여 넣거나 고친 뒤)
+function refreshArtDetail() { if (dlg.open && ui.artOpen && dlg.querySelector('.art-detail')) openArt(ui.artOpen, ui.artPhoto); }
 
-function artOptionLabel(r) { return `${r.date} · ${artTitle(r)}`; }
-
-function comparePanel(r) {
-  if (!r) return '<div class="card empty">기록을 골라 주세요.</div>';
-  return `<div class="card">
-    <img class="art-img" src="${esc(r.image)}" alt="${esc(artTitle(r))}" data-act="zoom" data-id="${esc(r.id)}">
-    <h3 style="margin-top:8px">${artStageTag(r)}${esc(artTitle(r))}</h3>
-    <div class="meta">${esc(dayLabel(r.date))}${r.origin ? ` · 원작자 ${esc(r.origin)}` : ''}</div>
-    ${textBlock('마음에 드는 곳', r.liked)}
-    ${textBlock('원본과 다른 점', r.diff)}
-    ${textBlock('내 그림에 가져갈 것', r.carry)}
-    ${textBlock('바꿔 그릴 것', [Array.isArray(r.nextChips) ? r.nextChips.join('·') : '', r.next].filter(Boolean).join(' — '))}
+// 캘린더 날짜 창 안의 그림 카드 (작은 사진 + 종류·한 줄. 사진을 누르면 상세 창)
+function artDayCard(r) {
+  const photos = artPhotos(r);
+  return `<div class="card art-day" data-rid="${esc(r.id)}">
+    <div class="item-head">
+      <div class="art-day-main">
+        <button type="button" class="art-day-thumb" data-act="artOpen" data-id="${esc(r.id)}" aria-label="그림 크게 보기">${photos[0] ? `<img src="${esc(photos[0])}" alt="">` : '🎨'}${photos.length > 1 ? `<span class="art-count">×${photos.length}</span>` : ''}</button>
+        <div><div><span class="tag art-kind">${esc(artKindOf(r))}</span> ${marksHTML(r)}</div>${r.topic ? `<div class="pre">${esc(r.topic)}</div>` : ''}</div>
+      </div>
+      ${actionButtons('art', r.id, claudeBtns(r))}
+    </div>
+    ${feedbackDoneNote(r)}
+    ${cardFeedbackHTML(r)}
   </div>`;
-}
-
-// 🖼 그림 연대기: 모든 그림을 날짜순으로 큰 썸네일로 (원본이 있으면 작은 원본 썸네일이 옆에). 단계만 작게 표시해요.
-function chronicleHTML() {
-  const list = ofType('art').filter((r) => r.image || r.srcImage).sort(byOldest);
-  if (!list.length) return '<div class="empty">그림을 올리면 날짜순으로 여기에 쭉 이어져요.</div>';
-  return `<div class="chrono">${list.map((r) => `<figure class="chrono-item" data-rid="${esc(r.id)}">
-    <div class="chrono-imgs">
-      ${r.image ? `<img class="art-img chrono-img" src="${esc(r.image)}" alt="${esc(artTitle(r))}" data-act="zoom" data-id="${esc(r.id)}">` : '<div class="art-noimg chrono-img">내 그림 없음</div>'}
-      ${r.srcImage ? `<img class="chrono-src" src="${esc(r.srcImage)}" alt="원본 그림" title="원본" data-act="zoom" data-id="${esc(r.id)}" data-key="srcImage">` : ''}
-    </div>
-    <figcaption><span class="meta">${esc(dayLabel(r.date))}</span>${r.stage ? ` <span class="tag art-kind small">${esc(r.stage)}</span>` : ''}</figcaption>
-  </figure>`).join('')}</div>`;
-}
-
-// 🧰 가져갈 것 모음: "내 그림에 가져갈 것"만 최신순으로. 누르면 그 그림으로 이동해요.
-function carryListHTML() {
-  const list = ofType('art').filter((r) => hasValue(r.carry)).sort(byNewest);
-  if (!list.length) return '<div class="empty">아직 없어요. 그림 기록의 "✍ 더 적기"에 "내 그림에 가져갈 것 하나"를 적으면 여기에 모여요.</div>';
-  return list.map((r) => `<div class="card carry-item">
-    <div class="pre carry-text">🧰 ${esc(r.carry)}</div>
-    <div class="row between" style="margin-top:6px">
-      <span class="meta">${esc(dayLabel(r.date))}${r.topic ? ` · ${esc(r.topic)}` : ''}${r.origin ? ` · 원작자 ${esc(r.origin)}` : ''}</span>
-      <button type="button" class="link-btn" data-act="goto" data-id="${esc(r.id)}">그림 보기</button>
-    </div>
-  </div>`).join('');
-}
-
-function renderArt() {
-  const arts = ofType('art');
-  const withImg = arts.filter((r) => r.image).sort(byOldest);
-  const chip = (id, text) => `<button type="button" class="chip ${ui.artView === id ? 'active' : ''}" data-act="artView" data-id="${id}">${text}</button>`;
-
-  let body = '';
-  if (ui.artView === 'book') {
-    const list = [...arts].sort(ui.artOrder === 'newest' ? byNewest : byOldest);
-    body = `
-      <div class="row between" style="margin-bottom:12px">
-        <span class="meta"></span>
-        <div class="row"><span class="meta">정렬</span>
-          <select id="artOrder" class="search" style="min-width:0">
-            <option value="newest" ${ui.artOrder === 'newest' ? 'selected' : ''}>최근 것부터</option>
-            <option value="oldest" ${ui.artOrder === 'oldest' ? 'selected' : ''}>오래된 것부터</option>
-          </select>
-        </div>
-      </div>
-      ${list.length ? `<div class="art-grid">${list.map(artCard).join('')}</div>`
-        : '<div class="empty">아직 기록이 없어요. 위의 버튼으로 첫 그림을 남겨 보세요.</div>'}`;
-  } else if (ui.artView === 'chrono') {
-    body = chronicleHTML();
-  } else if (ui.artView === 'carry') {
-    body = carryListHTML();
-  } else if (ui.artView === 'feedback') {
-    body = feedbackViewHTML('drawing');
-  } else if (withImg.length < 2) {
-    body = '<div class="empty">비교하려면 이미지가 있는 기록이 2개 이상 필요해요.</div>';
-  } else {
-    if (!withImg.some((r) => r.id === ui.cmpA)) ui.cmpA = withImg[0].id;
-    if (!withImg.some((r) => r.id === ui.cmpB)) ui.cmpB = withImg[withImg.length - 1].id;
-    const a = withImg.find((r) => r.id === ui.cmpA);
-    const b = withImg.find((r) => r.id === ui.cmpB);
-    const opts = (sel) => withImg.map((r) => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(artOptionLabel(r))}</option>`).join('');
-    const aNext = [Array.isArray(a.nextChips) ? a.nextChips.join('·') : '', a.next].filter(Boolean).join(' — ');
-    body = `
-      <div class="row" style="margin-bottom:12px">
-        <select class="search" data-cmp="a" style="min-width:0">${opts(ui.cmpA)}</select>
-        <span class="meta">와(과)</span>
-        <select class="search" data-cmp="b" style="min-width:0">${opts(ui.cmpB)}</select>
-        <button type="button" class="btn ghost small" data-act="cmp-first-last">처음 ↔ 최근</button>
-      </div>
-      ${aNext ? `<div class="reflect"><b>왼쪽 기록에서 세웠던 "다음에 바꿔 볼 것"</b><p class="pre">${esc(aNext)}</p>
-        <span class="meta">오른쪽 작업에서 어떻게 이어졌는지 살펴보세요. 잘하고 못하고를 따지지 않고, 달라진 점을 찾아보는 시간이에요.</span></div>` : ''}
-      <div class="compare">${comparePanel(a)}${comparePanel(b)}</div>`;
-  }
-
-  view.innerHTML = `
-    <h2 class="page-title">그림 기록</h2>
-    <p class="page-sub">한 장이 작은 프로젝트예요. 점수나 순위 없이, 내가 걸어온 과정을 돌아보는 기록장이에요. 이 기록은 이 컴퓨터에만 저장돼요.</p>
-    <div class="row between" style="margin-bottom:12px">
-      <div class="chips" style="margin:0">${chip('book', '📖 기록장')}${chip('chrono', '🖼 그림 연대기')}${chip('carry', '🧰 가져갈 것 모음')}${chip('compare', '↔ 나란히 비교')}${chip('feedback', '💬 피드백')}</div>
-      <div class="row actions-row">
-        <button type="button" class="btn purple" data-act="quick" data-menu="art">⚡ 빠른 기록</button>
-        <button type="button" class="btn" data-act="add" data-type="art">＋ 그림 기록 추가</button>
-        <input id="artMulti" type="file" accept="image/*" multiple class="sr-only">
-        <label class="btn ghost purple" for="artMulti">🖼 사진 여러 장 올리기</label>
-      </div>
-    </div>
-    <p class="meta" style="margin:-4px 0 12px">💡 컴퓨터에서는 사진을 이 화면에 끌어다 놓거나 Ctrl+V로 붙여넣어도 돼요. 여러 장을 한꺼번에 올리면 한 장씩 "간단 기록"이 만들어져요. 한 장을 며칠에 나눠 그려도 기록은 하나예요. 카드의 '수정'으로 이어서 써 주세요.</p>
-    ${body}`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1887,7 +1872,7 @@ function calTitle(r) {
     case 'econRoutine': return '경제 루틴';
     case 'englishArticle': return r.title || domainOf(r.link) || '영어 기사';
     case 'rest': return '쉼';
-    default: return r.topic || '그림';
+    default: return r.topic || artKindOf(r);
   }
 }
 
@@ -2133,13 +2118,12 @@ const RECAP_SECTIONS = [
     if (!mine.some((r) => routineIcons(r).length) && !notes.length) return null;
     return { title: '경제 루틴', html: `<p class="recap-big">${counts.map(esc).join(' · ')}</p>${notes.length ? `<div class="label">오늘 한 줄</div><ul class="note-list">${notes.map((r) => `<li><span class="meta">${esc(shortDay(r.date))}</span><span class="pre">${esc(r.note)}</span></li>`).join('')}</ul>` : ''}` };
   } },
-  { id: 'art', build: (c) => {
-    const imgs = c.real.filter((r) => r.type === 'art' && r.image).sort(byOldest);
-    if (!imgs.length) return null;
-    const fig = (r, cap) => `<figure class="recap-fig"><img class="art-img recap-img" src="${esc(r.image)}" alt="${esc(r.topic || '그림')}"><figcaption><b>${cap}</b> · ${esc(dayLabel(r.date))}${r.topic ? ` · ${esc(r.topic)}` : ''}</figcaption></figure>`;
-    const first = imgs[0];
-    const last = imgs[imgs.length - 1];
-    return { title: '그림', html: `<div class="recap-figs">${imgs.length === 1 ? fig(first, '이 달의 그림') : `${fig(first, '첫 그림')}${fig(last, '마지막 그림')}`}</div>` };
+  { id: 'art', build: (c) => { // 그림: "크로키 N장 · 모작 N장 · 창작 N장" + 이 달의 썸네일 (기록마다 첫 장, 최대 6장)
+    const list = c.real.filter((r) => r.type === 'art').sort(byOldest);
+    if (!list.length) return null;
+    const counts = ART_KINDS.map((k) => [k, list.filter((r) => artKindOf(r) === k).reduce((n, r) => n + artCount(r), 0)]).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}장`);
+    const thumbs = list.filter((r) => artPhotos(r).length).slice(-6);
+    return { title: '그림', html: `<p class="recap-big">${counts.map(esc).join(' · ')}</p>${thumbs.length ? `<div class="recap-thumbs">${thumbs.map((r) => `<img class="recap-thumb" src="${esc(artPhotos(r)[0])}" alt="${esc(artTitle(r))}" title="${esc(shortDay(r.date))}">`).join('')}</div>` : ''}` };
   } },
   { id: 'lessons', build: (c) => {
     const ls = c.real.filter((r) => r.type === 'violin' && r.kind === '레슨' && ((r.feedback || '').trim() || hasValue(r.praise) || hasValue(r.newLearn))).sort(byOldest);
@@ -2181,12 +2165,10 @@ function openRecap() {
 function routineDayCard(r) {
   const items = ECON_ROUTINES.filter((x) => routineChecked(r, x.id));
   const letters = Array.isArray(r.letters) ? r.letters : [];
-  const tags = Array.isArray(r.tags) ? r.tags : [];
   return `<div class="card" data-rid="${esc(r.id)}">
     <div><span class="tag">✅ 경제 루틴</span> ${items.length ? items.map((x) => `<span class="rt-day-item">${x.icon} ${esc(x.label)}</span>`).join(' · ') : '<span class="meta">체크한 항목은 없어요</span>'}</div>
     ${letters.length ? `<div class="chip-line"><span class="chip-label">읽은 뉴스레터</span>${letters.map((c) => `<span class="tag chip-tag">${esc(c)}</span>`).join('')}</div>` : ''}
     ${hasValue(r.note) ? textBlock('오늘 한 줄', r.note) : ''}
-    ${tags.length ? `<div class="chip-line"><span class="chip-label">태그</span>${tags.map((c) => `<span class="tag chip-tag">${esc(c)}</span>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -2194,7 +2176,7 @@ function routineDayCard(r) {
 function openDay(date) {
   ui.dayOpen = date;
   const list = records.filter((r) => r.date === date && catOf(r)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  const card = { workout: workoutCard, violin: violinCard, econRoutine: routineDayCard, englishArticle: englishCard, art: artCard, rest: restCard };
+  const card = { workout: workoutCard, violin: violinCard, econRoutine: routineDayCard, englishArticle: englishCard, art: artDayCard, rest: restCard };
   const add = [['workout', '운동'], ['violin', '바이올린'], ['art', '그림'], ['englishArticle', '영어 기사']]
     .map(([t, l]) => `<button type="button" class="btn ghost small" data-act="addOn" data-type="${t}" data-date="${date}">＋ ${l}</button>`).join('')
     + restButtonHTML(date);
@@ -2306,35 +2288,14 @@ function afterNewRecord(rec, extra = {}) {
   toast(s.text, ms, { ...extra, stamp: s.icon });
 }
 
-// 사진 파일 하나 → 새 그림 입력 창(사진이 붙은 채로 열림), 여러 장 → 한 장씩 "간단 기록"으로 만들기
+// 사진 파일(여러 장도 돼요) → 사진이 붙은 새 그림 올리기 창. 여러 장은 기록 하나로 묶여요.
 async function addArtFromFiles(files) {
   const imgs = files.filter(isImage);
   if (!imgs.length) { toast('이미지 파일(사진)만 올릴 수 있어요.'); return; }
-  if (imgs.length === 1) {
-    openForm('art');
-    const dateInput = $('#f_date');
-    if (dateInput) dateInput.value = dateOfFile(imgs[0]); // 사진 파일의 날짜를 미리 넣어 둬요 (바꿀 수 있어요)
-    await attachImage(imgs[0], 'image');
-    return;
-  }
-  let added = 0;
-  let skipped = 0;
-  for (let i = 0; i < imgs.length; i += 1) {
-    toast(`올리는 중이에요… ${i + 1}/${imgs.length}`, 60000);
-    try {
-      const image = await readImage(imgs[i]);
-      const saved = await saveRecord(assignStamp({
-        id: newId(), type: 'art', createdAt: Date.now() + i, updatedAt: Date.now(),
-        quick: true, date: dateOfFile(imgs[i]), topic: '', image,
-      }, false));
-      if (!saved) break; // 저장 공간이 모자라면 saveRecord가 이미 알려 줬어요
-      added += 1;
-    } catch (e) { skipped += 1; }
-  }
-  render();
-  toast(added
-    ? `${added}장을 "간단 기록"으로 추가했어요. 카드의 '수정'에서 주제와 메모를 채워 보세요.${skipped ? ` (${skipped}장은 이미지로 열 수 없어 건너뛰었어요)` : ''}`
-    : '올리지 못했어요. 이미지 파일인지 확인해 주세요.');
+  openForm('art', undefined, undefined, { artKind: '크로키' });
+  const dateInput = $('#f_date');
+  if (dateInput) dateInput.value = dateOfFile(imgs[0]); // 사진 파일의 날짜를 미리 넣어 둬요 (바꿀 수 있어요)
+  await attachShots(imgs);
 }
 
 const hasFiles = (e) => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
@@ -2343,7 +2304,7 @@ const firstImageKey = () => { const z = dlg.querySelector('.dropzone[data-key]')
 const multiFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone[data-multi]');
 // 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 그림 화면(그림 기록), 운동·바이올린 화면(운동 기록에 워치 캡처)
 const dropTarget = () => (dlg.open ? null : ui.tab === 'art' ? 'art' : ui.tab === 'exercise' ? 'exercise' : null);
-const DROP_HINT = { art: '🖼 여기에 놓으면 새 그림 기록이 만들어져요', exercise: '🖼 여기에 놓으면 새 운동 기록에 워치 캡처가 붙어요' };
+const DROP_HINT = { art: '🖼 여기에 놓으면 그림 올리기 창이 열려요', exercise: '🖼 여기에 놓으면 새 운동 기록에 워치 캡처가 붙어요' };
 let dragTimer = null;
 
 // 운동 기록 입력 창을 열고 워치 캡처를 붙여 줘요 (날짜는 사진 파일의 날짜)
@@ -2389,9 +2350,10 @@ document.addEventListener('drop', async (e) => {
   if (imgFormOpen()) {
     const imgs = files.filter(isImage);
     if (!imgs.length) { $('#formError').textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return; }
-    if (multiFormOpen()) await attachShots(imgs);
+    const onSingle = e.target.closest && e.target.closest('.dropzone[data-key]'); // 한 장짜리 칸(원본 사진)에 놓았으면 그 칸에 들어가요
+    if (multiFormOpen() && !onSingle) await attachShots(imgs);
     else {
-      const zone = e.target.closest && e.target.closest('.dropzone[data-key]'); // 놓은 자리의 칸(내 그림·원본 이미지)에 들어가요
+      const zone = onSingle; // 놓은 자리의 칸에 들어가요
       const key = zone ? zone.dataset.key : firstImageKey();
       if (await attachImage(imgs[0], key) && imgs.length > 1) {
         const note = $(`#imgNote_${key}`);
@@ -2413,7 +2375,7 @@ document.addEventListener('paste', async (e) => {
   if (!imgs.length) return;
   const target = dropTarget();
   if (imgFormOpen()) { e.preventDefault(); if (multiFormOpen()) await attachShots(imgs); else await attachImage(imgs[0], firstImageKey()); }
-  else if (target === 'art') { e.preventDefault(); await addArtFromFiles([imgs[0]]); }
+  else if (target === 'art') { e.preventDefault(); await addArtFromFiles(imgs); }
   else if (target === 'exercise') { e.preventDefault(); await addWorkoutFromFiles(imgs); }
 });
 
@@ -2970,7 +2932,7 @@ function claudeLine(r) {
       const chips = x.chips && Array.isArray(r.letters) ? r.letters.filter((c) => x.chips.includes(c)) : [];
       bits.push(`${x.icon} ${x.label}${chips.length ? `(${chips.join(', ')})` : ''}`);
     });
-    add('한 줄', r.note); add('태그', joinList(r.tags));
+    add('한 줄', r.note);
   } else if (r.type === 'englishArticle') {
     add('제목', r.title); add('링크', r.link);
     const sums = [r.sum1, r.sum2, r.sum3].map((t, i) => (String(t || '').trim() ? `${i + 1}) ${oneLine(t)}` : '')).filter(Boolean);
@@ -2978,11 +2940,11 @@ function claudeLine(r) {
     add('표현', joinList(r.phrases)); add('내 생각', r.thought);
     if (r.speak) bits.push('말해 볼 주제');
     done();
-  } else if (r.type === 'art') {
-    add('단계', r.stage); add('원작자', r.origin); add('그린 것', r.topic); feel();
-    add('마음에 드는 곳', r.liked); add('원본과 다른 점', r.diff); add('내 그림에 가져갈 것', r.carry);
-    const nx = [joinList(r.nextChips), oneLine(r.next)].filter(Boolean).join(' — ');
-    if (nx) bits.push(`다음에 바꿔 볼 것: ${nx}`);
+  } else if (r.type === 'art') { // 그림: 종류 · 장수 · 한 줄 · 마음에 드는 곳 · 다음에 해볼 것
+    bits.push(`종류: ${artKindOf(r)}`);
+    bits.push(`${artCount(r)}장`);
+    add('한 줄', r.topic); feel();
+    add('마음에 드는 곳', r.liked); add('다음에 해볼 것', r.next);
     done();
   }
   return bits.join(' · ');
@@ -3050,7 +3012,7 @@ async function hideTodo(id) { // 입력 창에 더 이상 안 뜨게 (지우는 
   await saveRecord({ ...f, todoHidden: true, updatedAt: Date.now() });
 }
 
-const refreshFeedbackViews = () => { render(); refreshDay(); };
+const refreshFeedbackViews = () => { render(); refreshDay(); refreshArtDetail(); };
 
 /* ---- 지난 피드백에서 "해볼 것" ---- */
 // 이 범위에서 아직 해봤음 체크가 안 됐고 숨기지도 않은 가장 최근 해볼 것 하나
@@ -3346,10 +3308,10 @@ function fieldHTML(f, value, type) {
     input = `<select id="${id}" name="${f.key}">${f.required ? '' : '<option value="">(선택 안 함)</option>'}${opts}</select>`;
   } else if (f.type === 'choice' || f.type === 'chips') { // 버튼 칸 (연습량·기분·각종 칩)
     input = choiceHTML(f.key, choicesOf(f), value, f.type === 'chips', f.manage === 'books' ? MANAGE_BOOKS_BTN : '');
-  } else if (f.type === 'images') { // 여러 장 (워치 캡처)
-    input = `<input id="${id}" type="file" accept="image/*" multiple class="sr-only">
-      <label class="dropzone" id="dropZone" data-multi="1" for="${id}"><span>🖼 여기에 ${esc(f.noun || '사진')}를 끌어다 놓거나, 눌러서 고르세요</span>
-        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${SHOT_MAX}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
+  } else if (f.type === 'images') { // 여러 장 (워치 캡처 · 그림 사진)
+    input = `<input id="${id}" type="file" accept="image/*" multiple class="sr-only" data-shots>
+      <label class="dropzone" id="dropZone" data-multi="1" for="${id}"><span>🖼 여기에 ${esc(withJosa(f.noun || '사진', '을/를'))} 끌어다 놓거나, 눌러서 고르세요</span>
+        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${f.max || SHOT_MAX}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
       <div class="hint" id="imgNote"></div>
       <div id="imgPreviewBox"></div>`;
   } else if (f.type === 'audio') { // 🎙 녹음 (value 는 이 기록의 id예요. 이미 붙어 있는 녹음을 보여주려고요)
@@ -3372,7 +3334,7 @@ function fieldHTML(f, value, type) {
     input = `<input id="${id}" name="${f.key}" type="${f.type}" value="${esc(v)}"${extra}${sugg}${ph}>`;
   }
   const labelFor = f.type === 'choice' || f.type === 'chips' || f.type === 'audio' ? '' : ` for="${id}"`;
-  return `<div class="field" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label${labelFor}>${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
+  return `<div class="field${f.small ? ' field-small' : ''}" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label${labelFor}>${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
 }
 
 // 종류(연습/레슨, 요가/슬로조깅)에 맞지 않는 칸은 숨겨요. 보일 칸이 하나도 없으면 "더 적기" 상자도 숨겨요.
@@ -3389,8 +3351,10 @@ function syncKindFields(form) {
 function updateShotsPreview() {
   const box = $('#imgPreviewBox');
   if (!box) return;
-  box.innerHTML = formShots.length
-    ? `<div class="shot-row">${formShots.map((src, i) => `<div class="shot"><img class="shot-img" src="${esc(src)}" alt="고른 사진 ${i + 1}"><button type="button" class="btn ghost small" data-act="removeShot" data-i="${i}">빼기</button></div>`).join('')}</div>`
+  const n = formShots.length;
+  box.innerHTML = n
+    ? `<div class="shot-row">${formShots.map((src, i) => `<div class="shot"><img class="shot-img" src="${esc(src)}" alt="고른 사진 ${i + 1}">
+        <div class="shot-btns">${n > 1 ? `<button type="button" class="btn ghost small" data-act="moveShot" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="앞으로">◀</button><button type="button" class="btn ghost small" data-act="moveShot" data-i="${i}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="뒤로">▶</button>` : ''}<button type="button" class="btn ghost small" data-act="removeShot" data-i="${i}">빼기</button></div></div>`).join('')}</div>`
     : '';
 }
 // 한 장짜리 그림 칸 하나의 미리보기
@@ -3406,8 +3370,9 @@ function updateImagePreview(key) {
 // 저장하고 나면: 캘린더의 '날짜 창'에서 온 거라면 그 창으로 돌아가고, 아니면 창을 닫아요
 function afterSave() {
   const back = ui.backToDay;
+  const backArt = ui.backToArt;
   render();
-  if (back) openDay(back); else closeDlg();
+  if (back) openDay(back); else if (backArt && records.some((r) => r.id === backArt)) openArt(backArt, ui.artPhoto); else closeDlg();
 }
 
 // 레슨 기록을 만들 때 창 위쪽에 보여줄 "아직 안 물어본 것" 목록
@@ -3418,20 +3383,22 @@ function askBoxHTML() {
     ${asksListHTML(items)}</div>`;
 }
 
-function openForm(type, existing, presetDate) {
+function openForm(type, existing, presetDate, preset) {
   const schema = SCHEMAS[type];
   ui.backToDay = dlg.open && dlg.querySelector('.day-list') ? ui.dayOpen : null;
-  const rec = existing ? { ...existing } : { date: presetDate || todayStr() };
+  ui.backToArt = dlg.open && dlg.querySelector('.art-detail') ? ui.artOpen : null; // 그림 상세 창에서 "수정"을 눌렀다면 저장·취소 뒤 그 창으로 돌아가요
+  const rec = existing ? { ...existing } : { date: presetDate || todayStr(), ...(preset || {}) };
+  if (type === 'art') { rec.artKind = existing ? artKindOf(existing) : (rec.artKind || '크로키'); rec.images = existing ? artPhotos(existing) : []; }
   // 종류 칸이 없던 예전 바이올린 기록은 '연습'으로 봐요
   if (schema.kindKey && !rec[schema.kindKey]) rec[schema.kindKey] = schema.fields.find((f) => f.key === schema.kindKey).options[0];
   formImages = {};
-  schema.fields.filter((f) => f.type === 'image').forEach((f) => { formImages[f.key] = rec[f.key] || null; });
-  formShots = Array.isArray(rec.shots) ? [...rec.shots] : [];
+  schema.fields.filter((f) => f.type === 'image' && !f.hidden).forEach((f) => { formImages[f.key] = rec[f.key] || null; });
+  formShots = type === 'art' ? [...rec.images] : (Array.isArray(rec.shots) ? [...rec.shots] : []);
   staged = [];
   const valueFor = (f) => (f.type === 'audio' ? (existing ? existing.id : '') : f.type === 'multi' ? Object.fromEntries(f.keys.map((k) => [k, rec[k]])) : rec[f.key]);
-  const base = schema.fields.filter((f) => !f.more && !f.legacy);
+  const base = schema.fields.filter((f) => !f.more && !f.legacy && !f.hidden);
   // 더 적기: 예전 칸(legacy)은 값이 들어 있을 때만 보여요
-  const more = schema.fields.filter((f) => (f.more || f.legacy) && !(f.legacy && !hasValue(rec[f.key])));
+  const more = schema.fields.filter((f) => !f.hidden && (f.more || f.legacy) && !(f.legacy && !hasValue(rec[f.key])));
   const moreOpen = !!existing && (more.some((f) => hasValue(rec[f.key])) || audios.some((a) => a.recId === existing.id)); // 수정할 때 내용이 있으면 펼친 채로
   const datalists = schema.fields.filter((f) => f.suggest)
     .map((f) => `<datalist id="dl_${type}_${f.key}">${(type === 'violin' && f.key === 'piece' ? pieceSuggestions(rec.books) : suggestions(type, f.key)).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>`).join('');
@@ -3464,6 +3431,12 @@ function openForm(type, existing, presetDate) {
   formBase = formSnapshot();
 }
 
+// 받침이 있으면 앞, 없으면 뒤 (예: 사진 + 을/를 → 사진을 · 캡처 + 을/를 → 캡처를)
+function withJosa(word, pair) {
+  const [a, b] = pair.split('/');
+  const c = word.charCodeAt(word.length - 1);
+  return `${word}${c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0 ? a : b}`;
+}
 const isImage = (f) => !!f && typeof f.type === 'string' && f.type.startsWith('image/');
 // 사진 파일의 날짜 (미래 날짜는 오늘로)
 function dateOfFile(f) {
@@ -3492,17 +3465,20 @@ async function attachShots(files) {
   const note = $('#imgNote');
   const imgs = files.filter(isImage);
   if (!imgs.length) { if (err) err.textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return false; }
-  const room = SHOT_MAX - formShots.length;
-  if (room <= 0) { if (note) note.textContent = `캡처는 한 기록에 ${SHOT_MAX}장까지 넣을 수 있어요. 필요 없는 것은 '빼기'를 눌러 주세요.`; return false; }
+  const form = $('#recForm');
+  const fld = form ? SCHEMAS[form.dataset.type].fields.find((f) => f.type === 'images') : null; // 사진을 넣는 칸 (운동: 워치 캡처 · 그림: 사진)
+  const max = (fld && fld.max) || SHOT_MAX;
+  const room = max - formShots.length;
+  if (room <= 0) { if (note) note.textContent = `사진은 한 기록에 ${max}장까지 넣을 수 있어요. 필요 없는 것은 '빼기'를 눌러 주세요.`; return false; }
   let added = 0;
   for (const f of imgs.slice(0, room)) {
     try { formShots.push(await readImage(f)); added += 1; } catch (e) { if (err) err.textContent = '이미지로 열 수 없는 파일은 건너뛰었어요.'; }
   }
   updateShotsPreview();
   const moreBox = $('#moreBox');
-  if (moreBox) moreBox.open = true; // 캡처를 붙이면 "더 적기"를 펼쳐서 보이게
+  if (moreBox && fld && fld.more) moreBox.open = true; // 캡처를 붙이면 "더 적기"를 펼쳐서 보이게 (그림 사진은 기본 칸이라 그대로)
   if (added && err) err.textContent = '';
-  if (note) note.textContent = imgs.length > room ? `${SHOT_MAX}장까지만 넣을 수 있어서 ${room}장만 넣었어요.` : '';
+  if (note) note.textContent = imgs.length > room ? `${max}장까지만 넣을 수 있어서 ${room}장만 넣었어요.` : '';
   return added > 0;
 }
 
@@ -3543,6 +3519,7 @@ async function submitForm(form) {
   for (const f of schema.fields) {
     if (f.only && f.only !== kind) continue; // 다른 종류의 칸은 저장하지 않아요
     if (f.legacy && !form.elements[f.key]) continue; // 안 보였던 예전 칸은 손대지 않아요
+    if (f.hidden) continue; // 화면에 없는 칸
     if (f.type === 'audio') continue; // 녹음은 기록 안에 저장하지 않고, 저장한 뒤 곡에 붙여요
     if (f.type === 'check') { data[f.key] = !!form.elements[f.key].checked; continue; }
     if (f.type === 'multi') { f.keys.forEach((k) => { data[k] = (form.elements[k].value || '').trim(); }); continue; }
@@ -3572,6 +3549,10 @@ async function submitForm(form) {
     } else {
       data[f.key] = raw;
     }
+  }
+  if (type === 'art') {
+    if (!old && !formShots.length) { err.textContent = '사진을 한 장 이상 넣어 주세요.'; return; }
+    if (!data.artKind) data.artKind = '크로키';
   }
   const newAudio = type === 'violin' && kind === '연습' ? staged.length : 0;
   if (newAudio && !data.piece) { err.textContent = '녹음을 붙이려면 곡 이름을 먼저 적어 주세요.'; form.elements.piece.focus(); return; }
@@ -3676,6 +3657,7 @@ const CLEAN_DROP_TYPES = ['study', 'invest'];                // 통째로 지우
 const CLEAN_FIELDS = {                                        // 종류별로 지우는 칸
   violin: ['did', 'focus'],                                   // 예전 "오늘 한 것" 칩, "집중한 점" 칩
   art: ['kind', 'areas', 'tools', 'tried', 'hard'],           // 예전 종류·연습 영역 칩, 사용한 도구, 새로 시도한 점, 어려웠던 점
+  econRoutine: ['tags'],                                      // 경제 루틴의 태그 (금리·인플레이션·환율)
 };
 const dirtyKeys = (r) => (CLEAN_FIELDS[r.type] || []).filter((k) => k in r);
 const needsCleanup = (r) => CLEAN_DROP_TYPES.includes(r.type) || dirtyKeys(r).length > 0;
@@ -3687,18 +3669,23 @@ function cleanedCopy(r) {
 }
 
 async function runUpdateCleanup() {
-  if (settings.cleanupV2) return;
+  if (settings.cleanupV3) return;
   const dirty = records.filter(needsCleanup);
-  if (!dirty.length) { settings.cleanupV2 = true; await saveSettings(); return; } // 정리할 것이 없으면 조용히 끝나요
+  if (!dirty.length) { settings.cleanupV2 = true; settings.cleanupV3 = true; await saveSettings(); return; } // 정리할 것이 없으면 조용히 끝나요
   const name = `my-journal-backup-before-update-${todayStr().replace(/-/g, '')}.json`;
   await downloadBackup(name); // 정리하기 직전에 전체 백업
-  if (!confirm(`업데이트 전에 백업을 저장했어요. 예전 투자·경제 메모와 일부 칩 값을 정리합니다.\n(백업 파일: ${name} — 다운로드 폴더를 확인해 주세요)`)) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
+  if (!confirm(`업데이트 전에 백업을 저장했어요. 예전 투자·경제 메모, 경제 루틴 태그와 일부 칩 값을 정리합니다.\n(백업 파일: ${name} — 다운로드 폴더를 확인해 주세요)`)) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
   const drop = dirty.filter((r) => CLEAN_DROP_TYPES.includes(r.type)).map((r) => r.id);
-  const edit = dirty.filter((r) => !CLEAN_DROP_TYPES.includes(r.type)).map(cleanedCopy);
+  const emptied = (r) => { const c = cleanedCopy(r); return r.type === 'econRoutine' && !Object.values(c.checks || {}).some(Boolean) && !(c.letters || []).length && !c.note; }; // 태그만 남아 있던 빈 루틴 기록
+  const emptyIds = dirty.filter((r) => !CLEAN_DROP_TYPES.includes(r.type) && emptied(r)).map((r) => r.id);
+  const at = Date.now();
+  const edit = dirty.filter((r) => !CLEAN_DROP_TYPES.includes(r.type) && !emptyIds.includes(r.id)).map((r, i) => ({ ...cleanedCopy(r), updatedAt: Math.max(at + i, (r.updatedAt || 0) + 1) })); // 바뀐 기록은 바꾼 시각도 새로 적어서 ☁ 다른 기기에도 반영돼요
   if (edit.length) await Store.putMany(edit);
   if (drop.length) await Store.remove(drop);
+  for (const id of emptyIds) await deleteRecord(id); // 빈 루틴 기록은 삭제 표시를 남겨서 ☁ 다른 기기에서도 사라져요
   records = await loadRecords();
   settings.cleanupV2 = true;
+  settings.cleanupV3 = true;
   await saveSettings();
   render();
   toast('정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000);
@@ -3956,23 +3943,32 @@ document.addEventListener('click', async (e) => {
 
   switch (act) {
     case 'tab':
-      await flushRoutineNote(); // 한 줄을 쓰다 옮겨도 저장돼요
+      if (ui.tab !== id && !(await confirmLeaveNote())) break; // 저장하지 않은 한 줄이 있으면 물어봐요
       ui.tab = id; ui.query = '';
       ui.todayKey = null;
       render(); window.scrollTo(0, 0); break;
     case 'week': ui.weekOffset = el.dataset.d === '0' ? 0 : ui.weekOffset + Number(el.dataset.d); render(); break;
     case 'setView': ui[el.dataset.key] = id; render(); break;
-    case 'artView': ui.artView = id; render(); break;
+    case 'artFilter': ui.artFilter = id; ui.artView = 'gallery'; render(); break;
+    case 'artFeedback': ui.artView = 'feedback'; render(); break;
+    case 'artGallery': ui.artView = 'gallery'; render(); break;
+    case 'artOpen': openArt(id); break;
+    case 'artNav': artNav(Number(el.dataset.d)); break;
     case 'add': openForm(type); break;
     case 'edit': openForm(type, records.find((r) => r.id === id)); break;
     case 'del': {
       const r = records.find((x) => x.id === id);
       const name = r ? (r.type === 'rest' ? '쉰 날' : (r.topic || r.piece || r.asset || r.kind || '이 기록')) : '이 기록';
-      if (confirm(`'${name}' 기록을 지울까요?\n지운 기록은 되돌릴 수 없어요.`)) { await deleteRecord(id); render(); refreshDay(); }
+      if (confirm(`'${name}' 기록을 지울까요?\n지운 기록은 되돌릴 수 없어요.`)) {
+        await deleteRecord(id); render(); refreshDay();
+        if (ui.artOpen === id && dlg.querySelector('.art-detail')) closeDlg(); // 열어 둔 그림 상세 창이면 닫아요
+      }
       break;
     }
     case 'closeDlg':
-      if (ui.backToDay && dlg.querySelector('#recForm')) openDay(ui.backToDay); else closeDlg();
+      if (ui.backToDay && dlg.querySelector('#recForm')) openDay(ui.backToDay);
+      else if (ui.backToArt && dlg.querySelector('#recForm') && records.some((r) => r.id === ui.backToArt)) openArt(ui.backToArt, ui.artPhoto);
+      else closeDlg();
       break;
     case 'calDay': openDay(el.dataset.date); break;
     case 'addOn': openForm(type, undefined, el.dataset.date); break;
@@ -3990,6 +3986,11 @@ document.addEventListener('click', async (e) => {
       render();
       break;
     case 'clearImage': formImages[el.dataset.key] = null; updateImagePreview(el.dataset.key); break;
+    case 'moveShot': { // 사진 순서 바꾸기
+      const i = Number(el.dataset.i); const j = i + Number(el.dataset.d);
+      if (j >= 0 && j < formShots.length) { [formShots[i], formShots[j]] = [formShots[j], formShots[i]]; updateShotsPreview(); }
+      break;
+    }
     case 'removeShot': formShots.splice(Number(el.dataset.i), 1); updateShotsPreview(); { const n = $('#imgNote'); if (n) n.textContent = ''; } break;
     case 'zoomShot': {
       const r = records.find((x) => x.id === id);
@@ -4009,11 +4010,17 @@ document.addEventListener('click', async (e) => {
         const on = input.value !== el.dataset.val;
         input.value = on ? el.dataset.val : '';
         box.querySelectorAll('.choice-btn').forEach((b) => { b.classList.toggle('on', on && b === el); b.setAttribute('aria-pressed', String(on && b === el)); });
+        if (input.name === 'artKind' && input.form) syncKindFields(input.form); // 종류가 모작일 때만 "원본 사진" 칸이 보여요
       }
       break;
     }
     case 'todayPick':
-      if (ui.todayKey === el.dataset.key && TODAY_BUTTONS.find((b) => b.key === el.dataset.key).routine) { ui.todayKey = null; render(); } // 경제 루틴은 체크하면 바로 저장돼서, 한 번 더 누르면 접혀요
+      if (TODAY_BUTTONS.find((b) => b.key === el.dataset.key).form) { // 🎨 그림: 간단 기록 대신 종류가 "크로키"로 골라진 올리기 창이 바로 열려요
+        const b = TODAY_BUTTONS.find((x) => x.key === el.dataset.key);
+        ui.todayKey = null;
+        openForm(b.type, undefined, undefined, b.form);
+      }
+      else if (ui.todayKey === el.dataset.key && TODAY_BUTTONS.find((b) => b.key === el.dataset.key).routine) { ui.todayKey = null; render(); } // 경제 루틴은 체크하면 바로 저장돼서, 한 번 더 누르면 접혀요
       else if (ui.todayKey === el.dataset.key) { const f = $('#todayForm'); if (f) f.requestSubmit(); } // 한 번 더 누르면 저장
       else { ui.todayKey = el.dataset.key; render(); }
       break;
@@ -4023,15 +4030,7 @@ document.addEventListener('click', async (e) => {
     case 'toastEdit': { hideToast(); const r = records.find((x) => x.id === id); if (r) openForm(r.type, r); break; }
     case 'recap': openRecap(); break;
     case 'routineChip': await toggleRoutineChip(el.dataset.date, el.dataset.chip); break;
-    case 'routineTag': await toggleRoutineTag(el.dataset.date, el.dataset.tag); break;
-    case 'routineFind': // 태그별로 모아 보기 열기·닫기 (오늘 한 줄에 붙인 태그가 있으면 그 태그부터)
-      await flushRoutineNote();
-      if (ui.routineView) ui.routineView = null;
-      else { const cur = routineOn(todayStr()); ui.routineView = (cur && (cur.tags || []).find((t) => ECON_TAGS.includes(t))) || ECON_TAGS[0] || null; }
-      render();
-      break;
-    case 'routineView': ui.routineView = el.dataset.tag; refreshTagPanel(); break;
-    case 'routineViewClose': ui.routineView = null; render(); break;
+    case 'pastNotes': openPastNotes(); break;
     case 'routineDot': await setRoutineCheck(el.dataset.date, el.dataset.routine, !routineChecked(routineOn(el.dataset.date), el.dataset.routine)); break;
     case 'playRec': await toggleCardPlay(el.dataset.aid); break;
     case 'claudeCard': await claudeCard(id); break;
@@ -4078,20 +4077,6 @@ document.addEventListener('click', async (e) => {
     case 'boardGo': goToStamp(id); break;
     case 'goto': goToRecord(id); break;
     case 'piece': openPiece(el.dataset.piece); break;
-    case 'zoom': {
-      const r = records.find((x) => x.id === id);
-      const src = r ? r[el.dataset.key || 'image'] : '';
-      if (r && src) openDlg(`<img class="zoom-img" src="${esc(src)}" alt="${esc(artTitle(r))}"><p class="meta" style="text-align:center">${esc(artOptionLabel(r))}${el.dataset.key === 'srcImage' ? ' · 원본' : ''}</p><div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
-      break;
-    }
-    case 'compare-prev': {
-      const imgs = ofType('art').filter((r) => r.image).sort(byOldest);
-      const i = imgs.findIndex((r) => r.id === id);
-      if (i <= 0) { alert('이 작업보다 먼저 기록한 그림이 없어요.'); break; }
-      ui.cmpA = imgs[i - 1].id; ui.cmpB = id; ui.artView = 'compare'; render(); window.scrollTo(0, 0);
-      break;
-    }
-    case 'cmp-first-last': ui.cmpA = null; ui.cmpB = null; render(); break;
     case 'autosaveOn': await enableAutosave(); break;
     case 'autosaveReconnect': await reconnectAutosave(); break;
     case 'autosaveOff': await disableAutosave(); break;
@@ -4137,6 +4122,7 @@ document.addEventListener('submit', (e) => {
   else if (e.target.id === 'clForm') { e.preventDefault(); saveClaudeSettings(); }
   else if (e.target.id === 'fbEditForm') { e.preventDefault(); saveFeedbackEdit(e.target); }
   else if (e.target.id === 'bookAddForm') { e.preventDefault(); addBook(e.target.elements[0].value); }
+  else if (e.target.id === 'rtNoteForm') { e.preventDefault(); saveRoutineNote(e.target.dataset.date); }
   else if (e.target.id === 'pieceMemoForm') { e.preventDefault(); savePieceMemo(e.target.dataset.piece, e.target.elements.memo.value.trim()); }
 });
 
@@ -4146,7 +4132,6 @@ document.addEventListener('change', async (e) => {
   else if ('fbDone' in t.dataset) { await setTodoDone(t.dataset.fbDone, t.checked); }
   else if (t.dataset.enSpeak) { const r = records.find((x) => x.id === t.dataset.enSpeak); if (r) { await saveRecord({ ...r, speak: t.checked, updatedAt: Date.now() }); render(); } }
   else if (t.dataset.routine && t.type === 'checkbox') { await setRoutineCheck(t.dataset.date, t.dataset.routine, t.checked); }
-  else if ('routineNote' in t.dataset) { await flushRoutineNote(); }
   else if (t.id === 'f_kind' && t.form && t.form.id === 'recForm') { syncKindFields(t.form); }
   else if (t.id === 'q_kind') { syncQuick(); }
   else if (t.dataset.act === 'bodyRange') { ui.bodyAllRange = !t.checked; render(); }
@@ -4156,22 +4141,20 @@ document.addEventListener('change', async (e) => {
     const nm = t.dataset.cal === 'month' ? Number(t.value) : cm;
     ui.calMonth = `${ny}-${pad(nm)}`;
     render();
-  } else if (t.id === 'artOrder') { ui.artOrder = t.value; render(); }
-  else if (t.dataset.cmp) { ui[t.dataset.cmp === 'a' ? 'cmpA' : 'cmpB'] = t.value; render(); }
+  }
   else if (t.id === 'importFile' && t.files[0]) { await importBackup(t.files[0]); }
   else if (t.dataset.imageInput && t.files[0]) { await attachImage(t.files[0], t.dataset.imageInput); t.value = ''; }
-  else if (t.id === 'f_shots' && t.files.length) { const files = [...t.files]; t.value = ''; await attachShots(files); }
+  else if ('shots' in t.dataset && t.files.length) { const files = [...t.files]; t.value = ''; await attachShots(files); }
   else if (t.dataset.act === 'celebrate') { settings.celebrateOff = !t.checked; await saveSettings(); }
   else if (t.matches('[data-audio-input]') && t.files.length) { const files = [...t.files]; t.value = ''; await stageAudioFiles(files); }
   else if (t.dataset.audioMemo) { await saveAudioMemo(t.dataset.audioMemo, t.value.trim()); }
   else if (t.dataset.act === 'audioSkip') { settings.audioSkip = t.checked; await saveSettings(); scheduleAutosave(); }
   else if (t.dataset.act === 'season') { settings.seasonOff = !t.checked; await saveSettings(); applySeason(); }
-  else if (t.id === 'artMulti' && t.files.length) { const files = [...t.files]; t.value = ''; await addArtFromFiles(files); }
 });
 
 document.addEventListener('input', (e) => {
   if (e.target.id === 'claudeQ') { ui.claudeQuestion[ui.claudeScope] = e.target.value; syncClaudeBox(); return; } // 복사할 글 미리보기
-  if (e.target.dataset && 'routineNote' in e.target.dataset) { queueRoutineNote(e.target.dataset.date, e.target.value); return; } // 오늘 한 줄 자동 저장
+  if (e.target.dataset && 'routineNote' in e.target.dataset) { ui.noteDraft = { date: e.target.dataset.date, text: e.target.value }; ui.noteSavedUntil = 0; syncNoteBtn(e.target.dataset.date); return; } // 오늘 한 줄: 고치면 다시 [저장]
   if (e.target.dataset && e.target.dataset.stage) { // 올리려는 녹음의 날짜·메모
     const s = staged.find((x) => x.sid === e.target.dataset.sid);
     if (s) s[e.target.dataset.stage] = e.target.value;
@@ -4183,7 +4166,7 @@ document.addEventListener('input', (e) => {
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
-dlg.addEventListener('close', () => { revokeAudioUrls(dlg); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; });
+dlg.addEventListener('close', () => { revokeAudioUrls(dlg); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; ui.backToArt = null; ui.artOpen = null; });
 
 /* ---------------------------------------------------------------------
    데스크톱 단축키: 입력 창에서 Cmd+Enter(Ctrl+Enter)로 저장, Esc로 닫기
@@ -4192,13 +4175,16 @@ dlg.addEventListener('close', () => { revokeAudioUrls(dlg); dlg.innerHTML = ''; 
 function requestClose() {
   if (!dlg.open) return;
   if (isFormDirty() && !confirm('적어 둔 내용이 있어요.\n저장하지 않고 닫을까요?')) return;
-  if (ui.backToDay && dlg.querySelector('#recForm')) openDay(ui.backToDay); else closeDlg();
+  if (ui.backToDay && dlg.querySelector('#recForm')) openDay(ui.backToDay);
+  else if (ui.backToArt && dlg.querySelector('#recForm') && records.some((r) => r.id === ui.backToArt)) openArt(ui.backToArt, ui.artPhoto);
+  else closeDlg();
 }
 
 document.addEventListener('keydown', (e) => {
   if (dlg2.open) { if (e.key === 'Escape') { e.preventDefault(); dlg2.close(); } return; } // 작은 창(교재 관리)이 열려 있으면 그것만 닫아요
   if (!dlg.open) return;
   if (e.key === 'Escape') { e.preventDefault(); requestClose(); return; }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && dlg.querySelector('.art-detail') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); artNav(e.key === 'ArrowLeft' ? -1 : 1); return; }
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
     const form = dlg.querySelector('#recForm, #quickForm');
     if (form) { e.preventDefault(); form.requestSubmit(); }
@@ -4214,7 +4200,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2 };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1 };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -4226,6 +4212,22 @@ async function loadRecords() {
     try { await Store._putMany(missing); } catch (e) { /* 저장하지 못해도 이번 사용에는 문제없어요 */ }
   }
   return live;
+}
+
+// 🎨 그림 "단계"를 "종류"로 한 번만 바꿔 적어 둬요 (그대로 모작·조금 바꿔 그리기 → 모작, 창작 → 창작, 없으면 모작).
+//   예전 값(단계·원작자 등)은 그대로 남겨요. 바뀐 기록은 바꾼 시각도 새로 적어서 ☁ 다른 기기에도 반영돼요. 한 번 하고 나면 flag(artKindV1)가 켜져요.
+async function migrateArtKinds() {
+  if (settings.artKindV1) return;
+  const at = Date.now();
+  const todo = records.filter((r) => r.type === 'art' && !ART_KINDS.includes(r.artKind));
+  if (todo.length) {
+    const next = todo.map((r, i) => ({ ...r, artKind: artKindOf(r), updatedAt: Math.max(at + i, (r.updatedAt || 0) + 1) }));
+    try { await Store.putMany(next); } catch (e) { return; } // 저장하지 못하면 다음에 다시 해요
+    const byId = new Map(next.map((r) => [r.id, r]));
+    records = records.map((r) => byId.get(r.id) || r);
+  }
+  settings.artKindV1 = true;
+  await saveSettings();
 }
 
 async function start() {
@@ -4248,6 +4250,7 @@ async function start() {
     n.hidden = false;
     n.textContent = '⚠ 이 브라우저에서는 기록을 저장할 수 없어요. 창을 닫으면 사라지니, 다른 브라우저(크롬 등)로 열어 주세요.';
   }
+  await migrateArtKinds();
   render();
   window.__journalReady = true;
   document.dispatchEvent(new Event('journal:ready')); // ☁ 동기화(sync.js)가 이때부터 시작해요
@@ -4267,7 +4270,7 @@ document.addEventListener('focusin', (e) => {
   setTimeout(() => { try { if (document.activeElement === t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { /* 괜찮아요 */ } }, 300);
 });
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) { flushRoutineNote(); if (autosaveTimer) runAutosave(); } }); // 탭을 닫기 직전에도 저장
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (autosaveTimer) runAutosave(); } }); // 탭을 닫기 직전에도 저장
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && (ui.tab === 'today' || ui.tab === 'econ') && !dlg.open && view.dataset.today && view.dataset.today !== todayStr()) render();
 });
