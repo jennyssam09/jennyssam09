@@ -166,7 +166,7 @@ dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여
   .backup-bar .row .btn { flex: 1; }
 }
 
-/* ---------- 새 기능: 색 버튼, 알림 줄, 간단 기록, 레슨, 그래프 ---------- */
+/* ---------- 새 기능: 색 버튼, 알림 줄, 레슨, 그래프 ---------- */
 .field[hidden] { display: none; }
 .btn.red { background: var(--red); border-color: var(--red); }
 .btn.purple { background: var(--purple); border-color: var(--purple); }
@@ -183,7 +183,7 @@ dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여
 .backup-bar .btn.ghost { color: var(--red); border-color: rgba(178,58,82,.35); background:#fff; }
 .backup-bar .btn.ghost:hover { background: #f1d3d9; }
 
-.tag.quick, .tag.lesson, .tag.rest { background: var(--purple-soft); color: var(--purple); }
+.tag.lesson, .tag.rest { background: var(--purple-soft); color: var(--purple); }
 
 .lesson-panel { border-left: 5px solid var(--purple); }
 .hw { list-style: none; margin: 6px 0 0; padding: 0; }
@@ -518,10 +518,10 @@ dialog.roomy { width: min(900px, 92vw); }
 
 /* ---------- 🎨 그림 갤러리 (주별 묶음 · 큰 썸네일 격자) / 상세 창 ---------- */
 .tag.art-kind.small { font-size: .72rem; padding: 0 8px; }
-.art-filter { margin-bottom: 4px; }
 .art-fb-link { font-size: .9rem; color: var(--purple); white-space: nowrap; }
-.art-week { margin-top: 22px; }
-.art-week-h { font-size: 1rem; margin-bottom: 10px; }
+/* 🎈 놀이터 머리: 제목 옆에 작은 "← 캘린더로" */
+.playground-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
+.playground-head .page-title { margin-bottom: 0; }
 /* 한 줄에 아이맥 6개(좁아지면 5개) · 폴드 펼침 4개 · 커버 2개 */
 .art-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 12px; }
 .art-tile { display: flex; flex-direction: column; gap: 4px; padding: 0; text-align: left; cursor: pointer; border: 0; background: transparent; color: inherit; font: inherit; }
@@ -728,3 +728,4 @@ dialog.roomy { width: min(900px, 92vw); }
 .sync-audio h3 { font-size: .95rem; color: var(--accent); margin-bottom: 6px; }
 
 @media (min-width: 901px) and (max-width: 1150px) { .art-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.playground-head + .page-sub { word-break: keep-all; }
