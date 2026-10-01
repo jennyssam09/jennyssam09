@@ -124,7 +124,7 @@ const SCHEMAS = {
       { key: 'newLearn', label: '새로 배운 것 한 줄', type: 'text', only: '레슨', more: true, placeholder: '예: 자리를 옮길 때 팔꿈치를 먼저 움직인다' },
     ],
   },
-  // ✅ 오늘의 경제 루틴: 하루에 기록 하나. 입력 창 없이 경제 화면·오늘 탭에서 바로 체크해요.
+  // ✅ 오늘의 경제 루틴: 하루에 기록 하나. 입력 창 없이 경제 화면에서 바로 체크해요.
   //   checks: { 항목id: true } (한 것만) / letters: 읽은 뉴스레터 / note: 오늘 한 줄
   econRoutine: {
     label: '경제 루틴',
@@ -202,13 +202,12 @@ const SCHEMAS = {
 
 // 메뉴 이름 (위쪽 탭)
 const TABS = [
-  { id: 'today', label: '✏️ 오늘' },
+  { id: 'cal', label: '📅 캘린더' },
   { id: 'exercise', label: '🧘 운동' },
   { id: 'violin', label: '🎻 바이올린' },
   { id: 'art', label: '🎨 그림' },
   { id: 'econ', label: '📚 경제 루틴' },
   { id: 'english', label: '📰 영어' },
-  { id: 'cal', label: '📅 캘린더' },
 ];
 
 // 캘린더가 시작되는 달 (이 달부터 앞으로 계속 이어져요)
@@ -232,16 +231,6 @@ const QUICK = {
   },
 };
 
-// "오늘" 탭의 큰 버튼. 누르면 연습량을 고르고, 한 번 더 누르면 오늘 날짜로 '간단 기록'이 저장돼요. (routine 이 붙은 버튼은 경제 루틴 체크가 열려요)
-//   type/data: 만들어지는 기록의 종류, memoKey: 한 줄 메모가 들어갈 칸, hint: 메모 칸 안내 글, form: 있으면 간단 기록 대신 그 값이 미리 채워진 입력 창이 열려요
-const TODAY_BUTTONS = [
-  { key: 'yoga', icon: '🧘', label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: '예: 아침 스트레칭' },
-  { key: 'jog', icon: '🏃', label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: '예: 동네 한 바퀴' },
-  { key: 'violin', icon: '🎻', label: '바이올린', type: 'violin', data: { kind: '연습' }, memoKey: 'part', hint: '예: 미뉴에트 1~8마디' },
-  { key: 'art', icon: '🎨', label: '그림', type: 'art', form: { artKind: '크로키' } }, // 누르면 종류 "크로키"가 골라진 그림 올리기 창이 바로 열려요
-  { key: 'econ', icon: '📚', label: '경제 루틴', routine: true }, // 누르면 오늘의 경제 루틴 체크가 바로 열려요 (저장 버튼 없이 체크하면 저장)
-];
-
 // 도장: 기록을 저장하면 이 중에서 하나가 랜덤으로 나타나요. 앞의 그림이 도장, 뒤가 한 마디예요.
 //   문구는 마음대로 고치거나 더해도 돼요. (평가나 비교하는 말은 넣지 않아요)
 //   workout / practice(바이올린 연습) / lesson / routine(경제 루틴) / english(영어) / art / rest : 종류별 문구
@@ -260,7 +249,7 @@ const STAMPS = {
 const NIGHT_START = 22; // 밤 10시부터
 const NIGHT_END = 5;    // 새벽 5시 전까지는 밤 문구를 써요
 
-// "그때의 나": 오늘 탭 아래에, 몇 달 전 오늘의 기록이 있으면 하나만 보여줘요. (위에서부터 먼저 있는 것 하나)
+// "그때의 나": 캘린더 아래에, 몇 달 전 오늘의 기록이 있으면 하나만 보여줘요. (위에서부터 먼저 있는 것 하나)
 const MEMORY_LOOKBACKS = [{ months: 1, label: '한 달 전' }, { months: 3, label: '석 달 전' }, { months: 12, label: '1년 전' }];
 
 // 백업 알림: 며칠이 지나면 알려줄지, '나중에'를 누르면 며칠 동안 숨길지
@@ -273,7 +262,7 @@ const IMAGE_MAX_SIZE = 1600;
 // 운동 기록 하나에 붙일 수 있는 워치 캡처의 최대 장수
 const SHOT_MAX = 4;
 
-// ✅ 오늘의 경제 루틴 (경제 화면과 오늘 탭의 체크 목록)
+// ✅ 오늘의 경제 루틴 (경제 화면의 체크 목록)
 //   id: 저장되는 이름 (한 번 정하면 바꾸지 마세요)  icon: 그림  label: 화면에 보이는 이름  chips: 읽은 것을 눌러 표시하는 칩 (있으면 체크 옆에 나타나요)
 //   항목을 더하거나 빼도 예전 기록은 그대로예요. (목록에 없는 id는 화면에서 조용히 무시돼요)
 const ECON_ROUTINES = [
@@ -527,16 +516,16 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 //   local: 이 기기에 파일이 있나 (☁ 로 다른 기기에서 정보만 받은 녹음은 false 예요) · rf: Drive에 올라간 파일의 id · updatedAt: 바꾼 시각
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
-// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false };
+// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2),
+// 캘린더 아래 '🤖 클로드에게 보내기'를 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
 let autosaveTimer = null;
 
 const ui = {
-  tab: 'today',       // 처음 열면 '오늘' 탭
-  todayKey: null,     // 오늘 탭에서 눌러 둔 큰 버튼 (연습량을 고르는 중)
+  tab: 'cal',         // 처음 열면 캘린더 (이번 달)
   weekOffset: 0,      // 0 = 이번 주, -1 = 지난 주 ...
   bodyAllRange: true, // true = 전체 기간, false = 선택한 주만 (운동·바이올린 기록 목록)
   exView: 'records',  // 운동: records | feedback
@@ -697,10 +686,10 @@ function renderTabs() {
 }
 
 function render() {
+  if (!TABS.some((t) => t.id === ui.tab)) ui.tab = 'cal'; // 없어진 메뉴(예전 '오늘')는 캘린더로
   renderTabs();
   renderBackupBar();
-  if (ui.tab === 'today') renderToday();
-  else if (ui.tab === 'exercise') renderExercise();
+  if (ui.tab === 'exercise') renderExercise();
   else if (ui.tab === 'violin') renderViolin();
   else if (ui.tab === 'english') renderEnglish();
   else if (ui.tab === 'econ') renderEcon();
@@ -760,7 +749,7 @@ function actionButtons(type, id, extra = '') {
 }
 
 /* ---------------------------------------------------------------------
-   7-2. 메뉴 0: ✏️ 오늘 (큰 버튼으로 가볍게 남기기)
+   7-2. 🕰 그때의 나 (캘린더 아래)
    --------------------------------------------------------------------- */
 // n달 전 같은 날짜 (그 달에 그 날짜가 없으면 그 달의 마지막 날)
 function monthsAgo(dateStr, n) {
@@ -807,69 +796,6 @@ function memoryHTML(today) {
   </section>`;
 }
 
-// 오늘 남긴 기록을 작은 칩으로 (누르면 수정 창)
-const recChipHTML = (r) => (r.type === 'econRoutine'
-  ? `<button type="button" class="rec-chip" data-act="todayPick" data-key="econ" title="누르면 경제 루틴 체크가 열려요"><span>${routineIcons(r).join('') || '✅'}</span><span>경제 루틴</span></button>`
-  : recChipEditHTML(r));
-const recChipEditHTML = (r) => `<button type="button" class="rec-chip" data-act="edit" data-type="${r.type}" data-id="${esc(r.id)}" title="누르면 수정"><span>${iconOf(r)}</span><span>${esc(calTitle(r))}</span>${marksHTML(r)}</button>`;
-
-// 큰 버튼을 눌렀을 때 아래에 열리는 창: 연습량 → 기분 → 한 줄 메모 (모두 선택)
-function todayPanelHTML(b, date) {
-  return `<form id="todayForm" class="card today-panel" data-key="${b.key}" data-date="${date}" novalidate>
-    <h3>${b.icon} ${esc(b.label)} <span class="meta">· 간단 기록으로 남겨요</span></h3>
-    ${b.type === 'violin' && knownPieces().length ? `<div class="field"><label>곡 - 선택 <span class="meta">(최근에 연습한 곡)</span></label>${choiceHTML('piece', knownPieces().slice(0, 4), '')}</div>` : ''}
-    ${supportsAmount(b.type, b.data.kind) ? `<div class="field"><label>연습량 - 선택</label>${choiceHTML('amount', AMOUNTS, '')}</div>` : ''}
-    <div class="field"><label>하고 나서 기분 - 선택</label>${choiceHTML('mood', MOODS, '')}</div>
-    <div class="field"><label for="todayMemo">한 줄 메모 - 선택</label><input id="todayMemo" name="memo" type="text" maxlength="200" autocomplete="off" placeholder="${esc(b.hint || '')}"></div>
-    <div class="row">
-      <button type="submit" class="btn">저장</button>
-      <button type="button" class="btn ghost" data-act="todayCancel">취소</button>
-      <span class="meta">위의 ${esc(b.label)} 버튼을 한 번 더 눌러도 저장돼요.</span>
-    </div>
-  </form>`;
-}
-
-function renderToday() {
-  const today = todayStr();
-  view.dataset.today = today; // 밤새 창을 열어 두었다가 날짜가 바뀌면 다시 그리려고 기억해 둬요
-  const pick = TODAY_BUTTONS.find((b) => b.key === ui.todayKey);
-  const mine = records.filter((r) => r.date === today && catOf(r)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  const btn = (b) => `<button type="button" class="today-btn${pick && pick.key === b.key ? ' on' : ''}" data-act="todayPick" data-key="${b.key}" aria-pressed="${!!(pick && pick.key === b.key)}"><span class="ti">${b.icon}</span><span>${esc(b.label)}</span></button>`;
-  view.innerHTML = `
-    <h2 class="page-title">✏️ 오늘</h2>
-    <p class="page-sub">${esc(dayLabel(today))} · 버튼을 눌러 가볍게 남겨요. 잘했는지 못했는지 점수는 매기지 않아요.${new Date().getHours() < DAY_STARTS_AT ? `<br>🌙 새벽 ${DAY_STARTS_AT}시 전이라 ${esc(shortDay(today))} 기록으로 남겨요.` : ''}</p>
-    <div class="today-grid">${TODAY_BUTTONS.map(btn).join('')}</div>
-    ${pick ? (pick.routine ? routinePanelHTML(today) : todayPanelHTML(pick, today)) : ''}
-    ${todayHintsHTML()}
-    <div class="row" style="margin:14px 0 4px">
-      ${restButtonHTML(today)}
-      <span class="meta">쉬는 날도 기록이에요.</span>
-    </div>
-    <div class="label" style="margin:18px 0 6px">오늘 남긴 기록${mine.length ? ' · 누르면 고칠 수 있어요' : ''}</div>
-    ${mine.length ? `<div class="rec-chips">${mine.map(recChipHTML).join('')}</div>` : '<p class="meta" style="margin:0">여기에 오늘 남긴 기록이 모여요. 누르면 고칠 수 있어요.</p>'}
-    ${memoryHTML(today)}
-    ${claudeBoxHTML()}`;
-  if (pick) { const memo = $('#todayMemo'); if (memo) memo.focus(); }
-}
-
-// 오늘 탭의 '저장': 오늘 날짜로 '간단 기록'을 만들어요
-async function saveToday(form) {
-  const b = TODAY_BUTTONS.find((x) => x.key === form.dataset.key);
-  if (!b) return;
-  const rec = { id: newId(), type: b.type, createdAt: Date.now(), updatedAt: Date.now(), quick: true, date: form.dataset.date || todayStr(), ...b.data };
-  const memo = form.elements.memo.value.trim();
-  if (memo) rec[b.memoKey] = memo;
-  const amount = form.elements.amount ? Number(form.elements.amount.value) : 0;
-  if (amount) rec.amount = amount;
-  if (form.elements.mood.value) rec.mood = form.elements.mood.value;
-  if (form.elements.piece && form.elements.piece.value) rec.piece = form.elements.piece.value;
-  assignStamp(rec);
-  if (!(await saveRecord(rec))) return;
-  ui.todayKey = null;
-  render();
-  afterNewRecord(rec, { action: { label: '✍ 자세히 적기', act: 'toastEdit', id: rec.id } });
-}
-
 // 쉰 날 기록 (하루에 하나만)
 async function saveRest(date) {
   if (records.some((r) => r.type === 'rest' && r.date === date)) { toast('이 날은 이미 쉼으로 남겨 두었어요.'); return null; }
@@ -879,7 +805,7 @@ async function saveRest(date) {
 }
 
 // 😴 쉰 날: 누르면 남기고, 다시 누르면 지워요
-async function toggleRest(date, withUndo) {
+async function toggleRest(date) {
   const old = records.find((r) => r.type === 'rest' && r.date === date);
   if (old) {
     if (hasValue(old.memo) && !confirm('쉰 날 표시와 적어 둔 메모를 지울까요?')) return;
@@ -891,7 +817,7 @@ async function toggleRest(date, withUndo) {
   const rec = await saveRest(date);
   if (!rec) return;
   render(); refreshDay();
-  afterNewRecord(rec, withUndo ? { action: { label: '되돌리기', act: 'undoRest', id: rec.id } } : {});
+  afterNewRecord(rec);
 }
 
 function restButtonHTML(date) {
@@ -1531,7 +1457,7 @@ function openPastNotes() {
     <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
 }
 
-// 체크 목록 (경제 화면과 오늘 탭이 함께 써요)
+// 체크 목록 (경제 화면)
 function routineRowsHTML(date) {
   const rec = routineOn(date);
   return `<div class="rt-list">${ECON_ROUTINES.map((x) => {
@@ -1584,15 +1510,6 @@ function routineScreenHTML() {
     ${routineHintHTML()}
     ${routineNoteHTML(today)}
     ${routineWeekHTML()}
-  </section>`;
-}
-
-// 오늘 탭에서 📚 경제 루틴 버튼을 눌렀을 때 열리는 체크 (저장 버튼 없이 체크하면 바로 저장돼요)
-function routinePanelHTML(date) {
-  return `<section class="card today-panel routine-panel">
-    <h3>📚 경제 루틴 <span class="meta">· 체크하면 바로 저장돼요</span></h3>
-    ${routineRowsHTML(date)}
-    <p class="meta" style="margin:10px 0 0">한 줄 남기기와 이번 주 보기는 📚 경제 루틴 화면에서 할 수 있어요.</p>
   </section>`;
 }
 
@@ -1883,20 +1800,12 @@ const shiftMonth = (ym, n) => {
 };
 
 // 머리 줄 맨 앞의 [오늘] 버튼 (캘린더와 도장 모음판이 함께 써요). 항상 같은 자리에 있어요.
-// 이미 이번 달을 보고 있으면 흐리게 보이지만 눌러도 돼요. (누르면 반짝임만)
-const todayBtnHTML = (act, here) => `<button type="button" class="btn ghost small cal-today-btn${here ? ' dim' : ''}" data-act="${act}" title="${here ? '지금 이번 달이에요' : '이번 달로 가요'}" aria-label="오늘로 가기">오늘</button>`;
-// 움직임 줄이기 설정이면 반짝이지 않고 이동만 해요
-const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function flashEl(el) {
-  if (!el || reduceMotion()) return;
-  el.classList.remove('flash-today');
-  void el.offsetWidth; // 연달아 눌러도 다시 반짝이게
-  el.classList.add('flash-today');
-  setTimeout(() => el.classList.remove('flash-today'), 1100);
-}
+// 다른 달을 보고 있으면 이번 달로 가기만 해요. 이미 이번 달이면 흐리게 보이고, 눌러도 아무 일도 없어요.
+const todayBtnHTML = (act, here) => `<button type="button" class="btn ghost small cal-today-btn${here ? ' dim' : ''}" data-act="${act}"${here ? ' aria-disabled="true"' : ''} title="${here ? '지금 이번 달이에요' : '이번 달로 가요'}" aria-label="오늘로 가기">오늘</button>`;
 
 function renderCalendar() {
   const today = todayStr();
+  view.dataset.today = today; // 밤새 창을 열어 두었다가 날짜가 바뀌면 다시 그리려고 기억해 둬요
   if (!ui.calMonth) ui.calMonth = today.slice(0, 7);
   if (ui.calMonth < CALENDAR_START) ui.calMonth = CALENDAR_START;
   const [y, m] = ui.calMonth.split('-').map(Number);
@@ -1969,7 +1878,9 @@ function renderCalendar() {
       <button type="button" class="btn purple" data-act="recap">📖 ${ui.calMonth === today.slice(0, 7) ? '이번 달' : `${m}월`} 돌아보기</button>
       <button type="button" class="btn ghost purple" data-act="board">🎴 도장 모음판</button>
     </div>
-    ${older ? `<p class="meta">${startYear}년 이전 기록 ${older}개는 달력에 나타나지 않아요. (각 메뉴의 목록에서는 볼 수 있어요.)</p>` : ''}`;
+    ${older ? `<p class="meta">${startYear}년 이전 기록 ${older}개는 달력에 나타나지 않아요. (각 메뉴의 목록에서는 볼 수 있어요.)</p>` : ''}
+    ${claudeBoxHTML()}
+    ${memoryHTML(today)}`;
 }
 
 // 기록한 날이 며칠인지 (하루에 여러 개를 남겨도 1일이에요. 예시 기록은 세지 않아요)
@@ -2204,7 +2115,7 @@ function hideToast() {
   try { if (el.hidePopover && el.matches(':popover-open')) el.hidePopover(); } catch (e) { /* 괜찮아요 */ }
 }
 
-// extra.stamp: 맨 앞에 크게 찍히는 도장 그림, extra.action: 토스트 안의 버튼 { label, act, id }
+// extra.stamp: 맨 앞에 크게 찍히는 도장 그림
 function toast(msg, ms = 6000, extra = {}) {
   const el = $('#toast');
   el.replaceChildren();
@@ -2217,15 +2128,6 @@ function toast(msg, ms = 6000, extra = {}) {
   const text = document.createElement('span');
   text.textContent = msg;
   el.append(text);
-  if (extra.action) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'toast-btn';
-    b.dataset.act = extra.action.act;
-    if (extra.action.id) b.dataset.id = extra.action.id;
-    b.textContent = extra.action.label;
-    el.append(b);
-  }
   el.hidden = false;
   // popover로 띄우면 열려 있는 창(날짜 창 등) 위에도 보여요. 못 쓰는 브라우저에서는 그냥 아래쪽에 떠요.
   try { if (el.showPopover) { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); } } catch (e) { /* 괜찮아요 */ }
@@ -2277,15 +2179,14 @@ function assignStamp(rec, remember = true) {
   return rec;
 }
 
-// 새 기록을 저장한 직후에 부르는 함수. extra.action 이 있으면(오늘 탭) 축하를 꺼 두어도 그 버튼은 보여줘요.
-function afterNewRecord(rec, extra = {}) {
-  const ms = extra.action ? 8000 : 5000;
+// 새 기록을 저장한 직후에 부르는 함수. 축하 한 줄(도장)을 잠깐 보여줘요. (축하를 꺼 두면 아무것도 안 보여요)
+function afterNewRecord(rec) {
   const s = stampPhrases.get(rec.id) || pickStamp(rec);
   stampPhrases.delete(rec.id);
-  if (settings.celebrateOff) { if (extra.action) toast('저장했어요', ms, extra); return; }
+  if (settings.celebrateOff) return;
   const m = milestoneText(rec);
-  if (m) { toast(m, ms, extra); return; }
-  toast(s.text, ms, { ...extra, stamp: s.icon });
+  if (m) { toast(m, 5000); return; }
+  toast(s.text, 5000, { stamp: s.icon });
 }
 
 // 사진 파일(여러 장도 돼요) → 사진이 붙은 새 그림 올리기 창. 여러 장은 기록 하나로 묶여요.
@@ -3037,15 +2938,6 @@ function routineHintHTML() {
     <button type="button" class="link-btn" data-act="fbHide" data-id="${esc(f.id)}" data-refresh="1">✕ 숨기기</button></div>`;
 }
 
-// 오늘 탭: 영역별 한 줄씩 최대 3줄, 작게
-function todayHintsHTML() {
-  const rows = ['violin', 'exercise', 'drawing', 'econ', 'english'].map((sc) => ({ sc, f: pendingTodo(sc) })).filter((x) => x.f)
-    .sort((a, b) => byCreatedDesc(a.f, b.f)).slice(0, 3);
-  if (!rows.length) return '';
-  return `<div class="fb-lines">${rows.map(({ sc, f }) => `<div class="fb-line"><span>💡 <span class="fb-scope" title="${esc(scopeMeta(sc).label)}">${scopeMeta(sc).icon}</span> 지난 피드백에서: ${esc(f.todo)}</span>
-    <label class="fb-hint-c"><input type="checkbox" data-fb-done="${esc(f.id)}"> 해봤음</label></div>`).join('')}</div>`;
-}
-
 /* ---- 기록 카드 안의 🤖 · 💬 ---- */
 const feedbacksOf = (id) => ofType('claudeFeedback').filter((f) => f.targetId === id).sort(byCreatedDesc);
 const claudeBtns = (r) => `<button type="button" class="btn ghost purple small" data-act="claudeCard" data-id="${esc(r.id)}" title="이 기록을 클로드에게 보낼 글로 복사해요" aria-label="클로드에게 보내기">🤖</button>${feedbackBadge(r)}`;
@@ -3138,7 +3030,7 @@ async function saveFeedbackEdit(form) {
   toast('피드백을 고쳤어요.', 2500);
 }
 
-/* ---- 메인 복사칸 (오늘 탭 아래) ---- */
+/* ---- 메인 복사칸 (캘린더 아래, 접어 둘 수 있어요) ---- */
 function claudeCurrent() {
   const [start, end] = claudeRange(ui.claudePeriod);
   const list = scopeRecords(ui.claudeScope, start, end);
@@ -3148,8 +3040,9 @@ function claudeCurrent() {
 
 function claudeBoxHTML() {
   const cur = claudeCurrent();
-  return `<section class="card claude-box" id="claudeBox">
-    <h3>🤖 클로드에게 보내기</h3>
+  return `<details class="card claude-fold" id="claudeFold"${settings.claudeBoxOpen ? ' open' : ''}>
+    <summary>🤖 클로드에게 보내기</summary>
+    <div class="claude-box" id="claudeBox">
     <div class="cl-row"><span class="chip-label">기간</span><div class="chips" style="margin:0">${PERIODS.map((p) => `<button type="button" class="chip ${ui.claudePeriod === p.id ? 'active' : ''}" data-act="claudePeriod" data-id="${p.id}" aria-pressed="${ui.claudePeriod === p.id}">${p.label}</button>`).join('')}</div></div>
     <div class="cl-row"><span class="chip-label">범위</span><div class="chips" style="margin:0">${COPY_SCOPES.map((id) => `<button type="button" class="chip ${ui.claudeScope === id ? 'active' : ''}" data-act="claudeScope" data-id="${id}" aria-pressed="${ui.claudeScope === id}">${scopeMeta(id).icon} ${esc(scopeMeta(id).label)}</button>`).join('')}</div></div>
     <label class="rt-h" for="claudeQ" style="margin-top:12px">이번에 특히 물어볼 것 <span class="meta">(선택, 한 줄)</span></label>
@@ -3160,8 +3053,17 @@ function claudeBoxHTML() {
       <button type="button" class="btn ghost" data-act="claudeSettings">✎ 내 정보·요청 문구</button>
     </div>
     <details class="fb-fold" id="mainFb"${ui.claudePending ? ' open' : ''}><summary>💬 받은 피드백 붙여넣기</summary>${fbInputHTML('')}</details>
-  </section>`;
+    </div>
+  </details>`;
 }
+
+// 펼치거나 접으면 이 기기에 기억해요 (다른 기기와 맞추지 않아요)
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d || d.id !== 'claudeFold' || d.open === settings.claudeBoxOpen) return;
+  settings.claudeBoxOpen = d.open;
+  saveSettings();
+}, true);
 
 // 기간·범위·물어볼 것이 바뀌면 미리보기만 새로 만들어요 (아래에 붙여 넣던 피드백은 그대로)
 function syncClaudeBox() {
@@ -3945,7 +3847,6 @@ document.addEventListener('click', async (e) => {
     case 'tab':
       if (ui.tab !== id && !(await confirmLeaveNote())) break; // 저장하지 않은 한 줄이 있으면 물어봐요
       ui.tab = id; ui.query = '';
-      ui.todayKey = null;
       render(); window.scrollTo(0, 0); break;
     case 'week': ui.weekOffset = el.dataset.d === '0' ? 0 : ui.weekOffset + Number(el.dataset.d); render(); break;
     case 'setView': ui[el.dataset.key] = id; render(); break;
@@ -3973,14 +3874,12 @@ document.addEventListener('click', async (e) => {
     case 'calDay': openDay(el.dataset.date); break;
     case 'addOn': openForm(type, undefined, el.dataset.date); break;
     case 'calShift': ui.calMonth = shiftMonth(ui.calMonth, Number(el.dataset.d)); render(); break;
-    case 'calToday': { // 이번 달로 가고, 오늘 칸을 한 번 반짝여요 (이미 이번 달이면 반짝임만)
-      ui.calMonth = todayStr().slice(0, 7);
-      render();
-      const cell = $('.cal-cell.today');
-      if (cell) { try { cell.scrollIntoView({ block: 'nearest' }); } catch (err) { /* 괜찮아요 */ } flashEl(cell); }
+    case 'calToday': { // 이번 달로 가기만 해요 (이미 이번 달이면 아무 일도 없어요)
+      const ym = todayStr().slice(0, 7);
+      if (ui.calMonth !== ym) { ui.calMonth = ym; render(); }
       break;
     }
-    case 'boardToday': openBoard(todayStr().slice(0, 7)); flashEl(dlg.querySelector('.board-nav strong')); break;
+    case 'boardToday': { const ym = todayStr().slice(0, 7); if (ui.boardMonth !== ym) openBoard(ym); break; }
     case 'calCat':
       if (ui.calHidden.has(id)) ui.calHidden.delete(id); else ui.calHidden.add(id);
       render();
@@ -4014,20 +3913,7 @@ document.addEventListener('click', async (e) => {
       }
       break;
     }
-    case 'todayPick':
-      if (TODAY_BUTTONS.find((b) => b.key === el.dataset.key).form) { // 🎨 그림: 간단 기록 대신 종류가 "크로키"로 골라진 올리기 창이 바로 열려요
-        const b = TODAY_BUTTONS.find((x) => x.key === el.dataset.key);
-        ui.todayKey = null;
-        openForm(b.type, undefined, undefined, b.form);
-      }
-      else if (ui.todayKey === el.dataset.key && TODAY_BUTTONS.find((b) => b.key === el.dataset.key).routine) { ui.todayKey = null; render(); } // 경제 루틴은 체크하면 바로 저장돼서, 한 번 더 누르면 접혀요
-      else if (ui.todayKey === el.dataset.key) { const f = $('#todayForm'); if (f) f.requestSubmit(); } // 한 번 더 누르면 저장
-      else { ui.todayKey = el.dataset.key; render(); }
-      break;
-    case 'todayCancel': ui.todayKey = null; render(); break;
-    case 'rest': await toggleRest(el.dataset.date, !dlg.open); break;
-    case 'undoRest': hideToast(); await deleteRecord(id); render(); break;
-    case 'toastEdit': { hideToast(); const r = records.find((x) => x.id === id); if (r) openForm(r.type, r); break; }
+    case 'rest': await toggleRest(el.dataset.date); break;
     case 'recap': openRecap(); break;
     case 'routineChip': await toggleRoutineChip(el.dataset.date, el.dataset.chip); break;
     case 'pastNotes': openPastNotes(); break;
@@ -4118,7 +4004,6 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('submit', (e) => {
   if (e.target.id === 'recForm') { e.preventDefault(); submitForm(e.target); }
   else if (e.target.id === 'quickForm') { e.preventDefault(); submitQuick(e.target); }
-  else if (e.target.id === 'todayForm') { e.preventDefault(); saveToday(e.target); }
   else if (e.target.id === 'clForm') { e.preventDefault(); saveClaudeSettings(); }
   else if (e.target.id === 'fbEditForm') { e.preventDefault(); saveFeedbackEdit(e.target); }
   else if (e.target.id === 'bookAddForm') { e.preventDefault(); addBook(e.target.elements[0].value); }
@@ -4200,7 +4085,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1 };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, claudeBoxOpen: !!st.claudeBoxOpen };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -4272,7 +4157,7 @@ document.addEventListener('focusin', (e) => {
 
 document.addEventListener('visibilitychange', () => { if (document.hidden) { if (autosaveTimer) runAutosave(); } }); // 탭을 닫기 직전에도 저장
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && (ui.tab === 'today' || ui.tab === 'econ') && !dlg.open && view.dataset.today && view.dataset.today !== todayStr()) render();
+  if (!document.hidden && (ui.tab === 'cal' || ui.tab === 'econ') && !dlg.open && view.dataset.today && view.dataset.today !== todayStr()) render();
 });
 
 start().catch((err) => {
