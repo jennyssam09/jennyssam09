@@ -132,6 +132,10 @@ dialog.roomy { width: min(780px, 94vw); } /* 입력 창: 넓은 화면에서 여
   width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
 }
 .field textarea { min-height: 84px; resize: vertical; }
+/* 새벽 4시 전에 입력 창을 열었을 때만 날짜 칸 아래에 나오는 작은 안내 */
+.dawn-note { margin-top: 6px; font-size: .85rem; color: var(--muted); }
+/* 데이터 정리 확인 창 */
+.cleanup-restore { margin-top: 10px; }
 .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .hint { font-size: .8rem; color: var(--muted); margin-top: 2px; }
 .preview { max-width: 100%; max-height: 220px; border-radius: 8px; display: block; margin-top: 8px; }
