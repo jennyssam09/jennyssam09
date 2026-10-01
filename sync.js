@@ -720,6 +720,7 @@
       const n = conflictCount();
       if (n && n !== S.conflictsSeen && typeof toast === 'function') toast(`☁ 충돌 ${n}개가 있어요. 위쪽 ☁ 를 눌러 확인해 주세요.`, 6000);
       S.conflictsSeen = n;
+      setTimeout(maybeAskAudio, 50); // 이번 동기화가 끝난 뒤에
     } catch (e) {
       S.progress = null;
       handleError(e);
@@ -1085,7 +1086,8 @@
       try { email = await fetchEmail(); } catch (e) { /* 이메일 표시는 없어도 돼요 */ }
       const keepDevice = S.meta.deviceId; const last = S.meta.last;
       const same = !!(last && last.email && last.email === email && last.firstDone); // 로그아웃했던 그 계정이면 이어서 써요
-      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, ...(same ? { base: last.base, folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
+      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, wifiOnly: S.meta.wifiOnly, ...(same ? { base: last.base, abase: last.abase || {}, audioAsked: !!last.audioAsked, audioHold: last.audioHold || [], folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
+      if (!same) await forgetAudioRefs(true); // 다른 계정이면 예전 Drive의 녹음 주소는 쓸 수 없어요
       S.needReconnect = false; S.remote = { version: '', journal: null };
       await saveMeta();
       closeDlg(); // 로그인 안내 창을 닫아요
@@ -1203,11 +1205,12 @@
     S.token = null; S.tokenExp = 0; S.needReconnect = false; S.remote = { version: '', journal: null };
     clearTimeout(S.debounceT); clearTimeout(S.retryT);
     const keepDevice = S.meta.deviceId; const m0 = S.meta;
-    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, last: wipe ? null : { email: m0.email, base: m0.base, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
+    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, wifiOnly: m0.wifiOnly, last: wipe ? null : { email: m0.email, base: m0.base, abase: m0.abase, audioAsked: m0.audioAsked, audioHold: m0.audioHold, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
     await saveMeta();
     if (wipe) {
       await Store.remove([...records.map((r) => r.id), ...tombstones.map((t) => t.id)]);
       records = []; tombstones = [];
+      await forgetAudioRefs(true);
     }
     setStatus('idle', '');
     closeDlg();
@@ -1243,7 +1246,24 @@
   }
   function valSigRemote(v) { const conv = (x) => (isRef(x) ? { $h: x.$img.h } : Array.isArray(x) ? x.map(conv) : x); return JSON.stringify(stable(conv(v === undefined ? null : v))); }
 
+  const AUD_LABEL = { memo: '메모', date: '날짜', piece: '곡', name: '파일 이름' };
+  function audioConflictCard(id, c) {
+    const L = localAudioMap().get(id); const R = c.remote;
+    const kindText = { edit: '양쪽에서 다르게 고쳤어요', remoteDeleted: 'Drive에서는 지웠고, 이 기기에서는 고쳤어요', localDeleted: '이 기기에서는 지웠고, Drive에서는 고쳤어요' }[c.kind] || '';
+    const lt = isTombLike(L); const rt = isTombLike(R); const ref = (!lt && L) || (!rt && R) || {};
+    let rows = '';
+    if (!lt && !rt && L && R) Object.keys(AUD_LABEL).filter((k) => (L[k] || '') !== (R[k] || '')).forEach((k) => { rows += `<div class="cf-row"><div class="cf-k">${AUD_LABEL[k]}</div><div class="cf-l pre">${esc(fmtVal(L[k]))}</div><div class="cf-r pre">${esc(fmtVal(R[k]))}</div></div>`; });
+    else rows = `<div class="cf-row"><div class="cf-k">상태</div><div class="cf-l pre">${lt ? '이 기기에서 지웠어요' : esc(`메모: ${fmtVal(L && L.memo)}`)}</div><div class="cf-r pre">${rt ? 'Drive에서 지웠어요' : esc(`메모: ${fmtVal(R && R.memo)}`)}</div></div>`;
+    const btns = c.kind === 'localDeleted'
+      ? `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">삭제 유지하기</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 것 되살리기</button>`
+      : c.kind === 'remoteDeleted'
+        ? `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">이 기기 것 남기기</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 따라 지우기</button>`
+        : `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">이 기기 것으로</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 것으로</button>`;
+    return `<div class="card cf-card" data-cf="${esc(id)}"><div class="cf-head"><b>🎙 녹음 · ${esc(ref.piece || '')} · ${esc(ref.date || '')}</b><span class="meta">${esc(kindText)}</span></div>
+      <div class="cf-cols"><div class="cf-colh">이 기기</div><div class="cf-colh">Drive</div></div>${rows}<div class="row" style="margin-top:8px">${btns}</div></div>`;
+  }
   async function conflictCard(id, c) {
+    if (c.k === 'aud') return audioConflictCard(id, c);
     const L = localMap().get(id); const R = c.remote;
     const kindText = { edit: '양쪽에서 다르게 고쳤어요', remoteDeleted: 'Drive에서는 지웠고, 이 기기에서는 고쳤어요', localDeleted: '이 기기에서는 지웠고, Drive에서는 고쳤어요' }[c.kind] || '';
     const lt = isTombLike(L); const rt = isTombLike(R);
@@ -1293,6 +1313,7 @@
   const bumpAbove = (rec, ru) => Math.max(now(), (rec.updatedAt || 0) + 1, (ru || 0) + 1);
   async function resolveConflict(id, choice, quiet = false) {
     const c = S.meta.conflicts[id]; if (!c) return;
+    if (c.k === 'aud') return resolveAudioConflict(id, c, choice, quiet);
     const L = localMap().get(id); const R = c.remote; const base = S.meta.base;
     try {
       if (choice === 'cf-local' || choice === 'cf-both') {
@@ -1327,9 +1348,26 @@
     if (conflictCount()) openConflicts(); else { closeDlg(); toast('☁ 충돌을 모두 풀었어요. 동기화할게요.', 3000); }
     runSync('resolved');
   }
+  async function resolveAudioConflict(id, c, choice, quiet) {
+    const L = localAudioMap().get(id); const R = c.remote; const ab = S.meta.abase;
+    try {
+      if (choice === 'cf-local') {
+        const at = bumpAbove(L, R && R.updatedAt);
+        if (c.kind === 'localDeleted') { await applyAudioChanges({ tombs: [{ ...audioTombEntry(L), rf: L.rf || '', deletedAt: at, updatedAt: at }] }); ab[id] = { lu: 0, ld: false, ru: R.updatedAt, rd: false }; }
+        else { await applyAudioChanges({ put: [{ id, updatedAt: at }] }); await AudioStore.update(id, (row) => (row ? { ...row, updatedAt: at } : undefined)); ab[id] = { lu: 0, ld: false, ru: R.updatedAt, rd: isTombLike(R) }; }
+      } else if (isTombLike(R)) { await applyAudioChanges({ tombs: [audioTombEntry(R)] }); ab[id] = { lu: R.updatedAt, ld: true, ru: R.updatedAt, rd: true }; }
+      else { await applyAudioChanges({ put: [audioRowFromEntry(R)] }); ab[id] = { lu: R.updatedAt, ld: false, ru: R.updatedAt, rd: false }; }
+      delete S.meta.conflicts[id];
+      await saveMeta();
+      tellOtherTabs(); renderSoon(); renderChip();
+    } catch (e) { toast('충돌을 풀지 못했어요. 다시 눌러 주세요.', 4000); return; }
+    if (quiet) return;
+    if (conflictCount()) openConflicts(); else { closeDlg(); toast('☁ 충돌을 모두 풀었어요. 동기화할게요.', 3000); }
+    runSync('resolved');
+  }
   async function resolveAllNewest() {
     for (const id of Object.keys(S.meta.conflicts)) {
-      const c = S.meta.conflicts[id]; const L = localMap().get(id); const R = c.remote;
+      const c = S.meta.conflicts[id]; const L = (c.k === 'aud' ? localAudioMap() : localMap()).get(id); const R = c.remote;
       const localNewer = !R || (L && L.updatedAt >= R.updatedAt);
       await resolveConflict(id, localNewer ? 'cf-local' : 'cf-remote', true);
     }
@@ -1371,12 +1409,42 @@
       case 'conflicts': openConflicts(); break;
       case 'fl-merge': case 'fl-upload': case 'fl-download': firstChoice(act); break;
       case 'stale-fresh': case 'stale-merge': staleChoice(act); break;
-      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.base = {}; runSync('recreate'); break;
+      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.base = {}; S.meta.abase = {}; forgetAudioRefs(false).then(() => runSync('recreate')); break;
       case 'cf-local': case 'cf-remote': case 'cf-both': resolveConflict(b.dataset.id, act); break;
       case 'cf-newest': resolveAllNewest(); break;
+      case 'wifi': S.meta.wifiOnly = !!b.checked; saveMeta().then(() => { if (dlg.open && dlg.querySelector('.sync-audio')) openDetail(); if (!S.meta.wifiOnly) runSync('wifi'); }); break;
+      case 'audio-up': case 'audio-start': S.meta.audioAsked = true; S.meta.audioHold = []; saveMeta().then(() => { closeDlg(); runSync('audio'); }); break;
+      case 'audio-later': closeDlg(); break;
       default: break;
     }
   });
+
+  // 🎙 로그인 계정이 바뀌거나 이 기기 기록을 지울 때 / Drive 폴더를 다시 만들 때: 녹음의 Drive 주소를 잊어요 (이 기기의 녹음 파일은 지우지 않아요)
+  //   dropGhosts: 파일 없이 목록만 있던 녹음(다른 기기에서 받은 정보)도 목록에서 빼요
+  async function forgetAudioRefs(dropGhosts) {
+    if (!AudioStore.ok()) return;
+    const ghosts = dropGhosts ? audios.filter((a) => !a.local).map((a) => a.id) : [];
+    const stale = audioTombs.map((t) => t.id);
+    await applyAudioChanges({ drop: [...ghosts, ...(dropGhosts ? stale : [])] });
+    for (const a of audios) { await AudioStore.update(a.id, (row) => (row ? { ...row, rf: '' } : undefined)); a.rf = ''; }
+    S.meta.up = {};
+  }
+
+  // 🎙 처음 켜질 때(로그인 상태) 이 기기에 올라가지 않은 녹음이 있으면 올릴지 물어봐요. 창을 그냥 닫아도 "나중에"로 봐요.
+  function maybeAskAudio() {
+    const m = S.meta;
+    if (!m || !m.enabled || envMode() !== 'ok' || m.audioAsked || !m.firstDone || S.running || dlg.open || dlg2.open || !AudioStore.ok()) return;
+    const mine = audios.filter((a) => a.local && !a.rf);
+    m.audioAsked = true;
+    if (!mine.length) { saveMeta(); return; }
+    m.audioHold = mine.map((a) => a.id);
+    saveMeta();
+    const bytes = mine.reduce((n, a) => n + (a.size || 0), 0);
+    openDlg(`<h2>🎙 녹음도 Drive에 올릴까요?</h2>
+      <p>이 기기에 있는 녹음 <b>${mine.length}개 (약 ${esc(fmtMB(bytes))})</b>를 Drive에 올릴 수 있어요. 올리면 다른 기기에서도 듣고 파일로 저장할 수 있어요.</p>
+      <p class="meta">큰 파일은 이어 올리기로 올려요. 데이터가 걱정되면 ☁ 상세 창의 "와이파이에서만 녹음 올리기"를 켜 두세요. "나중에"를 골라도 ☁ 상세 창에서 언제든 올릴 수 있어요.</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" data-sync="audio-later">나중에</button><button type="button" class="btn" data-sync="audio-up">올리기</button></div>`);
+  }
 
   function notify() {
     tellOtherTabs(); // 같은 브라우저의 다른 탭 화면도 바뀐 기록을 보게 해요
@@ -1390,6 +1458,8 @@
     const cutoff = now() - CFG.tombstoneDays * DAY;
     const old = tombstones.filter((t) => t.deletedAt < cutoff && (!S.meta.enabled || (S.meta.base[t.id] && S.meta.base[t.id].ld)));
     if (old.length) applySyncChanges({ drop: old.map((t) => t.id) });
+    const oldA = audioTombs.filter((t) => t.deletedAt < cutoff && (!S.meta.enabled || (S.meta.abase[t.id] && S.meta.abase[t.id].ld)));
+    if (oldA.length) applyAudioChanges({ drop: oldA.map((t) => t.id) });
   }
 
   async function boot() {
@@ -1397,7 +1467,7 @@
     renderChip();
     if (bc) bc.onmessage = () => { // 다른 탭이 바꿨어요 → 저장된 것을 다시 읽어 와요 (몰려 와도 한 번만)
       clearTimeout(S.bcT);
-      S.bcT = setTimeout(async () => { records = await loadRecords(); await loadMeta(); renderSoon(); renderChip(); }, 200);
+      S.bcT = setTimeout(async () => { records = await loadRecords(); await reloadAudios(); await loadMeta(); renderSoon(); renderChip(); }, 200);
     };
     document.addEventListener('visibilitychange', () => {
       if (document.hidden || !S.meta || !S.meta.enabled || envMode() !== 'ok') return;
@@ -1408,6 +1478,9 @@
     window.addEventListener('online', () => { S.backoffIdx = 0; if (S.meta && S.meta.enabled) runSync('online'); });
     window.addEventListener('offline', () => { if (S.meta && S.meta.enabled) setStatus('offline', FRIENDLY.offline); });
     setInterval(renderChip, 60000); // "N분 전" 갱신
+    const conn = navigator.connection;
+    if (conn && conn.addEventListener) conn.addEventListener('change', () => { if (S.meta && S.meta.enabled && S.meta.wifiOnly && !wifiBlocked()) runSync('conn'); }); // 와이파이에 연결되면 기다리던 녹음을 올려요
+    dlg.addEventListener('close', () => setTimeout(maybeAskAudio, 400));
     purgeOldTombs();
     if (envMode() !== 'ok' || !S.meta.enabled) return;
     loadGIS().catch(() => { /* 오프라인이면 나중에 다시 해요 */ });
@@ -1418,9 +1491,10 @@
 
   window.Sync = {
     notify, cardHTML, isEnabled: () => !!(S.meta && S.meta.enabled), openDetail,
+    audioBadge, fetchLabel, fetchAudio,
     // 자동 시험용 (화면에서는 쓰지 않아요)
     __t: {
-      S, T, CFG, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote,
+      S, T, CFG, maybeAskAudio, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote,
       setNow: (fn) => { nowFn = fn; }, resetNow: () => { nowFn = () => Date.now(); }, gisReady, requestToken,
     },
   };

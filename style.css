@@ -759,3 +759,10 @@ dialog.roomy { width: min(900px, 92vw); }
   .cal-pick .search { flex: 1 1 0; }
   .board-nav strong { order: 5; flex: 1 1 100%; }
 }
+
+/* ---------- 🎙 녹음 ☁ 표시 · 받기 버튼 ---------- */
+.rec-cloud { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.rec-cloud:empty { display: none; }
+.rec-fetch { align-self: flex-start; }
+.sync-audio { margin: 10px 0; padding: 10px 14px; border-radius: 14px; background: var(--bg); }
+.sync-audio h3 { font-size: .95rem; color: var(--accent); margin-bottom: 6px; }
