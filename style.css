@@ -114,7 +114,6 @@ main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
 /* ---------- 그림 (갤러리는 아래 "🎨 그림 갤러리" 쪽에 있어요) ---------- */
 details { margin-top: 6px; }
 summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: .9rem; }
-.zoom-img { max-width: 100%; max-height: 80vh; display: block; margin: 0 auto; }
 
 /* ---------- 입력 창 ---------- */
 dialog {
@@ -258,16 +257,13 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
   background: var(--ink); color: var(--card); box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
 }
 
-/* ---------- 워치 캡처, 클로드 피드백, 요약 복사, 쌓인 기록 ---------- */
+/* ---------- 그림 사진 미리보기(올리기 창), 복사 글, 쌓인 기록 ---------- */
 .shot-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .shot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .shot-img {
   display: block; height: 96px; width: auto; max-width: 100%; object-fit: contain;
-  border: 1px solid var(--line); border-radius: 8px; background: #efe9db; cursor: zoom-in;
+  border: 1px solid var(--line); border-radius: 8px; background: #efe9db;
 }
-.shot .shot-img { cursor: default; }
-.claude-fb { margin-top: 8px; padding: 4px 12px 8px; border-radius: 10px; background: var(--purple-soft); }
-.claude-fb summary { color: var(--purple); }
 .copy-text { width: 100%; min-height: 300px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; line-height: 1.55; }
 .copy-state { min-height: 1.5em; margin: 6px 0 0; color: var(--accent); font-weight: 700; font-size: .9rem; }
 .total-card h3 { font-size: .95rem; color: var(--accent); }
