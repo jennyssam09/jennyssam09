@@ -60,13 +60,14 @@ const TEXTBOOKS_DEFAULT = ['스즈키 4권'];
    - type: text / textarea / number / date / select / choice(버튼 하나) / chips(버튼 여러 개) / lines(한 줄에 하나) / tasks(체크 목록) / image / images
    - keep: 이 창에서 고치지 않아도 그대로 보관할 칸 (복기 창에서 적는 값 등)
    --------------------------------------------------------------------- */
-// 🧘 운동 "한 줄" 칸의 회색 예시 문장 (종류별). 빠른 기록 창도 같은 문장을 써요.
+// 🧘 운동 "한 줄" 칸의 회색 예시 문장 (종류별)
 const WORKOUT_LINE_HINTS = { '요가': '예: 골반이 좀 풀렸다', '슬로조깅': '예: 바람이 시원했다' };
 const AMOUNT_FIELD = { key: 'amount', label: '연습량 - 선택', type: 'choice', choices: AMOUNTS, hint: '시간 대신 느낌으로 골라요. 다시 누르면 선택이 풀려요.' };
+const WORKOUT_AMOUNT_FIELD = { ...AMOUNT_FIELD, label: '운동량 - 선택' }; // 운동은 "운동량", 바이올린·그림은 "연습량"이에요
 const MOOD_FIELD = { key: 'mood', label: '하고 나서 기분 - 선택', type: 'choice', choices: MOODS };
 
 const SCHEMAS = {
-  // 🧘 운동 기록 (요가 / 슬로조깅): 날짜 · 종류 · 거리 · 연습량 · 기분 · 한 줄, 이게 전부예요 ("더 적기"는 없어요)
+  // 🧘 운동 기록 (요가 / 슬로조깅): 날짜 · 종류 · 거리 · 운동량 · 기분 · 한 줄, 이게 전부예요 ("더 적기"는 없어요)
   workout: {
     label: '운동 기록',
     kindKey: 'kind', // '종류'에 따라 보이는 칸이 달라져요
@@ -74,7 +75,7 @@ const SCHEMAS = {
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
       { key: 'distance', label: '거리 (km) - 선택', type: 'number', min: 0, step: 0.01, only: '슬로조깅', placeholder: '예: 3.2' },
-      AMOUNT_FIELD,
+      WORKOUT_AMOUNT_FIELD,
       MOOD_FIELD,
       // 한 줄 (예전 "한 줄 메모", "몸이 어땠나 한 줄", "달리며 든 생각 한 줄"이 모두 여기에 모여요). 종류마다 회색 예시 문장이 달라요
       { key: 'memo', label: '한 줄 - 선택', type: 'text', flat: true, placeholder: '예: 퇴근 후 짧게 했다', placeholderByKind: WORKOUT_LINE_HINTS },
@@ -201,13 +202,6 @@ const CALENDAR_START = '2026-01';
 // 빠른 기록: 메뉴마다 '종류' 목록과, 한 줄 메모가 어느 칸에 저장될지 정해요.
 //   memoKey: 한 줄 메모가 들어갈 칸
 const QUICK = {
-  exercise: {
-    title: '빠른 기록 - 운동', memoRequired: false,
-    kinds: [
-      { label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: WORKOUT_LINE_HINTS['요가'] },
-      { label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: WORKOUT_LINE_HINTS['슬로조깅'] },
-    ],
-  },
   violin: {
     title: '빠른 기록 - 바이올린', memoRequired: false,
     kinds: [
@@ -498,9 +492,9 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 //   local: 이 기기에 파일이 있나 (☁ 로 다른 기기에서 정보만 받은 녹음은 false 예요) · rf: Drive에 올라간 파일의 id · updatedAt: 바꾼 시각
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
-// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1),
+// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1 · workoutQuickV1),
 // 캘린더 아래 '🤖 클로드에게 보내기'를 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, claudeBoxOpen: false };
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, workoutQuickV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -626,7 +620,7 @@ function buildSamples() {
     mk('workout', d(4), { stamp: '🌿', kind: '요가', amount: 1, mood: 'tired', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
     mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, memo: '' }),
     mk('workout', d(9), { kind: '요가', memo: '' }),
-    mk('workout', d(3), { kind: '요가', amount: 1, memo: '퇴근 후 짧게 (간단 기록 예시)', quick: true }),
+    mk('workout', d(3), { kind: '요가', amount: 1, memo: '퇴근 후 짧게 (예시 기록)' }),
     mk('rest', d(7), { stamp: '😴', memo: '야근한 날. 푹 잤다. (예시 기록)' }),
     // 🎻 바이올린
     mk('violin', d(1), { stamp: '🎶', kind: '연습', amount: 3, mood: 'good', tempo: 60, piece: '비발디 a단조 1악장', whatDid: ['기본기', '곡'], books: ['스즈키 4권'], bookPart: '에튀드 12번', good: '비브라토가 두 박 정도 고르게 됐다', part: '1~8마디 운지', stage: '천천히 치는 중', ask: [{ text: '비브라토할 때 손목은 어떻게 두는지', done: false }, { text: '활을 줄에서 떼는 타이밍', done: false }], next: '메트로놈 60에 비브라토 4박 느리게 두 번 (예시 기록)' }),
@@ -685,11 +679,12 @@ const quickTag = (r) => (r.quick ? '<span class="tag quick">간단 기록</span>
 
 // 연습량 ●●○ 와 기분 😊 (카드 머리줄에 작게 붙어요. 안 적었으면 아무것도 안 보여요)
 const amountOf = (r) => AMOUNTS.find((a) => a.v === Number(r.amount));
+const amountWord = (r) => (r && r.type === 'workout' ? '운동량' : '연습량'); // 운동은 "운동량", 바이올린·그림은 "연습량"
 const moodOf = (r) => MOODS.find((m) => m.v === r.mood);
 function marksHTML(r) {
   const a = amountOf(r);
   const m = moodOf(r);
-  return `${a ? `<span class="amt" role="img" aria-label="연습량 ${a.label}" title="연습량 ${a.label}">${a.icon} ${a.label}</span>` : ''}${m ? `<span class="mood" role="img" aria-label="기분 ${m.label}" title="하고 나서 기분: ${m.label}">${m.icon}</span>` : ''}`;
+  return `${a ? `<span class="amt" role="img" aria-label="${amountWord(r)} ${a.label}" title="${amountWord(r)} ${a.label}">${a.icon} ${a.label}</span>` : ''}${m ? `<span class="mood" role="img" aria-label="기분 ${m.label}" title="하고 나서 기분: ${m.label}">${m.icon}</span>` : ''}`;
 }
 
 // 칩 선택지 하나를 {v, icon, label}로 맞춰요 (글자만 있는 것도 돼요)
@@ -842,7 +837,7 @@ function workoutCard(r) {
   if (r.distance) parts.push(`${esc(fmtNum(r.distance))}km`);
   return `<div class="card" data-rid="${esc(r.id)}">
     <div class="item-head">
-      <div><span class="tag">${esc(r.kind || '운동')}</span> ${parts.join(' · ')} ${marksHTML(r)} ${quickTag(r)}</div>
+      <div><span class="tag">${esc(r.kind || '운동')}</span> ${parts.join(' · ')} ${marksHTML(r)}</div>
       ${actionButtons('workout', r.id, claudeBtns(r))}
     </div>
     ${r.memo ? `<p class="pre">${esc(r.memo)}</p>` : ''}
@@ -1104,11 +1099,8 @@ function weekStats(start) {
   const count = (list, k, v) => list.filter((r) => r[k] === v).length;
   const prac = vs.filter((r) => r.kind !== '레슨'); // 연습 기록만 (레슨은 따로 세요)
   const wOptions = SCHEMAS.workout.fields.find((f) => f.key === 'kind').options;
-  // 연습량은 그림까지 함께 세요 (합계나 점수는 만들지 않고 개수만 보여줘요)
-  const moved = records.filter((r) => inWeek(r) && amountOf(r) && supportsAmount(r.type, r.kind));
   return {
     end, ws, vs, prac,
-    amountText: moved.length ? AMOUNTS.map((a) => `${a.label} ${moved.filter((r) => amountOf(r).v === a.v).length}`).join(' · ') : '',
     restDays: new Set(ofType('rest').filter(inWeek).map((r) => r.date)).size,
     lessons: vs.length - prac.length,
     violinDays: new Set(prac.map((r) => r.date)).size,
@@ -1141,7 +1133,7 @@ function weekSummaryHTML(start, area) {
       ${isEx ? `<div class="stat"><b>${ws.length}회</b><span>운동 횟수</span></div>` : `<div class="stat"><b>${violinDays}일</b><span>바이올린 연습한 날</span></div>`}
     </div>
     ${isEx && ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)}</p>` : ''}
-    ${amountText ? `<p class="meta" style="margin:4px 0 0">연습량: ${esc(amountText)}</p>` : ''}
+    ${amountText ? `<p class="meta" style="margin:4px 0 0">${isEx ? '운동량' : '연습량'}: ${esc(amountText)}</p>` : ''}
     ${isEx && restDays ? `<p class="meta" style="margin:4px 0 0">쉰 날 ${restDays}일</p>` : ''}
     ${!isEx && lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
     ${!isEx && pieces.length ? `<p class="meta" style="margin:4px 0 0">이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}</p>` : ''}
@@ -1265,7 +1257,6 @@ function renderExercise() {
     ${weekSummaryHTML(start, 'exercise')}
     ${totalsCardHTML('exercise')}
     <div class="row actions-row" style="margin:14px 0">
-      <button type="button" class="btn purple" data-act="quick" data-menu="exercise">⚡ 빠른 기록</button>
       <button type="button" class="btn" data-act="add" data-type="workout">＋ 운동 기록</button>
     </div>
     <div class="row between">
@@ -1796,10 +1787,12 @@ function renderCalendar() {
     const date = `${ui.calMonth}-${pad(d)}`;
     const groups = CAL_CATS.filter((c) => byDate.get(date) && byDate.get(date).has(c.id)).map((c) => ({ c, items: byDate.get(date).get(c.id) }));
     const say = groups.length ? groups.map((g) => `${g.c.label}${g.items.length > 1 ? ` ${g.items.length}개` : ''}`).join(', ') : '기록 없음';
-    const top = Math.max(0, ...groups.flatMap((g) => g.items.map((r) => (amountOf(r) && supportsAmount(r.type, r.kind) ? amountOf(r).v : 0)))); // 그날 가장 높은 연습량
+    const withAmt = groups.flatMap((g) => g.items).filter((r) => amountOf(r) && supportsAmount(r.type, r.kind));
+    const top = Math.max(0, ...withAmt.map((r) => amountOf(r).v)); // 그날 가장 높은 연습량·운동량
+    const topRec = withAmt.find((r) => amountOf(r).v === top);
     const onlyRest = groups.length > 0 && groups.every((g) => g.c.id === 'rest');
     const shade = `${groups.length && !onlyRest ? ' has' : ''}${onlyRest ? ' rest-only' : ''}${top ? ` amt${top}` : ''}`;
-    cells.push(`<button type="button" class="cal-cell${shade}${date === today ? ' today' : ''}" data-act="calDay" data-date="${date}" aria-label="${esc(dayLabel(date))}, ${esc(say)}${top ? `, 연습량 ${AMOUNTS[top - 1].label}` : ''}">
+    cells.push(`<button type="button" class="cal-cell${shade}${date === today ? ' today' : ''}" data-act="calDay" data-date="${date}" aria-label="${esc(dayLabel(date))}, ${esc(say)}${top ? `, ${amountWord(topRec)} ${AMOUNTS[top - 1].label}` : ''}">
       <span class="cal-num">${d}</span>
       <span class="cal-marks">${groups.map((g) => (g.c.iconOnly
         ? `<span class="cal-mark icon-only ${g.c.id}" title="${esc(g.c.label)}">${(g.c.id === 'routine' ? routineIcons(g.items[0]) : [g.c.icon]).map((i) => `<span class="cal-ico">${i}</span>`).join('')}</span>` // 그림만 (루틴은 그날 체크한 항목, 영어는 📰)
@@ -1833,7 +1826,7 @@ function renderCalendar() {
       ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
       ${cells.join('')}
     </div>
-    <p class="meta cal-legend">배경 진하기는 그날 가장 많이 한 연습량이에요:
+    <p class="meta cal-legend">배경 진하기는 그날 가장 많이 한 연습량·운동량이에요:
       ${AMOUNTS.map((a, i) => `<span class="cal-swatch has amt${i + 1}" aria-hidden="true"></span>${esc(a.label)}`).join(' ')} · 😴 쉰 날</p>
     <p class="meta" style="margin-top:12px">${summary ? `${y}년 ${m}월의 기록: ${summary}` : `${y}년 ${m}월에는 기록이 없어요.`}</p>
     <div class="row" style="margin-top:14px">
@@ -1956,10 +1949,14 @@ const RECAP_SECTIONS = [
     }).filter((row) => row[2]);
     return rows.length ? { title: '종류별 횟수', html: chipsOf(rows) } : null;
   } },
-  { id: 'amount', build: (c) => {
-    const list = c.real.filter((r) => amountOf(r) && supportsAmount(r.type, r.kind));
-    const rows = AMOUNTS.map((a) => [a.icon, a.label, list.filter((r) => amountOf(r).v === a.v).length]).filter((row) => row[2]);
-    return rows.length ? { title: '연습량 (개수만)', html: chipsOf(rows) } : null;
+  { id: 'amount', build: (c) => { // 운동은 "운동량", 바이올린·그림은 "연습량"으로 따로 세요 (개수만)
+    const all = c.real.filter((r) => amountOf(r) && supportsAmount(r.type, r.kind));
+    const rowsOf = (list) => AMOUNTS.map((a) => [a.icon, a.label, list.filter((r) => amountOf(r).v === a.v).length]).filter((row) => row[2]);
+    const ex = rowsOf(all.filter((r) => r.type === 'workout'));
+    const pr = rowsOf(all.filter((r) => r.type !== 'workout'));
+    if (ex.length && pr.length) return { title: '운동량 · 연습량 (개수만)', html: `<div class="label">운동량</div>${chipsOf(ex)}<div class="label">연습량</div>${chipsOf(pr)}` };
+    if (ex.length) return { title: '운동량 (개수만)', html: chipsOf(ex) };
+    return pr.length ? { title: '연습량 (개수만)', html: chipsOf(pr) } : null;
   } },
   { id: 'piece', build: (c) => {
     const byPiece = new Map(); // 곡 이름 → 연습한 날들
@@ -2758,7 +2755,7 @@ const joinList = (a) => (Array.isArray(a) ? a.join(', ') : '');
 function claudeLine(r) {
   const bits = [mdLabel(r.date)];
   const add = (label, v) => { if (hasValue(v)) bits.push(label ? `${label}: ${oneLine(v)}` : oneLine(v)); };
-  const feel = () => { if (amountOf(r)) bits.push(`연습량: ${amountOf(r).label}`); if (moodOf(r)) bits.push(`기분: ${moodOf(r).label}`); };
+  const feel = () => { if (amountOf(r)) bits.push(`${amountWord(r)}: ${amountOf(r).label}`); if (moodOf(r)) bits.push(`기분: ${moodOf(r).label}`); };
   const done = () => { const f = r.feedbackId && records.find((x) => x.id === r.feedbackId); if (f && hasValue(f.todo)) bits.push(`해본 것(지난 제안): ${oneLine(f.todo)}`); };
   if (r.type === 'violin' && r.kind === '레슨') {
     bits.push('레슨');
@@ -3187,6 +3184,17 @@ function fieldHTML(f, value, type) {
   return `<div class="field${f.small ? ' field-small' : ''}" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label${labelFor}>${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
 }
 
+// 새벽 DAY_STARTS_AT시 전에 입력 창을 열었을 때만, 날짜 칸 아래에 어느 날 기록으로 남는지 작게 알려줘요. (날짜를 바꾸면 사라져요)
+function addDawnNote(dateInput) {
+  const t = todayStr();
+  if (!dateInput || new Date().getHours() >= DAY_STARTS_AT || dateInput.value !== t) return;
+  const note = document.createElement('div');
+  note.className = 'dawn-note';
+  note.dataset.date = t;
+  note.textContent = `🌙 새벽 ${DAY_STARTS_AT}시 전이라 어제(${shortDay(t)}) 기록으로 남겨요`;
+  dateInput.after(note);
+}
+
 // 종류(연습/레슨, 요가/슬로조깅)에 맞지 않는 칸은 숨겨요. 보일 칸이 하나도 없으면 "더 적기" 상자도 숨겨요.
 function syncKindFields(form) {
   const schema = SCHEMAS[form.dataset.type];
@@ -3258,7 +3266,7 @@ function openForm(type, existing, presetDate, preset) {
     .map((f) => `<datalist id="dl_${type}_${f.key}">${(type === 'violin' && f.key === 'piece' ? pieceSuggestions(rec.books) : suggestions(type, f.key)).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>`).join('');
   openDlg(`
     <h2>${esc(schema.label)} ${existing ? '수정' : '추가'}</h2>
-    ${existing && existing.quick ? '<p class="hint" style="margin:-6px 0 12px">간단 기록이에요. 나머지 칸은 천천히 채워도 돼요. 꼭 써야 하는 칸까지 채워 저장하면 \'간단 기록\' 표시가 사라져요.</p>' : ''}
+    ${existing && existing.quick && type !== 'workout' ? '<p class="hint" style="margin:-6px 0 12px">간단 기록이에요. 나머지 칸은 천천히 채워도 돼요. 꼭 써야 하는 칸까지 채워 저장하면 \'간단 기록\' 표시가 사라져요.</p>' : ''}
     <form id="recForm" novalidate>
       ${SCOPE_OF_TYPE[type] ? feedbackHintHTML(SCOPE_OF_TYPE[type], existing) : ''}
       ${type === 'violin' && !existing ? askBoxHTML() : ''}
@@ -3278,6 +3286,7 @@ function openForm(type, existing, presetDate, preset) {
   form.dataset.type = type;
   form.dataset.id = existing ? existing.id : '';
   syncKindFields(form);
+  if (!existing) addDawnNote($('#f_date'));
   updateShotsPreview();
   Object.keys(formImages).forEach(updateImagePreview);
   const first = dlg.querySelector('input:not([type=file]):not([type=date]):not([type=hidden]), textarea');
@@ -3453,6 +3462,7 @@ function openQuick(menu) {
       </div>
     </form>`, 'roomy');
   syncQuick();
+  addDawnNote($('#q_date'));
   $('#q_memo').focus();
   formBase = formSnapshot();
 }
@@ -3523,13 +3533,34 @@ function cleanedCopy(r) {
   return c;
 }
 
+// 🧹 데이터 정리 확인 창: 백업 파일 안내 + "정리 전 백업 파일 불러오기" 버튼 한 줄 + [취소] [정리하기]. true 면 정리해요. (닫거나 Esc 를 눌러도 취소예요)
+let cleanupAsk = null;
+async function askCleanup(message, name) {
+  while (dlg.open) await new Promise((r) => setTimeout(r, 300)); // 다른 창이 열려 있으면 닫힐 때까지 기다려요
+  return new Promise((resolve) => {
+    cleanupAsk = { resolve };
+    openDlg(`<h2>🧹 데이터 정리</h2>
+      <p class="pre cleanup-msg">${esc(message)}</p>
+      <div class="row cleanup-restore"><button type="button" class="btn ghost small" data-act="cleanRestore">📂 정리 전 백업 파일 불러오기</button><input type="file" id="cleanRestoreFile" accept=".json,application/json" hidden></div>
+      <p class="meta" style="margin:6px 0 0">백업 파일 이름: ${esc(name)} · 불러올 때도 없어진 칸은 같은 규칙으로 정리돼요. 값은 백업 파일 안에 그대로 있어요.</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" data-act="cleanNo">취소</button><button type="button" class="btn" data-act="cleanYes">정리하기</button></div>`);
+  });
+}
+function answerCleanup(yes) {
+  const a = cleanupAsk;
+  if (!a) return;
+  cleanupAsk = null;
+  a.resolve(yes);
+  closeDlg();
+}
+
 async function runUpdateCleanup() {
   if (settings.cleanupV3) return;
   const dirty = records.filter(needsCleanup);
   if (!dirty.length) { settings.cleanupV2 = true; settings.cleanupV3 = true; await saveSettings(); return; } // 정리할 것이 없으면 조용히 끝나요
   const name = `my-journal-backup-before-update-${todayStr().replace(/-/g, '')}.json`;
   await downloadBackup(name); // 정리하기 직전에 전체 백업
-  if (!confirm(`업데이트 전에 백업을 저장했어요. 예전 투자·경제 메모, 경제 루틴 태그와 일부 칩 값을 정리합니다.\n(백업 파일: ${name} — 다운로드 폴더를 확인해 주세요)`)) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
+  if (!(await askCleanup(`업데이트 전에 백업을 저장했어요. 예전 투자·경제 메모, 경제 루틴 태그와 일부 칩 값을 정리합니다.\n(백업 파일은 다운로드 폴더에 있어요)`, name))) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
   const drop = dirty.filter((r) => CLEAN_DROP_TYPES.includes(r.type)).map((r) => r.id);
   const emptied = (r) => { const c = cleanedCopy(r); return r.type === 'econRoutine' && !Object.values(c.checks || {}).some(Boolean) && !(c.letters || []).length && !c.note; }; // 태그만 남아 있던 빈 루틴 기록
   const emptyIds = dirty.filter((r) => !CLEAN_DROP_TYPES.includes(r.type) && emptied(r)).map((r) => r.id);
@@ -3559,7 +3590,8 @@ const WORKOUT_GONE = {                                         // 운동 기록�
   shots: '워치 캡처', claude: '클로드 피드백(붙여 둔 글)', condition: '컨디션(예전 칸)',
 };
 const WORKOUT_TO_LINE = { bodyNote: '몸이 어땠나 한 줄', runThought: '달리며 든 생각 한 줄' }; // 이 두 칸은 지우기 전에 "한 줄"(memo)로 옮겨요
-const workoutDirtyKeys = (r) => (r && r.type === 'workout' ? [...Object.keys(WORKOUT_GONE), ...Object.keys(WORKOUT_TO_LINE)].filter((k) => k in r) : []);
+const WORKOUT_FLAGS = ['quick']; // 운동은 빠른 기록이 없어져서 카드의 "간단 기록" 표시(quick)도 정리해요 (값이 아니라 표시라서 확인 없이 지워요)
+const workoutDirtyKeys = (r) => (r && r.type === 'workout' ? [...Object.keys(WORKOUT_GONE), ...Object.keys(WORKOUT_TO_LINE), ...WORKOUT_FLAGS].filter((k) => k in r) : []);
 function workoutLiteCopy(r, bump = false) {
   const keys = workoutDirtyKeys(r);
   if (!keys.length) return r;
@@ -3587,7 +3619,7 @@ function workoutLiteCounts(list) {
 }
 function workoutLiteMessage(c, name) {
   const lines = Object.entries(WORKOUT_GONE).filter(([k]) => c[k]).map(([k, label]) => `· ${label}: ${c[k]}개${k === 'shots' ? ` (사진 ${c.shotCount}장)` : k === 'refs' ? ` (링크 ${c.linkCount}개)` : ''}`);
-  return `🧘 운동 기록 입력이 간단해졌어요. 요가·슬로조깅의 칩과 "더 적기" 칸에 적어 둔 값을 지웁니다.\n${lines.length ? `${lines.join('\n')}\n` : ''}${c.moved ? `\n"몸이 어땠나 한 줄"·"달리며 든 생각 한 줄" ${c.moved}개는 지우지 않고 "한 줄"로 옮겨요.\n` : ''}\n정리하기 전에 백업을 저장했어요. (백업 파일: ${name} — 다운로드 폴더를 확인해 주세요)`;
+  return `🧘 운동 기록 입력이 간단해졌어요. 요가·슬로조깅의 칩과 "더 적기" 칸에 적어 둔 값을 지웁니다.\n${lines.length ? `${lines.join('\n')}\n` : ''}${c.moved ? `\n"몸이 어땠나 한 줄"·"달리며 든 생각 한 줄" ${c.moved}개는 지우지 않고 "한 줄"로 옮겨요.\n` : ''}\n정리하기 전에 백업을 저장했어요. (백업 파일은 다운로드 폴더에 있어요)`;
 }
 
 async function migrateWorkoutLite() {
@@ -3599,7 +3631,7 @@ async function migrateWorkoutLite() {
   if (valuable) {
     const name = `my-journal-backup-before-workout-lite-${todayStr().replace(/-/g, '')}.json`;
     await downloadBackup(name); // 정리하기 직전에 전체 백업
-    if (!confirm(workoutLiteMessage(counts, name))) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
+    if (!(await askCleanup(workoutLiteMessage(counts, name), name))) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
   }
   if (dirty.length) {
     const at = Date.now();
@@ -3611,6 +3643,21 @@ async function migrateWorkoutLite() {
   settings.workoutLiteV1 = true;
   await saveSettings();
   if (dirty.length) { render(); if (valuable) toast('운동 기록을 정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000); }
+}
+
+// 운동 기록의 "간단 기록" 표시(quick)만 한 번 지워요. (없어진 칸의 값은 건드리지 않아요. 그건 위의 migrateWorkoutLite 가 백업·확인 뒤에 해요) 바뀐 기록은 바꾼 시각도 새로 적어요.
+async function migrateWorkoutQuick() {
+  if (settings.workoutQuickV1) return;
+  const todo = records.filter((r) => r.type === 'workout' && 'quick' in r);
+  if (todo.length) {
+    const at = Date.now();
+    const next = todo.map((r, i) => { const c = { ...r }; delete c.quick; c.updatedAt = Math.max(at + i, (r.updatedAt || 0) + 1); return c; });
+    try { await Store.putMany(next); } catch (e) { return; } // 저장하지 못하면 다음에 다시 해요
+    const byId = new Map(next.map((r) => [r.id, r]));
+    records = records.map((r) => byId.get(r.id) || r);
+  }
+  settings.workoutQuickV1 = true;
+  await saveSettings();
 }
 
 async function refreshAutosaveState() {
@@ -3981,6 +4028,9 @@ document.addEventListener('click', async (e) => {
     case 'autosaveReconnect': await reconnectAutosave(); break;
     case 'autosaveOff': await disableAutosave(); break;
     case 'quick': openQuick(el.dataset.menu); break;
+    case 'cleanYes': answerCleanup(true); break;
+    case 'cleanNo': answerCleanup(false); break;
+    case 'cleanRestore': { const f = $('#cleanRestoreFile'); if (f) f.click(); break; }
     case 'backupNow': case 'export': exportBackup(); break;
     case 'snooze':
       settings.snoozeUntil = addDays(todayStr(), BACKUP_SNOOZE_DAYS);
@@ -4015,15 +4065,51 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+/* ---------------------------------------------------------------------
+   한글 입력 중(글자를 조합하는 중) Enter 는 저장하지 않아요.
+   한 줄짜리 입력란은 폼 안에 있어서 Enter 를 누르면 브라우저가 폼을 바로 보내요. 그런데 한글을 치다가 누르는 Enter 는
+   "마지막 글자를 확정"하려는 것이라, 그때 저장되면 마지막 글자가 빠지거나 두 번 저장될 수 있어요. (휴대폰 키보드에서 특히 그래요)
+   keydown(조합 중 Enter 를 눌렀을 때)과 submit(폼이 보내질 때) 두 곳에서 막아요. 조합이 끝난 뒤 다시 누른 Enter 부터 저장돼요.
+   --------------------------------------------------------------------- */
+let imeOn = false;   // 지금 글자를 조합하는 중인지
+let imeAt = 0;       // 조합이 마지막으로 움직인 시각 (compositionstart·update·input). 끝났다는 신호(compositionend)가 안 와도 오래되면 조합이 끝난 것으로 봐요
+let imeEndAt = 0;    // 마지막으로 조합이 끝난 시각
+let imeEnterAt = 0;  // 조합 중(또는 막 끝난 직후)에 Enter 가 눌린 시각
+const IME_GRACE = 150; // 조합이 끝난 직후 이 시간(ms) 안에 오는 Enter 는 "글자 확정"으로 봐요
+const IME_STALE = 3000; // 조합이 이만큼(ms) 아무 움직임이 없으면 "조합 중" 표시가 남아 있어도 풀어요 (입력 창이 조합 도중에 닫히는 경우 등)
+const IME_SUBMIT_GAP = 60; // 그런 Enter 로 곧바로 이어진 폼 보내기는 막아요 (일부러 다시 누른 Enter 는 이보다 늦어서 괜찮아요)
+const imeTouch = () => { imeAt = Date.now(); };
+document.addEventListener('compositionstart', () => { imeOn = true; imeTouch(); }, true);
+document.addEventListener('compositionupdate', imeTouch, true);
+document.addEventListener('input', (e) => { if (e.isComposing) imeTouch(); }, true);
+document.addEventListener('compositionend', () => { imeOn = false; imeEndAt = Date.now(); }, true);
+document.addEventListener('focusout', () => { imeOn = false; }, true); // 다른 곳으로 옮기면 조합은 끝나요
+const imeBusy = (e) => !!(e && (e.isComposing || e.keyCode === 229)) || (imeOn && Date.now() - imeAt < IME_STALE) || Date.now() - imeEndAt < IME_GRACE;
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !imeBusy(e)) return;
+  imeEnterAt = Date.now();
+  if (e.target && e.target.tagName === 'INPUT') e.preventDefault(); // 한 줄짜리 입력란: 브라우저가 폼을 바로 보내지 못하게 해요
+}, true);
+
+// 저장을 두 번 누르거나(Enter 두 번) 저장하는 중에 또 보내지 않게, 폼마다 잠깐 잠가요
+const busyForms = new WeakSet();
+async function once(form, fn) {
+  if (busyForms.has(form)) return;
+  busyForms.add(form);
+  try { await fn(); } finally { setTimeout(() => busyForms.delete(form), 400); }
+}
+
 document.addEventListener('submit', (e) => {
-  if (e.target.id === 'recForm') { e.preventDefault(); submitForm(e.target); }
-  else if (e.target.id === 'quickForm') { e.preventDefault(); submitQuick(e.target); }
-  else if (e.target.id === 'clForm') { e.preventDefault(); saveClaudeSettings(); }
-  else if (e.target.id === 'fbEditForm') { e.preventDefault(); saveFeedbackEdit(e.target); }
-  else if (e.target.id === 'bookAddForm') { e.preventDefault(); addBook(e.target.elements[0].value); }
-  else if (e.target.id === 'rtNoteForm') { e.preventDefault(); saveRoutineNote(e.target.dataset.date); }
-  else if (e.target.id === 'pieceMemoForm') { e.preventDefault(); savePieceMemo(e.target.dataset.piece, e.target.elements.memo.value.trim()); }
-});
+  if (Date.now() - imeEnterAt < IME_SUBMIT_GAP) { e.preventDefault(); e.stopImmediatePropagation(); return; } // 글자를 확정하는 Enter 로 보내진 폼은 저장하지 않아요
+  const f = e.target;
+  if (f.id === 'recForm') { e.preventDefault(); once(f, () => submitForm(f)); }
+  else if (f.id === 'quickForm') { e.preventDefault(); once(f, () => submitQuick(f)); }
+  else if (f.id === 'clForm') { e.preventDefault(); once(f, () => saveClaudeSettings()); }
+  else if (f.id === 'fbEditForm') { e.preventDefault(); once(f, () => saveFeedbackEdit(f)); }
+  else if (f.id === 'bookAddForm') { e.preventDefault(); once(f, () => addBook(f.elements[0].value)); }
+  else if (f.id === 'rtNoteForm') { e.preventDefault(); once(f, () => saveRoutineNote(f.dataset.date)); }
+  else if (f.id === 'pieceMemoForm') { e.preventDefault(); once(f, () => savePieceMemo(f.dataset.piece, f.elements.memo.value.trim())); }
+}, true);
 
 document.addEventListener('change', async (e) => {
   const t = e.target;
@@ -4034,6 +4120,10 @@ document.addEventListener('change', async (e) => {
   else if (t.id === 'f_kind' && t.form && t.form.id === 'recForm') { syncKindFields(t.form); }
   else if (t.id === 'q_kind') { syncQuick(); }
   else if (t.dataset.act === 'bodyRange') { ui.bodyAllRange = !t.checked; render(); }
+  else if (t.id === 'f_date' || t.id === 'q_date') { // 날짜를 바꾸면 "새벽 4시 전이라 어제 기록" 안내는 사라져요
+    const n = t.parentElement.querySelector('.dawn-note');
+    if (n) n.hidden = t.value !== n.dataset.date;
+  }
   else if (t.dataset.cal) {
     const [cy, cm] = ui.calMonth.split('-').map(Number);
     const ny = t.dataset.cal === 'year' ? Number(t.value) : cy;
@@ -4042,6 +4132,7 @@ document.addEventListener('change', async (e) => {
     render();
   }
   else if (t.id === 'importFile' && t.files[0]) { await importBackup(t.files[0]); }
+  else if (t.id === 'cleanRestoreFile' && t.files[0]) { const f = t.files[0]; t.value = ''; await importBackup(f); } // 정리 확인 창의 "정리 전 백업 파일 불러오기"
   else if (t.dataset.imageInput && t.files[0]) { await attachImage(t.files[0], t.dataset.imageInput); t.value = ''; }
   else if ('shots' in t.dataset && t.files.length) { const files = [...t.files]; t.value = ''; await attachShots(files); }
   else if (t.dataset.act === 'celebrate') { settings.celebrateOff = !t.checked; await saveSettings(); }
@@ -4065,7 +4156,7 @@ document.addEventListener('input', (e) => {
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
-dlg.addEventListener('close', () => { revokeAudioUrls(dlg); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; ui.backToArt = null; ui.artOpen = null; });
+dlg.addEventListener('close', () => { if (cleanupAsk) { const a = cleanupAsk; cleanupAsk = null; a.resolve(false); } revokeAudioUrls(dlg); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; ui.backToArt = null; ui.artOpen = null; });
 
 /* ---------------------------------------------------------------------
    데스크톱 단축키: 입력 창에서 Cmd+Enter(Ctrl+Enter)로 저장, Esc로 닫기
@@ -4084,7 +4175,7 @@ document.addEventListener('keydown', (e) => {
   if (!dlg.open) return;
   if (e.key === 'Escape') { e.preventDefault(); requestClose(); return; }
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && dlg.querySelector('.art-detail') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); artNav(e.key === 'ArrowLeft' ? -1 : 1); return; }
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !imeBusy(e)) {
     const form = dlg.querySelector('#recForm, #quickForm');
     if (form) { e.preventDefault(); form.requestSubmit(); }
   }
@@ -4099,7 +4190,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, claudeBoxOpen: !!st.claudeBoxOpen };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, workoutQuickV1: !!st.workoutQuickV1, claudeBoxOpen: !!st.claudeBoxOpen };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -4150,6 +4241,7 @@ async function start() {
     n.textContent = '⚠ 이 브라우저에서는 기록을 저장할 수 없어요. 창을 닫으면 사라지니, 다른 브라우저(크롬 등)로 열어 주세요.';
   }
   await migrateArtKinds();
+  await migrateWorkoutQuick();
   render();
   window.__journalReady = true;
   document.dispatchEvent(new Event('journal:ready')); // ☁ 동기화(sync.js)가 이때부터 시작해요
