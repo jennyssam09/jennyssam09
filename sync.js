@@ -8,8 +8,10 @@
    - Drive에 생기는 것 (내 드라이브 → "나의 기록장 (동기화)" 폴더)
        journal.json                        기록 글 전체 + 삭제 표시 + 동기화 정보 (이미지 데이터는 없어요)
        img-<기록id>-<칸>-<번호>-<해시>.jpg  그림·원본·워치 캡처 한 장에 파일 하나
+       audio-<녹음id>.<확장자>              🎙 녹음 한 개에 파일 하나 (녹음 정보는 journal.json 의 audios · 삭제 표시는 atombs)
    - 합치는 규칙: 두 기기의 시계를 견주지 않고, 각 기기가 "마지막 동기화 때의 나"(base)와만 비교해서 바뀌었는지 알아봐요.
-   - 녹음 파일은 동기화하지 않아요 (이 기기에만 저장돼요).
+   - 녹음: 파일을 먼저 올리고(큰 파일은 이어 올리기) 녹음 정보는 그 뒤에 journal.json 으로 올려요. 다른 기기에서는 정보만 먼저 받고,
+     ▶ 재생·⬇ 파일로 저장을 누를 때 파일을 내려받아요.
    - file:// 로 열었거나 로그인하지 않았어도 기록·백업·자동 저장은 전부 그대로 써져요.
    ===================================================================== */
 (() => {
@@ -20,6 +22,9 @@
   const JOURNAL_NAME = 'journal.json';
   const DAY = 86400000;
   const T = { debounce: 5000, refocus: 60000, backoff: [5, 15, 60, 300, 900].map((s) => s * 1000), fast: false };
+  const AUDIO_ONE_SHOT = 1024 * 1024;        // 1MB 이하 녹음은 한 번에 올려요 (그보다 크면 이어 올리기)
+  const AUDIO_CHUNK = 2 * 1024 * 1024;       // 이어 올릴 때 한 번에 보내는 크기 (256KB 의 배수여야 해요)
+  const SESSION_MAX_AGE = 6 * 86400000;      // 구글의 이어 올리기 주소는 약 1주일 유효해서, 그 전에 새로 시작해요
 
   let nowFn = () => Date.now();
   const now = () => nowFn();
@@ -60,6 +65,10 @@
     meta: null, status: 'idle', lastError: '', token: null, tokenExp: 0, tokenP: null, needReconnect: false,
     running: false, dirty: false, force: null, staleOk: false, gisP: null, backoffIdx: 0, nextRetryAt: 0,
     debounceT: null, retryT: null, lastRunAt: 0, progress: null, remote: { version: '', journal: null }, shaCache: new Map(), conflictsSeen: 0,
+    audioProg: {},          // 지금 올리는 녹음 id → { sent, total }
+    audioDl: new Map(),     // 지금 받는 녹음 id → { pct, promise }
+    audioIdx: null,         // 이번 동기화에서 본 Drive의 녹음 파일 목록 (audio id → 파일)
+    audioErr: null,         // 이번 동기화에서 올리지 못한 녹음의 이유 (다른 기록의 동기화는 막지 않아요)
   };
 
   class SyncError extends Error {
@@ -89,15 +98,20 @@
     id: '__meta_sync', type: 'meta', deviceId: newId(), enabled: false, email: '', folderId: '', journalId: '', remoteVersion: '',
     firstDone: false, lastSyncAt: 0,
     base: {},       // 기록 id → { lu: 마지막으로 맞췄을 때 이 기기의 updatedAt, ld: 그때 지워진 상태였나, ru: Drive 쪽 updatedAt, rd }
-    conflicts: {},  // 아직 풀지 못한 충돌 id → { kind, remote }
+    conflicts: {},  // 아직 풀지 못한 충돌 id → { kind, remote, k }  (k: 'aud' 이면 녹음)
+    abase: {},      // 녹음용 base (기록의 base 와 같은 모양이에요)
+    up: {},         // 이어 올리는 중인 녹음 id → { uri, size, offset, folderId, at } (끊겨도 다음에 이어서 올려요)
+    audioAsked: false, audioHold: [], // 기존 녹음을 올릴지 물어봤나 / "나중에"로 미뤄 둔 녹음 id
+    wifiOnly: false,  // 와이파이에서만 녹음 올리기 (이 기기만의 설정)
     last: null,     // 로그아웃할 때 남겨 두는 마지막 동기화 정보 (같은 계정으로 다시 로그인하면 이어서 써요. 비밀 값은 없어요)
   });
-  async function loadMeta() {
-    const m = await Store.get('__meta_sync');
-    S.meta = m ? { ...emptyMeta(), ...m } : emptyMeta();
-    S.meta.base = S.meta.base || {};
-    S.meta.conflicts = S.meta.conflicts || {};
+  function normMeta(m) {
+    const out = m ? { ...emptyMeta(), ...m } : emptyMeta();
+    out.base = out.base || {}; out.conflicts = out.conflicts || {}; out.abase = out.abase || {}; out.up = out.up || {};
+    out.audioHold = Array.isArray(out.audioHold) ? out.audioHold : [];
+    return out;
   }
+  async function loadMeta() { S.meta = normMeta(await Store.get('__meta_sync')); }
   const saveMeta = () => Store.putMany([S.meta], { silent: true });
 
   /* ---------------------------------------------------------------------
@@ -167,13 +181,13 @@
      3. Drive 호출 (fetch로 REST v3 직접. 실패하면 알아듣기 쉬운 오류로 바꿔요)
      --------------------------------------------------------------------- */
   async function drive(path, opt = {}) {
-    const { method = 'GET', params, json, body, contentType, raw = false, upload = false } = opt;
+    const { method = 'GET', params, json, body, contentType, raw = false, upload = false, headers: extraHeaders } = opt;
     const url = new URL((upload ? UPLOAD : API) + path);
     if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const token = await ensureToken();
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { Authorization: `Bearer ${token}`, ...(extraHeaders || {}) };
       let b = body;
       if (json !== undefined) { headers['Content-Type'] = 'application/json'; b = JSON.stringify(json); } else if (contentType) headers['Content-Type'] = contentType;
       let res;
@@ -296,7 +310,12 @@
     imageFields(rec.type).forEach((f) => scan(rec[f.key]));
     return out;
   };
-  const refFileIds = (journal) => { const s = new Set(); (journal.records || []).forEach((r) => refsOfRecord(r).forEach((x) => s.add(x.f))); return s; };
+  const refFileIds = (journal) => {
+    const s = new Set();
+    (journal.records || []).forEach((r) => refsOfRecord(r).forEach((x) => s.add(x.f)));
+    (journal.audios || []).forEach((a) => { if (a.file && a.file.f) s.add(a.file.f); }); // 🎙 녹음 파일
+    return s;
+  };
 
   async function uploadImage(rec, im, sha, folderId) {
     const mime = (im.value.match(/^data:([\w.+\-/]+);base64,/) || [])[1] || 'image/jpeg';
@@ -344,6 +363,232 @@
   }
 
   /* ---------------------------------------------------------------------
+     4-2. 🎙 녹음 (파일은 audio-<녹음id>.<확장자> 하나씩 · 정보는 journal.json 의 audios · 삭제 표시는 atombs)
+          기록과 같은 규칙으로 합쳐요 (base 와 비교). 파일은 정보보다 먼저 올리고, 다른 기기에서는 정보만 먼저 받아요.
+     --------------------------------------------------------------------- */
+  const AUD_KEYS = ['piece', 'date', 'memo', 'createdAt', 'size', 'mime', 'name', 'recId']; // 내용이 같은지 볼 칸 (바꾼 시각·첫 녹음 표시·파일 id 는 빼요)
+  const audSig = (x) => JSON.stringify(stable(Object.fromEntries(AUD_KEYS.map((k) => [k, x[k] === undefined ? null : x[k]]))));
+  const localAudioMap = () => { const m = new Map(); audioTombs.forEach((t) => m.set(t.id, t)); audios.forEach((a) => m.set(a.id, a)); return m; };
+  const remoteAudioMap = (j) => { const m = new Map(); (j.atombs || []).forEach((t) => m.set(t.id, t)); (j.audios || []).forEach((a) => m.set(a.id, a)); return m; };
+  const audioEntry = (a) => ({ id: a.id, piece: a.piece, date: a.date, memo: a.memo || '', createdAt: a.createdAt, updatedAt: a.updatedAt, size: a.size, mime: a.mime, name: a.name || '', first: !!a.first, recId: a.recId || '', file: { f: a.rf, m: a.mime, s: a.size } });
+  const audioTombEntry = (t) => ({ id: t.id, piece: t.piece || '', deletedAt: t.deletedAt, updatedAt: t.updatedAt });
+  const audioRowFromEntry = (e) => ({ id: e.id, piece: e.piece, date: e.date, memo: e.memo || '', createdAt: e.createdAt, updatedAt: e.updatedAt, size: e.size, mime: e.mime, name: e.name || '', first: !!e.first, recId: e.recId || '', rf: (e.file && e.file.f) || '' });
+  const audioFileCount = (j) => (j.audios || []).length;
+
+  // 아직 올릴지 묻지 않았거나 "나중에"로 미뤄 둔 녹음은 올리지 않아요
+  const audioHeld = (a) => !!S.meta && (!S.meta.audioAsked || S.meta.audioHold.includes(a.id));
+  const audioPending = (a) => { const b = S.meta.abase[a.id]; return !b || b.lu !== a.updatedAt || b.ld; };
+  const audioWaiting = (a) => (a.local || a.rf) && audioPending(a) && !(audioHeld(a) && !a.rf); // 올라가기를 기다리는 녹음 (미뤄 둔 것은 빼요)
+
+  // 와이파이에서만 올리기: 연결 종류를 알 수 있는 브라우저(주로 안드로이드 크롬)에서 모바일 데이터(cellular)면 올리지 않고 기다려요
+  function connInfo() {
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const t = c && typeof c.type === 'string' ? c.type : '';
+    if (!t || t === 'unknown') return { known: false, cellular: false };
+    return { known: true, cellular: t === 'cellular', type: t };
+  }
+  const wifiBlocked = () => !!(S.meta && S.meta.wifiOnly && connInfo().cellular);
+
+  const AUDIO_PROG = '녹음 올리는 중';
+  function audioProgress(a, sent, total) {
+    S.audioProg[a.id] = { sent, total };
+    if (S.progress && S.progress.label === AUDIO_PROG) S.progress.pct = total ? Math.floor((sent / total) * 100) : 0;
+    renderChip();
+  }
+  const audioExt = (a) => extOf(a.name) || (typeof AUDIO_EXT_BY_MIME !== 'undefined' && AUDIO_EXT_BY_MIME[a.mime]) || 'm4a';
+  const audioDriveName = (a) => `audio-${a.id}.${audioExt(a)}`;
+
+  // Drive 폴더에 이미 올라가 있는 녹음 파일들 (같은 녹음을 두 번 올리지 않으려고 이번 동기화에서 한 번만 봐요)
+  async function listRemoteAudio(folderId) {
+    if (S.audioIdx) return S.audioIdx;
+    const idx = new Map(); let pageToken;
+    do {
+      const r = await drive('/files', { params: { q: `'${qEsc(folderId)}' in parents and appProperties has { key='kind' and value='audio' } and trashed=false`, fields: 'nextPageToken,files(id,size,appProperties)', pageSize: '1000', pageToken } });
+      (r.files || []).forEach((f) => { const aid = f.appProperties && f.appProperties.aid; if (aid) idx.set(aid, f); });
+      pageToken = r.nextPageToken;
+    } while (pageToken);
+    S.audioIdx = idx;
+    return idx;
+  }
+
+  const parseRange = (h) => { const m = /bytes=0-(\d+)/.exec(h || ''); return m ? Number(m[1]) + 1 : null; };
+  // 이어 올리기 주소(세션)로 보내요. 결과: { done: 파일 } 끝남 · { offset } 서버가 받은 만큼 (null: 알 수 없어요) · { gone } 이 주소는 더 못 써요
+  async function sessionPut(uri, contentRange, part) {
+    let res;
+    const headers = { 'Content-Range': contentRange };
+    if (tokenValid()) headers.Authorization = `Bearer ${S.token}`;
+    try { res = await fetch(uri, { method: 'PUT', headers, body: part }); } catch (e) { throw new SyncError('offline'); }
+    if (res.status === 200 || res.status === 201) { try { return { done: await res.json() }; } catch (e) { throw new SyncError('server', '구글의 응답을 읽지 못했어요'); } }
+    if (res.status === 308) return { offset: parseRange(res.headers.get('Range')) };
+    if ([400, 404, 410, 416].includes(res.status)) return { gone: true };
+    let reason = '';
+    try { const j = await res.json(); reason = (j.error && ((j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || j.error.status)) || ''; } catch (e) { /* 본문이 없어도 괜찮아요 */ }
+    if (res.status === 401) throw new SyncError('auth');
+    if (res.status === 403 && /storageQuotaExceeded/i.test(reason)) throw new SyncError('quota');
+    if (res.status === 403) throw new SyncError('forbidden');
+    if (res.status === 429) throw new SyncError('rate');
+    throw new SyncError('server', `HTTP ${res.status}`);
+  }
+  async function verifyUploaded(f, total) { // 올라간 파일의 크기가 맞는지 확인해요
+    if (f && f.id && Number(f.size) === total) return f;
+    try { if (f && f.id) await trashFile(f.id); } catch (e) { /* 괜찮아요 */ }
+    throw new SyncError('server', '올라간 녹음의 크기가 달라요');
+  }
+  async function uploadAudioOnce(meta, blob) {
+    const mp = multipart(meta, blob, meta.mimeType);
+    return drive('/files', { method: 'POST', upload: true, params: { uploadType: 'multipart', fields: 'id,size' }, body: mp.body, contentType: mp.contentType });
+  }
+  // 이어 올리기: 끊기면 어디까지 올라갔는지 이 기기(S.meta.up)와 구글에 남아 있어서, 다음에 거기서부터 이어서 올려요
+  async function uploadAudioResumable(a, meta, blob) {
+    const total = blob.size; const folder = meta.parents[0];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let up = S.meta.up[a.id];
+      if (up && (up.size !== total || up.folderId !== folder || now() - up.at > SESSION_MAX_AGE)) { delete S.meta.up[a.id]; up = null; }
+      let offset = 0;
+      if (up) { // 끊겼던 올리기: 서버가 어디까지 받았는지 물어봐요
+        const st = await sessionPut(up.uri, `bytes */${total}`);
+        if (st.done) { delete S.meta.up[a.id]; await saveMeta(); return verifyUploaded(st.done, total); }
+        if (st.gone || (st.offset == null && up.offset > 0)) { delete S.meta.up[a.id]; up = null; } // 이어 올릴 수 없으면 새로 시작해요
+        else offset = st.offset || 0;
+      }
+      if (!up) {
+        const res = await drive('/files', { method: 'POST', upload: true, params: { uploadType: 'resumable', fields: 'id,size' }, json: meta, headers: { 'X-Upload-Content-Type': a.mime, 'X-Upload-Content-Length': String(total) }, raw: true });
+        const uri = res.headers.get('Location');
+        if (!uri) return verifyUploaded(await uploadAudioOnce(meta, blob), total); // 이어 올리기 주소를 못 받으면 한 번에 올려요
+        up = S.meta.up[a.id] = { uri, size: total, offset: 0, folderId: folder, at: now() };
+        await saveMeta();
+      }
+      audioProgress(a, offset, total);
+      let gone = false;
+      while (offset < total) {
+        const end = Math.min(offset + AUDIO_CHUNK, total);
+        const r = await sessionPut(up.uri, `bytes ${offset}-${end - 1}/${total}`, blob.slice(offset, end));
+        if (r.gone) { gone = true; break; }
+        if (r.done) { delete S.meta.up[a.id]; await saveMeta(); return verifyUploaded(r.done, total); }
+        offset = r.offset != null ? r.offset : end; // 서버가 알려 준 만큼 (알 수 없으면 보낸 만큼)
+        up.offset = offset; await saveMeta();
+        audioProgress(a, offset, total);
+      }
+      if (!gone) { // 끝까지 보냈는데 완료 응답이 없었으면 서버에 물어봐요
+        const st = await sessionPut(up.uri, `bytes */${total}`);
+        if (st.done) { delete S.meta.up[a.id]; await saveMeta(); return verifyUploaded(st.done, total); }
+      }
+      delete S.meta.up[a.id]; await saveMeta(); // 이 주소로는 안 돼요 → 새로 시작
+    }
+    throw new SyncError('server', '녹음을 올리지 못했어요');
+  }
+  // 녹음 파일 하나를 Drive에 올려요 (이미 올라가 있으면 다시 올리지 않아요). 올라간 파일의 id 를 돌려줘요. 이 기기에 파일이 없으면 ''
+  async function ensureAudioUploaded(a, folderId) {
+    const idx = await listRemoteAudio(folderId);
+    const found = idx.get(a.id);
+    if (found && Number(found.size) === a.size) return found.id;
+    const full = await AudioStore.get(a.id);
+    if (!full || !full.blob) return '';
+    const blob = full.blob;
+    const meta = { name: audioDriveName(a), parents: [folderId], mimeType: a.mime, appProperties: { kind: 'audio', aid: a.id } };
+    audioProgress(a, 0, blob.size);
+    try {
+      const f = blob.size <= AUDIO_ONE_SHOT ? await verifyUploaded(await uploadAudioOnce(meta, blob), blob.size) : await uploadAudioResumable(a, meta, blob);
+      idx.set(a.id, f);
+      return f.id;
+    } finally { delete S.audioProg[a.id]; renderChip(); }
+  }
+  // 올릴 녹음 파일들을 먼저 올려요 (녹음 정보는 그 뒤에 journal.json 으로 올라가요). 미뤄 둔 것·와이파이를 기다리는 것은 이번에 올리지 않아요.
+  async function uploadAudioFiles(apushes, folderId) {
+    const todo = apushes.filter((it) => it.act === 'push' && !it.L.rf);
+    let n = 0;
+    for (const it of todo) {
+      const a = it.L;
+      if (audioHeld(a) || wifiBlocked() || !a.local) { it.act = 'skip'; it.deferred = true; continue; }
+      n += 1;
+      S.progress = { label: AUDIO_PROG, i: n, n: todo.filter((x) => !(audioHeld(x.L) || wifiBlocked() || !x.L.local)).length, pct: 0, audio: true };
+      renderChip();
+      try {
+        const rf = await ensureAudioUploaded(a, folderId);
+        if (!rf) { it.act = 'skip'; it.deferred = true; continue; }
+        await AudioStore.update(a.id, (row) => (row && !isAudioTomb(row) ? { ...row, rf } : undefined));
+        a.rf = rf;
+      } catch (e) {
+        if (!(e instanceof SyncError) || ['offline', 'auth', 'gis'].includes(e.kind)) throw e; // 인터넷·로그인 문제는 처음부터 다시
+        it.act = 'skip'; it.failed = true; S.audioErr = S.audioErr || e; // 이 녹음만 못 올렸어요. 다른 기록의 동기화는 계속해요 (이 기기의 녹음은 그대로예요)
+      }
+    }
+    S.progress = null;
+  }
+
+  // Drive에서 녹음 파일을 받아 Blob 으로 (진행은 onPct 로 알려요)
+  async function downloadAudioBlob(a, onPct) {
+    const res = await drive(`/files/${a.rf}`, { params: { alt: 'media' }, raw: true });
+    const total = Number(res.headers.get('Content-Length')) || a.size || 0;
+    let blob;
+    try {
+      if (res.body && res.body.getReader) {
+        const reader = res.body.getReader(); const parts = []; let got = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value); got += value.length;
+          if (total) onPct(Math.min(99, Math.floor((got / total) * 100)));
+        }
+        blob = new Blob(parts, { type: a.mime || 'audio/mpeg' });
+      } else blob = new Blob([await res.arrayBuffer()], { type: a.mime || 'audio/mpeg' });
+    } catch (e) { throw new SyncError('offline'); }
+    if (a.size && blob.size !== a.size) throw new SyncError('server', '받은 녹음의 크기가 달라요');
+    return blob;
+  }
+  // ▶ 재생·⬇ 파일로 저장을 눌렀을 때: 다른 기기에서 올린 녹음의 파일을 받아서 이 기기(my-journal-audio)에 보관해요. 이 기기에 파일이 생기면 true
+  function fetchAudio(id) {
+    const a = audios.find((x) => x.id === id);
+    if (!a) return Promise.resolve(false);
+    if (a.local) return Promise.resolve(true);
+    if (S.audioDl.has(id)) return S.audioDl.get(id).promise;
+    if (envMode() !== 'ok' || !S.meta || !S.meta.enabled) { toast('☁ 로그인하면 Drive에서 이 녹음을 받을 수 있어요.', 4000); return Promise.resolve(false); }
+    if (!a.rf) { toast('Drive에서 이 녹음의 파일을 찾지 못했어요.', 4000); return Promise.resolve(false); }
+    if (S.needReconnect && !tokenValid()) { reconnectNow(); toast('다시 연결한 뒤 이 녹음을 한 번 더 눌러 주세요.', 4500); return Promise.resolve(false); }
+    const st = { pct: 0 };
+    st.promise = (async () => {
+      try {
+        const blob = await downloadAudioBlob(a, (p) => { st.pct = p; renderAudioBadges(); });
+        await AudioStore.update(id, (row) => (row && !isAudioTomb(row) ? { ...row, blob } : undefined)); // 그사이 지웠다면 저장하지 않아요
+        const cur = audios.find((x) => x.id === id);
+        if (cur) cur.local = true;
+        return !!cur;
+      } catch (e) {
+        const kind = e instanceof SyncError ? e.kind : 'fatal';
+        if (kind === 'auth') { S.needReconnect = true; setStatus('reconnect', FRIENDLY.auth); toast(FRIENDLY.auth, 4500); }
+        else if (kind === 'offline') toast('인터넷에 연결되면 다시 눌러 주세요.', 4000);
+        else if (kind === 'notfound') toast('Drive에서 이 녹음 파일을 찾지 못했어요. (Drive 폴더에서 지웠을 수 있어요)', 5000);
+        else toast('녹음을 받지 못했어요. 잠시 뒤에 다시 눌러 주세요.', 4000);
+        return false;
+      } finally { S.audioDl.delete(id); renderAudioBadges(); }
+    })();
+    S.audioDl.set(id, st);
+    renderAudioBadges();
+    return st.promise;
+  }
+
+  // 녹음 줄에 보이는 작은 ☁ 표시 (이 기기에 파일이 있는 녹음)와 "눌러서 받기" 버튼의 글자
+  function audioBadge(a) {
+    if (!S.meta || !S.meta.enabled || envMode() !== 'ok' || !a.local) return '';
+    const p = S.audioProg[a.id];
+    if (p) return `☁ 올리는 중 ${Math.min(99, Math.floor((p.sent / (p.total || 1)) * 100))}%`;
+    if (a.rf && !audioPending(a)) return '☁ 올라감';
+    if (audioHeld(a) && !a.rf) return '☁ 올리기 전 (나중에)';
+    if (!a.rf && wifiBlocked()) return '☁ 와이파이를 기다리는 중';
+    return '☁ 대기';
+  }
+  function fetchLabel(a) {
+    const d = S.audioDl.get(a.id);
+    if (d) return `☁ 받는 중 ${d.pct}%`;
+    if (!S.meta || !S.meta.enabled || envMode() !== 'ok') return '☁ 로그인하면 받을 수 있어요';
+    return `☁ 눌러서 받기 · ${fmtMB(a.size || 0)}`;
+  }
+  function renderAudioBadges() {
+    document.querySelectorAll('.rec-cloud[data-aid]').forEach((el) => { const a = audios.find((x) => x.id === el.dataset.aid); if (a) el.textContent = audioBadge(a); });
+    document.querySelectorAll('.rec-fetch[data-aid]').forEach((el) => { const a = audios.find((x) => x.id === el.dataset.aid); if (a) el.textContent = fetchLabel(a); });
+  }
+
+  /* ---------------------------------------------------------------------
      5. 무엇을 할지 정하기 (이 기기 ↔ Drive, base 와 비교)
      --------------------------------------------------------------------- */
   function localMap() {
@@ -355,7 +600,8 @@
   const remoteMap = (j) => { const m = new Map(); (j.tombs || []).forEach((t) => m.set(t.id, t)); (j.records || []).forEach((r) => m.set(r.id, r)); return m; };
   const tombOf = (t) => ({ id: t.id, type: t.type, date: t.date, deletedAt: t.deletedAt, updatedAt: t.updatedAt });
 
-  async function decide(L, R, b) {
+  // kind: 'rec' 기록 / 'aud' 녹음 (녹음은 같은 규칙에 내용 비교만 다르게 해요)
+  async function decide(L, R, b, kind = 'rec') {
     const lt = isTombLike(L); const rt = isTombLike(R);
     if (!L && !R) return { act: 'skip' };
     if (L && !lt && !R) return { act: 'push' };
@@ -366,12 +612,12 @@
     const lchg = !b || L.updatedAt !== b.lu || lt !== !!b.ld;
     const rchg = !b || R.updatedAt !== b.ru || rt !== !!b.rd;
     if (!lt && !rt) { // 둘 다 살아 있음
-      if (L.type !== R.type) return { act: 'conflict', kind: 'edit' };
+      if (kind === 'rec' && L.type !== R.type) return { act: 'conflict', kind: 'edit' };
       if (b && !lchg && !rchg) return { act: 'skip' };
       if (b && lchg && !rchg) return { act: 'push' };
       if (b && !lchg && rchg) return R.updatedAt < b.ru ? { act: 'push' } : { act: 'pull' }; // Drive가 뒤로 돌아갔다면(다른 기기가 덮어씀) 내 것을 다시 올려요
-      if ((await sigLocal(L)) === sigRemote(R)) return { act: 'converge' };
-      if (L.type === 'config') return L.updatedAt >= R.updatedAt ? { act: 'push' } : { act: 'pull' }; // 설정은 최신 것으로 자동
+      if (kind === 'aud' ? audSig(L) === audSig(R) : (await sigLocal(L)) === sigRemote(R)) return { act: 'converge' };
+      if (kind === 'rec' && L.type === 'config') return L.updatedAt >= R.updatedAt ? { act: 'push' } : { act: 'pull' }; // 설정은 최신 것으로 자동
       return { act: 'conflict', kind: 'edit' };
     }
     if (!lt && rt) { // 나는 살아 있고 Drive에서는 지웠어요
@@ -398,6 +644,31 @@
     return items;
   }
 
+  // 🎙 녹음도 같은 규칙으로 (녹음 정보만 견줘요. 파일은 올릴 때·받을 때만 다뤄요)
+  async function makeAudioPlan(remoteEff) {
+    if (!AudioStore.ok()) return [];
+    const L = localAudioMap(); const R = remoteAudioMap(remoteEff); const items = [];
+    for (const id of new Set([...L.keys(), ...R.keys()])) {
+      const l = L.get(id); const r = R.get(id);
+      if (l && !isTombLike(l) && !l.local && !l.rf && !r) continue; // 파일도 Drive 주소도 없는 빈 줄은 건너뛰어요
+      items.push({ id, L: l, R: r, aud: true, ...(await decide(l, r, S.meta.abase[id], 'aud')) });
+    }
+    return items;
+  }
+  // "Drive 기준으로 새로 받기": 녹음은 이 기기에만 있는 것을 지우지 않아요. Drive에 있는 것을 받고, Drive에서 지운 것만 따라 지워요.
+  function planReplaceLocalAudio(remote) {
+    if (!AudioStore.ok()) return [];
+    const R = remoteAudioMap(remote); const L = localAudioMap(); const items = [];
+    R.forEach((r, id) => {
+      const l = L.get(id);
+      if (isTombLike(r)) { if (l && !isTombLike(l) && l.rf) items.push({ id, L: l, R: r, aud: true, act: 'dropLocal', force: true }); return; }
+      if (l && !isTombLike(l) && audSig(l) === audSig(r) && l.rf === ((r.file && r.file.f) || '')) items.push({ id, L: l, R: r, aud: true, act: 'converge' });
+      else items.push({ id, L: l, R: r, aud: true, act: 'pull', force: true });
+    });
+    L.forEach((l, id) => { if (!R.has(id) && !isTombLike(l)) items.push({ id, L: l, R: undefined, aud: true, act: 'push' }); });
+    return items;
+  }
+
   /* ---------------------------------------------------------------------
      6. 한 번의 동기화
      --------------------------------------------------------------------- */
@@ -408,9 +679,11 @@
 
   const pendingCount = () => {
     if (!S.meta) return 0;
-    let n = 0; const base = S.meta.base;
+    let n = 0; const base = S.meta.base; const ab = S.meta.abase;
     records.filter(syncable).forEach((r) => { const b = base[r.id]; if (!b || b.lu !== r.updatedAt || b.ld) n += 1; });
     tombstones.forEach((t) => { const b = base[t.id]; if (!b || b.lu !== t.updatedAt || !b.ld) n += 1; });
+    audios.forEach((a) => { if (audioWaiting(a)) n += 1; }); // 🎙 올라가기를 기다리는 녹음 ("나중에"로 미뤄 둔 것은 세지 않아요)
+    audioTombs.forEach((t) => { const b = ab[t.id]; if (!b || b.lu !== t.updatedAt || !b.ld) n += 1; });
     return n;
   };
   const conflictCount = () => (S.meta ? Object.keys(S.meta.conflicts).length : 0);
@@ -447,6 +720,7 @@
       const n = conflictCount();
       if (n && n !== S.conflictsSeen && typeof toast === 'function') toast(`☁ 충돌 ${n}개가 있어요. 위쪽 ☁ 를 눌러 확인해 주세요.`, 6000);
       S.conflictsSeen = n;
+      setTimeout(maybeAskAudio, 50); // 이번 동기화가 끝난 뒤에
     } catch (e) {
       S.progress = null;
       handleError(e);
@@ -460,7 +734,7 @@
   // 다른 탭이 바꿨을 수 있으니, 동기화를 시작할 때 저장된 동기화 정보를 다시 읽어요 (토큰 등 메모리 상태는 그대로)
   async function loadMetaKeepMemory() {
     const m = await Store.get('__meta_sync');
-    if (m) { S.meta = { ...emptyMeta(), ...m }; S.meta.base = S.meta.base || {}; S.meta.conflicts = S.meta.conflicts || {}; }
+    if (m) S.meta = normMeta(m);
   }
 
   function handleError(e) {
@@ -505,19 +779,22 @@
       if (found) { jm = found; S.meta.journalId = found.id; }
     }
     if (!jm && S.meta.firstDone && !S.createMissing) throw new SyncError('missing');
+    S.audioIdx = null; S.audioErr = null;
     for (let round = 0; round < 3; round += 1) {
       const remote = jm ? await getRemote(jm) : emptyJournal();
       const remoteEff = S.force === 'replaceRemote' ? emptyJournal() : remote;
       const items = S.force === 'replaceLocal' ? planReplaceLocal(remote) : await makePlan(remote, remoteEff);
+      const aitems = S.force === 'replaceLocal' ? planReplaceLocalAudio(remote) : await makeAudioPlan(remoteEff);
       await applyPulls(items);
-      const res = await pushAll(items, remote, jm, folderId);
+      await applyAudioPulls(aitems);
+      const res = await pushAll(items, aitems, remote, jm, folderId);
       if (res === 'retry') { jm = await journalMeta(S.meta.journalId); if (!jm) throw new SyncError('missing'); continue; }
-      finishPass(items, remote);
+      finishPass(items, aitems, remote);
       break;
     }
     S.createMissing = false;
   }
-  const emptyJournal = () => ({ app: 'my-journal', kind: 'sync', syncVersion: 1, rev: 0, writtenAt: '', writer: '', records: [], tombs: [] });
+  const emptyJournal = () => ({ app: 'my-journal', kind: 'sync', syncVersion: 1, rev: 0, writtenAt: '', writer: '', records: [], tombs: [], audios: [], atombs: [] });
   async function getRemote(jm) {
     if (S.remote.journal && S.remote.version === jm.version) return S.remote.journal;
     const j = await downloadJournal(jm.id);
@@ -566,21 +843,51 @@
     if (failed) { S.pullFailed = failed; }
   }
 
-  async function pushAll(items, remote, jm, folderId) {
+  // 🎙 Drive에서 온 녹음 정보를 이 기기에 반영해요. (파일은 받지 않아요. 목록에만 나타나고, 눌렀을 때 받아요)
+  async function applyAudioPulls(aitems) {
+    if (!AudioStore.ok()) return;
+    const put = []; const tombs = []; const drop = [];
+    aitems.forEach((it) => {
+      if (it.act === 'pull') {
+        const cur = localAudioMap().get(it.id);
+        if (!it.force && cur && it.L && cur.updatedAt !== it.L.updatedAt) { it.act = 'skip'; it.skipped = true; return; } // 가져오는 사이에 이 기기에서 또 고쳤다면 덮어쓰지 않아요
+        put.push(audioRowFromEntry(it.R)); it.applied = true;
+      } else if (it.act === 'pullDel' && it.L && !isTombLike(it.L)) { tombs.push(audioTombEntry(it.R)); it.applied = true; }
+      else if (it.act === 'dropLocal') { drop.push(it.id); it.applied = true; }
+      else if (it.act === 'converge' && it.L && !isTombLike(it.L) && it.R && it.R.file && it.L.rf !== it.R.file.f) { put.push({ id: it.id, rf: it.R.file.f }); } // 같은 녹음이 이미 Drive에 있으면 그 파일을 쓰고 다시 올리지 않아요
+    });
+    if (put.length || tombs.length || drop.length) {
+      await applyAudioChanges({ put, tombs, drop });
+      tellOtherTabs();
+      renderSoon();
+      if (dlg.open && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#pieceAudio, #formAudioList'))) { const pb = dlg.querySelector('#pieceAudio, #formAudioList'); if (pb) refreshAudioUI(); }
+    }
+  }
+
+  async function pushAll(items, aitems, remote, jm, folderId) {
     const pushes = items.filter((it) => it.act === 'push' || it.act === 'pushDel');
     const needCreate = !jm;
-    if (!pushes.length && !needCreate) return 'nothing';
+    if (!pushes.length && !aitems.some((it) => it.act === 'push' || it.act === 'pushDel') && !needCreate) return 'nothing';
+    await uploadAudioFiles(aitems.filter((it) => it.act === 'push' || it.act === 'pushDel'), folderId); // 🎙 녹음 파일을 먼저 올려요 (그다음 그림, 마지막이 journal.json)
+    const apushes = aitems.filter((it) => it.act === 'push' || it.act === 'pushDel');
+    if (!pushes.length && !apushes.length && !needCreate) return 'nothing'; // 미뤄 둔 녹음뿐이면 올릴 것이 없어요
     const outR = new Map((S.force === 'replaceRemote' ? [] : remote.records || []).map((r) => [r.id, r]));
     const outT = new Map((S.force === 'replaceRemote' ? [] : remote.tombs || []).map((t) => [t.id, t]));
+    const outA = new Map((S.force === 'replaceRemote' ? [] : remote.audios || []).map((a) => [a.id, a]));
+    const outAT = new Map((S.force === 'replaceRemote' ? [] : remote.atombs || []).map((t) => [t.id, t]));
     const prevById = new Map((remote.records || []).map((r) => [r.id, r]));
     const total = pushes.filter((it) => it.act === 'push').reduce((n, it) => n + imagesOf(it.L).length, 0);
     S.progress = total ? { label: '이미지 올리는 중', i: 0, n: total } : null;
     for (const it of pushes) {
       if (it.act === 'push') { outR.set(it.id, await toRemoteRecord(it.L, prevById.get(it.id), folderId)); outT.delete(it.id); } else { outR.delete(it.id); outT.set(it.id, tombOf(it.L)); }
     }
+    for (const it of apushes) { // 녹음 정보 (파일은 위에서 이미 올라갔어요)
+      if (it.act === 'push') { outA.set(it.id, audioEntry(it.L)); outAT.delete(it.id); } else { outA.delete(it.id); outAT.set(it.id, audioTombEntry(it.L)); }
+    }
     const cutoff = now() - CFG.tombstoneDays * DAY;
     [...outT.values()].forEach((t) => { if (t.deletedAt < cutoff) outT.delete(t.id); });
-    const journal = { app: 'my-journal', kind: 'sync', syncVersion: 1, rev: (remote.rev || 0) + 1, writtenAt: new Date(now()).toISOString(), writer: S.meta.deviceId, records: [...outR.values()], tombs: [...outT.values()] };
+    [...outAT.values()].forEach((t) => { if (t.deletedAt < cutoff) outAT.delete(t.id); });
+    const journal = { app: 'my-journal', kind: 'sync', syncVersion: 1, rev: (remote.rev || 0) + 1, writtenAt: new Date(now()).toISOString(), writer: S.meta.deviceId, records: [...outR.values()], tombs: [...outT.values()], audios: [...outA.values()], atombs: [...outAT.values()] };
     if (jm) { // 올리기 전에 Drive의 버전을 다시 확인해요. 그사이 다른 기기가 올렸다면 처음부터 다시 합쳐요.
       const cur = await journalMeta(jm.id);
       if (!cur) throw new SyncError('missing');
@@ -590,22 +897,25 @@
     S.meta.journalId = up.id;
     S.meta.remoteVersion = up.version;
     S.remote = { version: up.version, journal };
-    // 더 이상 쓰이지 않는 이미지 파일은 휴지통으로
+    // 더 이상 쓰이지 않는 이미지·녹음 파일은 휴지통으로 (지운 녹음의 파일도 여기서 휴지통으로 가요)
     const keep = refFileIds(journal);
-    for (const f of refFileIds(remote)) { if (!keep.has(f)) { try { await trashFile(f); } catch (e) { /* 이미 없어도 괜찮아요 */ } } }
+    const old = refFileIds(remote);
+    apushes.forEach((it) => { if (it.act === 'pushDel' && it.L && it.L.rf) old.add(it.L.rf); });
+    for (const f of old) { if (!keep.has(f)) { try { await trashFile(f); } catch (e) { /* 이미 없어도 괜찮아요 */ } } }
     items.forEach((it) => { if (it.act === 'push' || it.act === 'pushDel') it.applied = true; });
+    apushes.forEach((it) => { it.applied = true; });
     return 'pushed';
   }
 
   // 결과를 base 에 적어 두고, 충돌 목록과 오래된 삭제 표시를 정리해요
-  function finishPass(items, remote) {
-    const base = S.meta.base; const conflicts = {};
+  function finishPass(items, aitems, remote) {
+    const conflicts = {};
     const cutoff = now() - CFG.tombstoneDays * DAY;
-    const dropTombs = [];
-    items.forEach((it) => {
+    const dropTombs = []; const dropATombs = [];
+    const settle = (list, base, kindKey) => list.forEach((it) => {
       const { id, L, R } = it; const lt = isTombLike(L); const rt = isTombLike(R);
-      if (it.act === 'conflict') { conflicts[id] = { kind: it.kind, remote: R ? clone(R) : null }; return; }
-      if (it.failed || it.skipped) return;
+      if (it.act === 'conflict') { conflicts[id] = { kind: it.kind, remote: R ? clone(R) : null, ...(kindKey ? { k: kindKey } : {}) }; return; }
+      if (it.failed || it.skipped || it.deferred) return;
       if (it.act === 'push' || it.act === 'pushDel') base[id] = { lu: L.updatedAt, ld: lt, ru: L.updatedAt, rd: lt };
       else if (it.act === 'pull') base[id] = { lu: R.updatedAt, ld: false, ru: R.updatedAt, rd: false };
       else if (it.act === 'pullDel') base[id] = { lu: R.updatedAt, ld: true, ru: R.updatedAt, rd: true };
@@ -613,13 +923,22 @@
       else if (it.act === 'converge') base[id] = { lu: L.updatedAt, ld: false, ru: R.updatedAt, rd: false };
       else if (it.act === 'skip' && L && R) base[id] = { lu: L.updatedAt, ld: lt, ru: R.updatedAt, rd: rt };
     });
+    const base = S.meta.base; const abase = S.meta.abase;
+    settle(items, base, '');
+    settle(aitems, abase, 'aud');
     // 양쪽에 없는 것은 base 에서 빼요. 60일 지난 삭제 표시는 이 기기에서도 정리해요.
     const live = new Set([...localMap().keys(), ...remoteMap(S.remote.journal || remote).keys()]);
     Object.keys(base).forEach((id) => { if (!live.has(id)) delete base[id]; });
     tombstones.forEach((t) => { if (t.deletedAt < cutoff && base[t.id] && base[t.id].ld) dropTombs.push(t.id); });
     if (dropTombs.length) { applySyncChanges({ drop: dropTombs }); dropTombs.forEach((id) => { delete base[id]; }); }
+    const liveA = new Set([...localAudioMap().keys(), ...remoteAudioMap(S.remote.journal || remote).keys()]);
+    Object.keys(abase).forEach((id) => { if (!liveA.has(id)) delete abase[id]; });
+    audioTombs.forEach((t) => { if (t.deletedAt < cutoff && abase[t.id] && abase[t.id].ld) dropATombs.push(t.id); });
+    if (dropATombs.length) { applyAudioChanges({ drop: dropATombs }); dropATombs.forEach((id) => { delete abase[id]; }); }
+    Object.keys(S.meta.up).forEach((id) => { if (!audios.some((a) => a.id === id)) delete S.meta.up[id]; }); // 지운 녹음의 이어 올리기 기록은 정리해요
     S.meta.conflicts = conflicts;
     if (S.pullFailed) { const n = S.pullFailed; S.pullFailed = 0; throw new SyncError('server', `${n}개는 이번에 받지 못했어요`); }
+    if (S.audioErr) { const e = S.audioErr; S.audioErr = null; throw e; } // 올리지 못한 녹음이 있었어요 (다른 것은 모두 올라갔고, 이 기기의 녹음은 그대로예요)
   }
 
   /* ---------------------------------------------------------------------
@@ -644,7 +963,7 @@
     if (S.status === 'stale') return { text: '☁ ⚠ 오랜만이에요 — 눌러 주세요', cls: 'warn', title: '오랜만에 동기화해요. 어떻게 할지 골라 주세요' };
     if (S.status === 'missing') return { text: '☁ ⚠ Drive 파일이 없어요', cls: 'warn', title: FRIENDLY.missing };
     if (S.status === 'welcome') return { text: '☁ 처음 연결 중…', cls: 'busy', title: '' };
-    if (S.status === 'syncing') return { text: `☁ 동기화 중…${S.progress ? ` ${S.progress.label} ${S.progress.i}/${S.progress.n}` : ''}`, cls: 'busy', title: '' };
+    if (S.status === 'syncing') return { text: `☁ 동기화 중…${S.progress ? ` ${S.progress.label} ${S.progress.i}/${S.progress.n}${S.progress.pct != null ? ` · ${S.progress.pct}%` : ''}` : ''}`, cls: 'busy', title: '' };
     if (c) return { text: `☁ ⚠ 충돌 ${c}개`, cls: 'warn', title: '눌러서 어느 쪽을 남길지 골라 주세요' };
     if (S.status === 'offline') return { text: `☁ 대기 중${pend ? ` · ${pend}개` : ''} (오프라인)`, cls: 'busy', title: S.lastError };
     if (S.status === 'error') return { text: '☁ ⚠ 동기화 실패 · 다시 시도할게요', cls: 'err', title: S.lastError };
@@ -660,12 +979,13 @@
     b.className = `sync-chip ${m.cls}`;
     b.title = m.title || '';
     b.setAttribute('aria-label', `구글 드라이브 동기화: ${m.text.replace(/^☁\s*/, '')}`);
+    renderAudioBadges(); // 녹음 줄의 작은 ☁ 표시도 함께 새로 고쳐요
   }
   function cardHTML() {
     const m = chipModel();
     return `<div class="card" id="syncCard" style="margin:0"><h3>☁ 구글 드라이브 동기화</h3>
       <p class="meta">${esc(m.text.replace(/^☁\s*/, ''))}</p>
-      <p class="meta">🎙 녹음은 이 기기에만 저장돼요. (Drive로 올라가지 않아요)</p>
+      <p class="meta">${S.meta && S.meta.enabled && envMode() === 'ok' ? '🎙 녹음도 Drive에 올라가요.' : '🎙 녹음은 이 기기에만 저장돼요.'}</p>
       <button type="button" class="btn ${S.meta && S.meta.enabled ? 'ghost' : ''}" data-sync="detail">☁ 동기화 열기</button></div>`;
   }
   function refreshCard() {
@@ -676,7 +996,29 @@
   /* ---------------------------------------------------------------------
      8. 창들: 자세히 · 로그아웃 · 첫 로그인 · 오랜만이에요 · 충돌
      --------------------------------------------------------------------- */
-  const AUDIO_NOTE = '<p class="meta">🎙 <b>녹음은 이 기기에만 저장돼요.</b> Drive로 올라가지 않아요. (백업 파일의 "첫 녹음"과는 별개예요)</p>';
+  // 🎙 녹음 안내 (로그인한 상태에서는 "녹음도 Drive에 올라가요", 아니면 "이 기기에만 저장돼요")
+  const AUDIO_NOTE = '<p class="meta">🎙 <b>녹음은 이 기기에만 저장돼요.</b> (백업 파일에는 곡마다 첫 녹음만 들어가요. 녹음 줄의 "⬇ 파일로 저장"은 로그인하지 않아도 쓸 수 있어요)</p>';
+  const AUDIO_NOTE_LOGIN = '<p class="meta">🎙 로그인하면 <b>녹음도 Drive에 올라가요.</b> 큰 파일은 이어 올리고, 다른 기기에서는 재생하거나 파일로 저장할 때 내려받아요. 로그인하기 전에는 녹음이 이 기기에만 저장돼요.</p>';
+
+  function audioStats() {
+    const onDrive = audios.filter((a) => a.rf && S.meta.abase[a.id]);
+    const held = audios.filter((a) => a.local && !a.rf && audioHeld(a));
+    return { onDrive, bytes: onDrive.reduce((n, a) => n + (a.size || 0), 0), waiting: audios.filter(audioWaiting).length, held, heldBytes: held.reduce((n, a) => n + (a.size || 0), 0) };
+  }
+  function audioSectionHTML() {
+    if (!AudioStore.ok()) return '';
+    const st = audioStats(); const ci = connInfo();
+    return `<div class="sync-audio"><h3>🎙 녹음도 Drive에 올라가요</h3>
+      <div class="sync-rows">
+        <div><span class="meta">Drive의 녹음</span><b>${st.onDrive.length}개 · ${esc(fmtMB(st.bytes))}</b></div>
+        <div><span class="meta">올리기 대기</span><b>${st.waiting}개</b>${st.held.length ? ` <span class="meta">(나중에로 미뤄 둔 ${st.held.length}개는 따로예요)</span>` : ''}</div>
+      </div>
+      ${st.held.length ? `<p style="margin:6px 0"><button type="button" class="btn" data-sync="audio-start">🎙 녹음 올리기 (${st.held.length}개 · 약 ${esc(fmtMB(st.heldBytes))})</button></p>` : ''}
+      <label class="meta"><input type="checkbox" data-sync="wifi" ${S.meta.wifiOnly ? 'checked' : ''}> 와이파이에서만 녹음 올리기 <span class="hint">(꺼 두면 모바일 데이터로도 올라가요)</span></label>
+      ${!ci.known ? '<p class="meta" style="margin:4px 0 0">이 브라우저는 연결 종류를 알 수 없어서 그냥 올려요.</p>' : (S.meta.wifiOnly && ci.cellular ? '<p class="meta" style="margin:4px 0 0">지금은 모바일 데이터라서, 와이파이에 연결되면 올릴게요.</p>' : '')}
+      <p class="meta" style="margin:6px 0 0">다른 기기에서 올린 녹음은 목록에만 먼저 나타나요. <b>▶ 재생</b>이나 <b>⬇ 파일로 저장</b>을 누를 때 파일을 내려받아요. 올리는 도중 끊겨도 다음에 이어서 올려요.</p>
+    </div>`;
+  }
 
   function openDetail() {
     const env = envMode();
@@ -705,7 +1047,7 @@
           <li>로그인 정보(토큰)는 <b>저장하지 않아요.</b> 창을 닫으면 사라져요.</li>
           <li>처음 로그인하면 <b>이 기기의 백업 파일이 자동으로 내려받아져요.</b></li>
         </ul>
-        ${AUDIO_NOTE}
+        ${AUDIO_NOTE_LOGIN}
         <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button><button type="button" class="btn" data-sync="login">구글로 로그인</button></div>`);
       return;
     }
@@ -718,7 +1060,7 @@
         <div><span class="meta">대기 중인 변경</span><b>${pend}개</b></div>
         ${S.status === 'error' || S.status === 'offline' ? `<div><span class="meta">자세히</span><span>${esc(S.lastError)}</span></div>` : ''}
       </div>
-      ${AUDIO_NOTE}
+      ${audioSectionHTML()}
       <div class="row" style="margin-top:12px">
         <button type="button" class="btn" data-sync="now" ${S.running ? 'disabled' : ''}>지금 동기화</button>
         <button type="button" class="btn ghost" data-sync="folder">Drive 폴더 열기</button>
@@ -744,7 +1086,8 @@
       try { email = await fetchEmail(); } catch (e) { /* 이메일 표시는 없어도 돼요 */ }
       const keepDevice = S.meta.deviceId; const last = S.meta.last;
       const same = !!(last && last.email && last.email === email && last.firstDone); // 로그아웃했던 그 계정이면 이어서 써요
-      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, ...(same ? { base: last.base, folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
+      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, wifiOnly: S.meta.wifiOnly, ...(same ? { base: last.base, abase: last.abase || {}, audioAsked: !!last.audioAsked, audioHold: last.audioHold || [], folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
+      if (!same) await forgetAudioRefs(true); // 다른 계정이면 예전 Drive의 녹음 주소는 쓸 수 없어요
       S.needReconnect = false; S.remote = { version: '', journal: null };
       await saveMeta();
       closeDlg(); // 로그인 안내 창을 닫아요
@@ -842,7 +1185,7 @@
       <div class="fl-opts">
         <button type="button" class="btn" data-sync="logout-keep">로그아웃 (이 기기 기록은 남기기)</button>
         <button type="button" class="btn danger" data-sync="logout-wipe">로그아웃하고 이 기기의 기록도 지우기</button>
-        <p class="meta">지우기 전에 백업 파일을 자동으로 내려받아요. 🎙 녹음은 이 기기에만 있어서 지우지 않아요.</p>
+        <p class="meta">지우기 전에 백업 파일을 자동으로 내려받아요. 🎙 이 기기에 있는 녹음 파일은 지우지 않아요. (아직 받지 않은 녹음은 목록에서만 빠져요. Drive에는 그대로 있어요)</p>
       </div>
       <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">취소</button></div>`);
   }
@@ -862,11 +1205,12 @@
     S.token = null; S.tokenExp = 0; S.needReconnect = false; S.remote = { version: '', journal: null };
     clearTimeout(S.debounceT); clearTimeout(S.retryT);
     const keepDevice = S.meta.deviceId; const m0 = S.meta;
-    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, last: wipe ? null : { email: m0.email, base: m0.base, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
+    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, wifiOnly: m0.wifiOnly, last: wipe ? null : { email: m0.email, base: m0.base, abase: m0.abase, audioAsked: m0.audioAsked, audioHold: m0.audioHold, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
     await saveMeta();
     if (wipe) {
       await Store.remove([...records.map((r) => r.id), ...tombstones.map((t) => t.id)]);
       records = []; tombstones = [];
+      await forgetAudioRefs(true);
     }
     setStatus('idle', '');
     closeDlg();
@@ -902,7 +1246,24 @@
   }
   function valSigRemote(v) { const conv = (x) => (isRef(x) ? { $h: x.$img.h } : Array.isArray(x) ? x.map(conv) : x); return JSON.stringify(stable(conv(v === undefined ? null : v))); }
 
+  const AUD_LABEL = { memo: '메모', date: '날짜', piece: '곡', name: '파일 이름' };
+  function audioConflictCard(id, c) {
+    const L = localAudioMap().get(id); const R = c.remote;
+    const kindText = { edit: '양쪽에서 다르게 고쳤어요', remoteDeleted: 'Drive에서는 지웠고, 이 기기에서는 고쳤어요', localDeleted: '이 기기에서는 지웠고, Drive에서는 고쳤어요' }[c.kind] || '';
+    const lt = isTombLike(L); const rt = isTombLike(R); const ref = (!lt && L) || (!rt && R) || {};
+    let rows = '';
+    if (!lt && !rt && L && R) Object.keys(AUD_LABEL).filter((k) => (L[k] || '') !== (R[k] || '')).forEach((k) => { rows += `<div class="cf-row"><div class="cf-k">${AUD_LABEL[k]}</div><div class="cf-l pre">${esc(fmtVal(L[k]))}</div><div class="cf-r pre">${esc(fmtVal(R[k]))}</div></div>`; });
+    else rows = `<div class="cf-row"><div class="cf-k">상태</div><div class="cf-l pre">${lt ? '이 기기에서 지웠어요' : esc(`메모: ${fmtVal(L && L.memo)}`)}</div><div class="cf-r pre">${rt ? 'Drive에서 지웠어요' : esc(`메모: ${fmtVal(R && R.memo)}`)}</div></div>`;
+    const btns = c.kind === 'localDeleted'
+      ? `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">삭제 유지하기</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 것 되살리기</button>`
+      : c.kind === 'remoteDeleted'
+        ? `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">이 기기 것 남기기</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 따라 지우기</button>`
+        : `<button type="button" class="btn small" data-sync="cf-local" data-id="${esc(id)}">이 기기 것으로</button><button type="button" class="btn small" data-sync="cf-remote" data-id="${esc(id)}">Drive 것으로</button>`;
+    return `<div class="card cf-card" data-cf="${esc(id)}"><div class="cf-head"><b>🎙 녹음 · ${esc(ref.piece || '')} · ${esc(ref.date || '')}</b><span class="meta">${esc(kindText)}</span></div>
+      <div class="cf-cols"><div class="cf-colh">이 기기</div><div class="cf-colh">Drive</div></div>${rows}<div class="row" style="margin-top:8px">${btns}</div></div>`;
+  }
   async function conflictCard(id, c) {
+    if (c.k === 'aud') return audioConflictCard(id, c);
     const L = localMap().get(id); const R = c.remote;
     const kindText = { edit: '양쪽에서 다르게 고쳤어요', remoteDeleted: 'Drive에서는 지웠고, 이 기기에서는 고쳤어요', localDeleted: '이 기기에서는 지웠고, Drive에서는 고쳤어요' }[c.kind] || '';
     const lt = isTombLike(L); const rt = isTombLike(R);
@@ -952,6 +1313,7 @@
   const bumpAbove = (rec, ru) => Math.max(now(), (rec.updatedAt || 0) + 1, (ru || 0) + 1);
   async function resolveConflict(id, choice, quiet = false) {
     const c = S.meta.conflicts[id]; if (!c) return;
+    if (c.k === 'aud') return resolveAudioConflict(id, c, choice, quiet);
     const L = localMap().get(id); const R = c.remote; const base = S.meta.base;
     try {
       if (choice === 'cf-local' || choice === 'cf-both') {
@@ -986,9 +1348,26 @@
     if (conflictCount()) openConflicts(); else { closeDlg(); toast('☁ 충돌을 모두 풀었어요. 동기화할게요.', 3000); }
     runSync('resolved');
   }
+  async function resolveAudioConflict(id, c, choice, quiet) {
+    const L = localAudioMap().get(id); const R = c.remote; const ab = S.meta.abase;
+    try {
+      if (choice === 'cf-local') {
+        const at = bumpAbove(L, R && R.updatedAt);
+        if (c.kind === 'localDeleted') { await applyAudioChanges({ tombs: [{ ...audioTombEntry(L), rf: L.rf || '', deletedAt: at, updatedAt: at }] }); ab[id] = { lu: 0, ld: false, ru: R.updatedAt, rd: false }; }
+        else { await applyAudioChanges({ put: [{ id, updatedAt: at }] }); await AudioStore.update(id, (row) => (row ? { ...row, updatedAt: at } : undefined)); ab[id] = { lu: 0, ld: false, ru: R.updatedAt, rd: isTombLike(R) }; }
+      } else if (isTombLike(R)) { await applyAudioChanges({ tombs: [audioTombEntry(R)] }); ab[id] = { lu: R.updatedAt, ld: true, ru: R.updatedAt, rd: true }; }
+      else { await applyAudioChanges({ put: [audioRowFromEntry(R)] }); ab[id] = { lu: R.updatedAt, ld: false, ru: R.updatedAt, rd: false }; }
+      delete S.meta.conflicts[id];
+      await saveMeta();
+      tellOtherTabs(); renderSoon(); renderChip();
+    } catch (e) { toast('충돌을 풀지 못했어요. 다시 눌러 주세요.', 4000); return; }
+    if (quiet) return;
+    if (conflictCount()) openConflicts(); else { closeDlg(); toast('☁ 충돌을 모두 풀었어요. 동기화할게요.', 3000); }
+    runSync('resolved');
+  }
   async function resolveAllNewest() {
     for (const id of Object.keys(S.meta.conflicts)) {
-      const c = S.meta.conflicts[id]; const L = localMap().get(id); const R = c.remote;
+      const c = S.meta.conflicts[id]; const L = (c.k === 'aud' ? localAudioMap() : localMap()).get(id); const R = c.remote;
       const localNewer = !R || (L && L.updatedAt >= R.updatedAt);
       await resolveConflict(id, localNewer ? 'cf-local' : 'cf-remote', true);
     }
@@ -1030,12 +1409,42 @@
       case 'conflicts': openConflicts(); break;
       case 'fl-merge': case 'fl-upload': case 'fl-download': firstChoice(act); break;
       case 'stale-fresh': case 'stale-merge': staleChoice(act); break;
-      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.base = {}; runSync('recreate'); break;
+      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.base = {}; S.meta.abase = {}; forgetAudioRefs(false).then(() => runSync('recreate')); break;
       case 'cf-local': case 'cf-remote': case 'cf-both': resolveConflict(b.dataset.id, act); break;
       case 'cf-newest': resolveAllNewest(); break;
+      case 'wifi': S.meta.wifiOnly = !!b.checked; saveMeta().then(() => { if (dlg.open && dlg.querySelector('.sync-audio')) openDetail(); if (!S.meta.wifiOnly) runSync('wifi'); }); break;
+      case 'audio-up': case 'audio-start': S.meta.audioAsked = true; S.meta.audioHold = []; saveMeta().then(() => { closeDlg(); runSync('audio'); }); break;
+      case 'audio-later': closeDlg(); break;
       default: break;
     }
   });
+
+  // 🎙 로그인 계정이 바뀌거나 이 기기 기록을 지울 때 / Drive 폴더를 다시 만들 때: 녹음의 Drive 주소를 잊어요 (이 기기의 녹음 파일은 지우지 않아요)
+  //   dropGhosts: 파일 없이 목록만 있던 녹음(다른 기기에서 받은 정보)도 목록에서 빼요
+  async function forgetAudioRefs(dropGhosts) {
+    if (!AudioStore.ok()) return;
+    const ghosts = dropGhosts ? audios.filter((a) => !a.local).map((a) => a.id) : [];
+    const stale = audioTombs.map((t) => t.id);
+    await applyAudioChanges({ drop: [...ghosts, ...(dropGhosts ? stale : [])] });
+    for (const a of audios) { await AudioStore.update(a.id, (row) => (row ? { ...row, rf: '' } : undefined)); a.rf = ''; }
+    S.meta.up = {};
+  }
+
+  // 🎙 처음 켜질 때(로그인 상태) 이 기기에 올라가지 않은 녹음이 있으면 올릴지 물어봐요. 창을 그냥 닫아도 "나중에"로 봐요.
+  function maybeAskAudio() {
+    const m = S.meta;
+    if (!m || !m.enabled || envMode() !== 'ok' || m.audioAsked || !m.firstDone || S.running || dlg.open || dlg2.open || !AudioStore.ok()) return;
+    const mine = audios.filter((a) => a.local && !a.rf);
+    m.audioAsked = true;
+    if (!mine.length) { saveMeta(); return; }
+    m.audioHold = mine.map((a) => a.id);
+    saveMeta();
+    const bytes = mine.reduce((n, a) => n + (a.size || 0), 0);
+    openDlg(`<h2>🎙 녹음도 Drive에 올릴까요?</h2>
+      <p>이 기기에 있는 녹음 <b>${mine.length}개 (약 ${esc(fmtMB(bytes))})</b>를 Drive에 올릴 수 있어요. 올리면 다른 기기에서도 듣고 파일로 저장할 수 있어요.</p>
+      <p class="meta">큰 파일은 이어 올리기로 올려요. 데이터가 걱정되면 ☁ 상세 창의 "와이파이에서만 녹음 올리기"를 켜 두세요. "나중에"를 골라도 ☁ 상세 창에서 언제든 올릴 수 있어요.</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" data-sync="audio-later">나중에</button><button type="button" class="btn" data-sync="audio-up">올리기</button></div>`);
+  }
 
   function notify() {
     tellOtherTabs(); // 같은 브라우저의 다른 탭 화면도 바뀐 기록을 보게 해요
@@ -1049,6 +1458,8 @@
     const cutoff = now() - CFG.tombstoneDays * DAY;
     const old = tombstones.filter((t) => t.deletedAt < cutoff && (!S.meta.enabled || (S.meta.base[t.id] && S.meta.base[t.id].ld)));
     if (old.length) applySyncChanges({ drop: old.map((t) => t.id) });
+    const oldA = audioTombs.filter((t) => t.deletedAt < cutoff && (!S.meta.enabled || (S.meta.abase[t.id] && S.meta.abase[t.id].ld)));
+    if (oldA.length) applyAudioChanges({ drop: oldA.map((t) => t.id) });
   }
 
   async function boot() {
@@ -1056,7 +1467,7 @@
     renderChip();
     if (bc) bc.onmessage = () => { // 다른 탭이 바꿨어요 → 저장된 것을 다시 읽어 와요 (몰려 와도 한 번만)
       clearTimeout(S.bcT);
-      S.bcT = setTimeout(async () => { records = await loadRecords(); await loadMeta(); renderSoon(); renderChip(); }, 200);
+      S.bcT = setTimeout(async () => { records = await loadRecords(); await reloadAudios(); await loadMeta(); renderSoon(); renderChip(); }, 200);
     };
     document.addEventListener('visibilitychange', () => {
       if (document.hidden || !S.meta || !S.meta.enabled || envMode() !== 'ok') return;
@@ -1067,6 +1478,9 @@
     window.addEventListener('online', () => { S.backoffIdx = 0; if (S.meta && S.meta.enabled) runSync('online'); });
     window.addEventListener('offline', () => { if (S.meta && S.meta.enabled) setStatus('offline', FRIENDLY.offline); });
     setInterval(renderChip, 60000); // "N분 전" 갱신
+    const conn = navigator.connection;
+    if (conn && conn.addEventListener) conn.addEventListener('change', () => { if (S.meta && S.meta.enabled && S.meta.wifiOnly && !wifiBlocked()) runSync('conn'); }); // 와이파이에 연결되면 기다리던 녹음을 올려요
+    dlg.addEventListener('close', () => setTimeout(maybeAskAudio, 400));
     purgeOldTombs();
     if (envMode() !== 'ok' || !S.meta.enabled) return;
     loadGIS().catch(() => { /* 오프라인이면 나중에 다시 해요 */ });
@@ -1077,9 +1491,10 @@
 
   window.Sync = {
     notify, cardHTML, isEnabled: () => !!(S.meta && S.meta.enabled), openDetail,
+    audioBadge, fetchLabel, fetchAudio,
     // 자동 시험용 (화면에서는 쓰지 않아요)
     __t: {
-      S, T, CFG, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote,
+      S, T, CFG, maybeAskAudio, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote,
       setNow: (fn) => { nowFn = fn; }, resetNow: () => { nowFn = () => Date.now(); }, gisReady, requestToken,
     },
   };
