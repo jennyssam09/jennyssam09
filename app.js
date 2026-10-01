@@ -1806,12 +1806,10 @@ function renderCalendar() {
       ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
       ${cells.join('')}
     </div>
-    <p class="meta cal-legend">배경 진하기는 그날 가장 많이 한 연습량·운동량이에요:
-      ${AMOUNTS.map((a, i) => `<span class="cal-swatch has amt${i + 1}" aria-hidden="true"></span>${esc(a.label)}`).join(' ')} · 😴 쉰 날</p>
     <p class="meta" style="margin-top:12px">${summary ? `${y}년 ${m}월의 기록: ${summary}` : `${y}년 ${m}월에는 기록이 없어요.`}</p>
     <div class="row" style="margin-top:14px">
       <button type="button" class="btn purple" data-act="recap">📖 ${ui.calMonth === today.slice(0, 7) ? '이번 달' : `${m}월`} 돌아보기</button>
-      <button type="button" class="btn ghost purple" data-act="board">🎴 도장 모음판</button>
+      <button type="button" class="btn ghost purple" data-act="board">💮 도장 모음판</button>
     </div>
     ${older ? `<p class="meta">${startYear}년 이전 기록 ${older}개는 달력에 나타나지 않아요. (각 메뉴의 목록에서는 볼 수 있어요.)</p>` : ''}
     ${claudeBoxHTML()}
@@ -1839,7 +1837,7 @@ function filledDaysHTML(y, m) {
 }
 
 /* ---------------------------------------------------------------------
-   🎴 도장 모음판: 기록을 남기고 받은 도장이 받은 순서대로 한 달에 한 장씩 차곡차곡 붙어요.
+   💮 도장 모음판: 기록을 남기고 받은 도장이 받은 순서대로 한 달에 한 장씩 차곡차곡 붙어요.
    (날짜 칸이나 빈 칸은 없고, 받은 도장만 쌓여요. 예전 기록은 종류에 맞는 기본 도장으로 보여요.)
    --------------------------------------------------------------------- */
 const stampOf = (r) => (r.type === 'rest' ? '😴' : r.stamp || iconOf(r));
@@ -1858,7 +1856,7 @@ function openBoard(ym) {
   const [y, m] = ym.split('-').map(Number);
   const list = records.filter((r) => r.date && r.date.slice(0, 7) === ym && catOf(r)).sort(byReceived);
   openDlg(`
-    <h2>🎴 도장 모음판</h2>
+    <h2>💮 도장 모음판</h2>
     <div class="row board-nav">
       ${todayBtnHTML('boardToday', ym === todayStr().slice(0, 7))}
       <button type="button" class="btn ghost small" data-act="boardShift" data-d="-1" ${ym <= CALENDAR_START ? 'disabled' : ''}>◀ 이전 달</button>
@@ -1991,7 +1989,7 @@ const RECAP_SECTIONS = [
     if (!list.length) return null;
     return { title: '💬 이번 달 받은 해볼 것', html: `<ul class="note-list">${list.map((f) => `<li><span class="meta">${esc(shortDay(f.date))}</span><span class="pre">${scopeMeta(f.scope).icon} ${esc(f.todo)}${f.todoDone ? ' <span class="fb-done-mark">✓ 해봤음</span>' : ''}</span></li>`).join('')}</ul>` };
   } },
-  { id: 'stamps', build: (c) => (c.real.length ? { title: '이 달의 도장판', html: stampButtons([...c.real].sort(byReceived), true) } : null) }, // 🎴 도장 모음판을 작게
+  { id: 'stamps', build: (c) => (c.real.length ? { title: '이 달의 도장판', html: stampButtons([...c.real].sort(byReceived), true) } : null) }, // 💮 도장 모음판을 작게
 ];
 
 function openRecap() {
@@ -2107,7 +2105,7 @@ function pickStamp(rec) {
   return i < 0 ? { icon: '', text: phrase } : { icon: phrase.slice(0, i), text: phrase.slice(i + 1) };
 }
 
-// 새 기록을 저장하기 직전에 부르면, 이 기록이 받는 도장을 골라서 기록에 남겨 둬요(stamp). 🎴 도장 모음판이 이 그림을 써요.
+// 새 기록을 저장하기 직전에 부르면, 이 기록이 받는 도장을 골라서 기록에 남겨 둬요(stamp). 💮 도장 모음판이 이 그림을 써요.
 // 쉰 날은 늘 😴 도장이에요. remember=false 이면 화면에 보여줄 한 마디는 따로 기억하지 않아요.
 const stampPhrases = new Map();
 function assignStamp(rec, remember = true) {
