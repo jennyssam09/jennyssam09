@@ -44,11 +44,6 @@ const ART_MAX_PHOTOS = 30;
    - 이미 저장한 기록은 그대로 남아요. (예전에 고른 글자는 지워도 카드에 계속 보여요)
    --------------------------------------------------------------------- */
 const CHIPS = {
-  // 🧘 요가 / 🏃 슬로조깅
-  yogaDid: ['스트레칭', '코어', '밸런스', '호흡·명상', '영상 따라하기'],
-  yogaRelief: ['목·어깨', '등', '허리', '골반·고관절', '다리', '전신'],
-  weather: ['맑음', '흐림', '더움', '추움', '비'],
-  pace: ['여유', '적당', '조금 벅참'],
   // 🎻 바이올린 (기본기 = 스케일·에튀드·개방현·포지션 이동을 모두 포함해요)
   violinDid: ['활', '기본기', '곡'],
 };
@@ -65,34 +60,24 @@ const TEXTBOOKS_DEFAULT = ['스즈키 4권'];
    - type: text / textarea / number / date / select / choice(버튼 하나) / chips(버튼 여러 개) / lines(한 줄에 하나) / tasks(체크 목록) / image / images
    - keep: 이 창에서 고치지 않아도 그대로 보관할 칸 (복기 창에서 적는 값 등)
    --------------------------------------------------------------------- */
+// 🧘 운동 "한 줄" 칸의 회색 예시 문장 (종류별). 빠른 기록 창도 같은 문장을 써요.
+const WORKOUT_LINE_HINTS = { '요가': '예: 골반이 좀 풀렸다', '슬로조깅': '예: 바람이 시원했다' };
 const AMOUNT_FIELD = { key: 'amount', label: '연습량 - 선택', type: 'choice', choices: AMOUNTS, hint: '시간 대신 느낌으로 골라요. 다시 누르면 선택이 풀려요.' };
 const MOOD_FIELD = { key: 'mood', label: '하고 나서 기분 - 선택', type: 'choice', choices: MOODS };
 
 const SCHEMAS = {
-  // 🧘 운동 기록 (요가 / 슬로조깅)
+  // 🧘 운동 기록 (요가 / 슬로조깅): 날짜 · 종류 · 거리 · 연습량 · 기분 · 한 줄, 이게 전부예요 ("더 적기"는 없어요)
   workout: {
     label: '운동 기록',
     kindKey: 'kind', // '종류'에 따라 보이는 칸이 달라져요
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
-      { key: 'did', label: '주로 한 것 - 선택', type: 'chips', choices: CHIPS.yogaDid, only: '요가' },
       { key: 'distance', label: '거리 (km) - 선택', type: 'number', min: 0, step: 0.01, only: '슬로조깅', placeholder: '예: 3.2' },
-      { key: 'weather', label: '날씨 - 선택', type: 'choice', choices: CHIPS.weather, only: '슬로조깅' },
       AMOUNT_FIELD,
       MOOD_FIELD,
-      { key: 'memo', label: '한 줄 메모 - 선택', type: 'textarea', rows: 2, placeholder: '예: 퇴근 후 짧게 했다' },
-      // ✍ 더 적기
-      { key: 'relief', label: '시원했던 곳', type: 'chips', choices: CHIPS.yogaRelief, only: '요가', more: true },
-      { key: 'bodyNote', label: '몸이 어땠나 한 줄', type: 'text', only: '요가', more: true, placeholder: '예: 오른쪽 골반이 더 뻣뻣했다' },
-      { key: 'course', label: '따라 한 영상·수업', type: 'text', suggest: true, only: '요가', more: true, placeholder: '영상 제목이나 강사 이름 (전에 쓴 것이 제안돼요)' },
-      { key: 'refs', label: '영상·수업 링크', type: 'textarea', links: true, rows: 2, only: '요가', more: true, hint: '한 줄에 링크 하나씩 적어 주세요.' },
-      { key: 'place', label: '장소', type: 'text', suggest: true, only: '슬로조깅', more: true, placeholder: '예: 중랑천 (전에 쓴 것이 제안돼요)' },
-      { key: 'pace', label: '대화할 수 있는 속도였나?', type: 'choice', choices: CHIPS.pace, only: '슬로조깅', more: true },
-      { key: 'runThought', label: '달리며 든 생각 한 줄', type: 'text', only: '슬로조깅', more: true, placeholder: '예: 바람이 시원해서 발이 가벼웠다' },
-      { key: 'shots', label: '워치 캡처', type: 'images', noun: '워치 캡처', more: true, hint: '갤럭시 워치·삼성 헬스 화면을 캡처해서 붙여 두세요.' },
-      { key: 'claude', label: '클로드 피드백', type: 'textarea', more: true, hint: '클로드가 해 준 말을 그대로 붙여넣어 두세요. 나중에 카드나 캘린더의 날짜 창에서 다시 볼 수 있어요.' },
-      { key: 'condition', label: '컨디션 (예전 칸)', type: 'select', options: ['좋음', '보통', '피곤함'], legacy: true, more: true },
+      // 한 줄 (예전 "한 줄 메모", "몸이 어땠나 한 줄", "달리며 든 생각 한 줄"이 모두 여기에 모여요). 종류마다 회색 예시 문장이 달라요
+      { key: 'memo', label: '한 줄 - 선택', type: 'text', flat: true, placeholder: '예: 퇴근 후 짧게 했다', placeholderByKind: WORKOUT_LINE_HINTS },
     ],
   },
   // 🎻 바이올린 기록 (연습 / 레슨)
@@ -219,8 +204,8 @@ const QUICK = {
   exercise: {
     title: '빠른 기록 - 운동', memoRequired: false,
     kinds: [
-      { label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: '예: 아침 스트레칭' },
-      { label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: '예: 동네 한 바퀴' },
+      { label: '요가', type: 'workout', data: { kind: '요가' }, memoKey: 'memo', hint: WORKOUT_LINE_HINTS['요가'] },
+      { label: '슬로조깅', type: 'workout', data: { kind: '슬로조깅' }, memoKey: 'memo', hint: WORKOUT_LINE_HINTS['슬로조깅'] },
     ],
   },
   violin: {
@@ -258,9 +243,6 @@ const BACKUP_SNOOZE_DAYS = 3;
 
 // 사진을 저장할 때 긴 변의 최대 크기(픽셀). 커질수록 선명하지만 저장 공간을 더 써요.
 const IMAGE_MAX_SIZE = 1600;
-
-// 운동 기록 하나에 붙일 수 있는 워치 캡처의 최대 장수
-const SHOT_MAX = 4;
 
 // ✅ 오늘의 경제 루틴 (경제 화면의 체크 목록)
 //   id: 저장되는 이름 (한 번 정하면 바꾸지 마세요)  icon: 그림  label: 화면에 보이는 이름  chips: 읽은 것을 눌러 표시하는 칩 (있으면 체크 옆에 나타나요)
@@ -516,9 +498,9 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 //   local: 이 기기에 파일이 있나 (☁ 로 다른 기기에서 정보만 받은 녹음은 false 예요) · rf: Drive에 올라간 파일의 id · updatedAt: 바꾼 시각
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
-// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2),
+// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1),
 // 캘린더 아래 '🤖 클로드에게 보내기'를 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, claudeBoxOpen: false };
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -639,11 +621,11 @@ function buildSamples() {
   const artA = mk('art', d(8), { stamp: '🎨', artKind: '모작', images: [SAMPLE_IMAGES.shaded], srcImage: SAMPLE_IMAGES.color, amount: 2, topic: '명암 연습', liked: '그림자 경계가 부드럽게 나왔다', next: '표정만 웃는 얼굴로 바꿔 보기 (예시 기록)' });
   return [
     // 🧘 운동
-    mk('workout', d(1), { stamp: '🍃', kind: '요가', amount: 2, mood: 'good', did: ['스트레칭', '호흡·명상'], relief: ['목·어깨'], bodyNote: '오른쪽 어깨가 더 뻣뻣했다', course: '아침 요가 20분 (예시)', refs: 'https://www.youtube.com', condition: '좋음', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
-    mk('workout', d(2), { stamp: '🏃', kind: '슬로조깅', amount: 1, mood: 'ok', distance: 3.1, weather: '맑음', place: '중랑천', pace: '여유', runThought: '바람이 시원해서 발이 가벼웠다', condition: '보통', memo: '대화할 수 있는 속도로 천천히. (예시 기록)' }),
-    mk('workout', d(4), { stamp: '🌿', kind: '요가', amount: 1, mood: 'tired', did: ['스트레칭'], condition: '피곤함', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
-    mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, weather: '흐림', place: '중랑천', pace: '적당', condition: '좋음', memo: '' }),
-    mk('workout', d(9), { kind: '요가', did: ['코어', '밸런스'], relief: ['허리'], course: '아침 요가 20분 (예시)', condition: '보통', memo: '' }),
+    mk('workout', d(1), { stamp: '🍃', kind: '요가', amount: 2, mood: 'good', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
+    mk('workout', d(2), { stamp: '🏃', kind: '슬로조깅', amount: 1, mood: 'ok', distance: 3.1, memo: '바람이 시원해서 발이 가벼웠다. 대화할 수 있는 속도로 천천히. (예시 기록)' }),
+    mk('workout', d(4), { stamp: '🌿', kind: '요가', amount: 1, mood: 'tired', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
+    mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, memo: '' }),
+    mk('workout', d(9), { kind: '요가', memo: '' }),
     mk('workout', d(3), { kind: '요가', amount: 1, memo: '퇴근 후 짧게 (간단 기록 예시)', quick: true }),
     mk('rest', d(7), { stamp: '😴', memo: '야근한 날. 푹 잤다. (예시 기록)' }),
     // 🎻 바이올린
@@ -829,13 +811,6 @@ function restButtonHTML(date) {
 /* ---------------------------------------------------------------------
    8. 메뉴 1: 운동·바이올린
    --------------------------------------------------------------------- */
-// 워치 캡처 작은 그림들 (누르면 크게 보여요)
-function shotsHTML(r) {
-  const list = Array.isArray(r.shots) ? r.shots : [];
-  if (!list.length) return '';
-  return `<div class="shot-row">${list.map((src, i) => `<img class="shot-img" src="${esc(src)}" alt="워치 캡처 ${i + 1}" data-act="zoomShot" data-id="${esc(r.id)}" data-i="${i}">`).join('')}</div>`;
-}
-
 // 카드에 보여 줄 칸들: 스키마 순서대로, 값이 있는 칸만. 칩은 작은 표시로 먼저, 글은 제목+내용으로 그 아래에.
 // (skip: 카드 머리줄 등에서 이미 보여준 칸)
 // opts.readonly: 체크 목록을 눌러서 바꿀 수 없는 글자로만 보여줘요 (예전 메모용)
@@ -862,27 +837,16 @@ function guideHTML(type, r, skip = [], opts = {}) {
   return `${tags.join('')}${blocks.join('')}`;
 }
 
-// 워치 캡처 작은 그림들 (누르면 크게 보여요)
-function shotsHTML(r) {
-  const list = Array.isArray(r.shots) ? r.shots : [];
-  if (!list.length) return '';
-  return `<div class="shot-row">${list.map((src, i) => `<img class="shot-img" src="${esc(src)}" alt="워치 캡처 ${i + 1}" data-act="zoomShot" data-id="${esc(r.id)}" data-i="${i}">`).join('')}</div>`;
-}
-
 function workoutCard(r) {
   const parts = [];
   if (r.distance) parts.push(`${esc(fmtNum(r.distance))}km`);
-  if (r.condition) parts.push(`컨디션 ${esc(r.condition)}`);
   return `<div class="card" data-rid="${esc(r.id)}">
     <div class="item-head">
       <div><span class="tag">${esc(r.kind || '운동')}</span> ${parts.join(' · ')} ${marksHTML(r)} ${quickTag(r)}</div>
       ${actionButtons('workout', r.id, claudeBtns(r))}
     </div>
     ${r.memo ? `<p class="pre">${esc(r.memo)}</p>` : ''}
-    ${guideHTML('workout', r, ['kind', 'memo', 'distance', 'condition', 'claude'])}
-    ${shotsHTML(r)}
     ${feedbackDoneNote(r)}
-    ${r.claude ? `<details class="claude-fb"><summary>💬 클로드 피드백 (예전에 붙여 둔 것)</summary><p class="pre">${esc(r.claude)}</p></details>` : ''}
     ${cardFeedbackHTML(r)}
   </div>`;
 }
@@ -1140,7 +1104,6 @@ function weekStats(start) {
   const count = (list, k, v) => list.filter((r) => r[k] === v).length;
   const prac = vs.filter((r) => r.kind !== '레슨'); // 연습 기록만 (레슨은 따로 세요)
   const wOptions = SCHEMAS.workout.fields.find((f) => f.key === 'kind').options;
-  const condOptions = SCHEMAS.workout.fields.find((f) => f.key === 'condition').options;
   // 연습량은 그림까지 함께 세요 (합계나 점수는 만들지 않고 개수만 보여줘요)
   const moved = records.filter((r) => inWeek(r) && amountOf(r) && supportsAmount(r.type, r.kind));
   return {
@@ -1150,7 +1113,6 @@ function weekStats(start) {
     lessons: vs.length - prac.length,
     violinDays: new Set(prac.map((r) => r.date)).size,
     kindText: wOptions.map((k) => `${k} ${count(ws, 'kind', k)}회`).join(' · '),
-    condText: condOptions.map((c) => `${c} ${count(ws, 'condition', c)}`).join(' · '),
     pieces: [...new Set(prac.map((r) => r.piece).filter(Boolean))],
     lastNext: prac.filter((r) => r.next).sort(byNewest)[0],
   };
@@ -1163,7 +1125,7 @@ const amountLine = (list) => {
 
 // 주간 요약 (area: 'exercise' | 'violin'). 합계·점수 없이 개수만 보여줘요.
 function weekSummaryHTML(start, area) {
-  const { end, ws, vs, lessons, violinDays, kindText, condText, pieces, lastNext, restDays } = weekStats(start);
+  const { end, ws, vs, lessons, violinDays, kindText, pieces, lastNext, restDays } = weekStats(start);
   const label = ui.weekOffset === 0 ? '이번 주' : ui.weekOffset === -1 ? '지난 주' : '';
   const isEx = area === 'exercise';
   const mine = isEx ? ws : vs;
@@ -1178,7 +1140,7 @@ function weekSummaryHTML(start, area) {
     <div class="stats">
       ${isEx ? `<div class="stat"><b>${ws.length}회</b><span>운동 횟수</span></div>` : `<div class="stat"><b>${violinDays}일</b><span>바이올린 연습한 날</span></div>`}
     </div>
-    ${isEx && ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)} · 컨디션: ${esc(condText)}</p>` : ''}
+    ${isEx && ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)}</p>` : ''}
     ${amountText ? `<p class="meta" style="margin:4px 0 0">연습량: ${esc(amountText)}</p>` : ''}
     ${isEx && restDays ? `<p class="meta" style="margin:4px 0 0">쉰 날 ${restDays}일</p>` : ''}
     ${!isEx && lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
@@ -2203,20 +2165,10 @@ const hasFiles = (e) => !!(e.dataTransfer && [...e.dataTransfer.types].includes(
 const imgFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone, .dropzone[data-key]');
 const firstImageKey = () => { const z = dlg.querySelector('.dropzone[data-key]'); return z ? z.dataset.key : 'image'; };
 const multiFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone[data-multi]');
-// 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 그림 화면(그림 기록), 운동·바이올린 화면(운동 기록에 워치 캡처)
-const dropTarget = () => (dlg.open ? null : ui.tab === 'art' ? 'art' : ui.tab === 'exercise' ? 'exercise' : null);
-const DROP_HINT = { art: '🖼 여기에 놓으면 그림 올리기 창이 열려요', exercise: '🖼 여기에 놓으면 새 운동 기록에 워치 캡처가 붙어요' };
+// 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 그림 화면(그림 기록)
+const dropTarget = () => (dlg.open ? null : ui.tab === 'art' ? 'art' : null);
+const DROP_HINT = { art: '🖼 여기에 놓으면 그림 올리기 창이 열려요' };
 let dragTimer = null;
-
-// 운동 기록 입력 창을 열고 워치 캡처를 붙여 줘요 (날짜는 사진 파일의 날짜)
-async function addWorkoutFromFiles(files) {
-  const imgs = files.filter(isImage);
-  if (!imgs.length) { toast('이미지 파일(사진)만 올릴 수 있어요.'); return; }
-  openForm('workout');
-  const dateInput = $('#f_date');
-  if (dateInput) dateInput.value = dateOfFile(imgs[0]);
-  await attachShots(imgs);
-}
 
 function endDrag() {
   clearTimeout(dragTimer);
@@ -2263,10 +2215,8 @@ document.addEventListener('drop', async (e) => {
     }
   } else if (target === 'art') {
     await addArtFromFiles(files);
-  } else if (target === 'exercise') {
-    await addWorkoutFromFiles(files);
   } else if (!dlg.open) {
-    toast('사진은 🎨 그림 화면이나 🧘 운동 화면에 끌어다 놓아 주세요.');
+    toast('사진은 🎨 그림 화면에 끌어다 놓아 주세요.');
   }
 });
 
@@ -2277,7 +2227,6 @@ document.addEventListener('paste', async (e) => {
   const target = dropTarget();
   if (imgFormOpen()) { e.preventDefault(); if (multiFormOpen()) await attachShots(imgs); else await attachImage(imgs[0], firstImageKey()); }
   else if (target === 'art') { e.preventDefault(); await addArtFromFiles(imgs); }
-  else if (target === 'exercise') { e.preventDefault(); await addWorkoutFromFiles(imgs); }
 });
 
 /* ---------------------------------------------------------------------
@@ -2825,8 +2774,7 @@ function claudeLine(r) {
   } else if (r.type === 'workout') {
     bits.push(r.kind || '운동');
     if (r.distance) bits.push(`거리: ${fmtNum(r.distance)}km`);
-    add('한 것', joinList(r.did)); add('시원했던 곳', joinList(r.relief)); add('날씨', r.weather); add('장소', r.place); add('속도', r.pace);
-    feel(); add('몸', r.bodyNote); add('생각', r.runThought); add('컨디션', r.condition); add('메모', r.memo);
+    feel(); add('한 줄', r.memo);
     done();
   } else if (r.type === 'econRoutine') {
     ECON_ROUTINES.filter((x) => routineChecked(r, x.id)).forEach((x) => {
@@ -3173,7 +3121,7 @@ function openDlg(html, size) {
 function closeDlg() { if (dlg2.open) dlg2.close(); if (dlg.open) dlg.close(); }
 
 let formImages = {}; // 입력 창에서 선택한 이미지들 (칸 이름 → 데이터 주소). 그림 기록은 '내 그림'과 '원본 이미지' 두 칸이에요
-let formShots = []; // 입력 창에서 고른 워치 캡처들
+let formShots = []; // 입력 창에서 고른 그림 사진들
 let formBase = '';  // 입력 창을 열었을 때의 내용 (Esc로 닫을 때 뭔가 적었는지 비교해요)
 
 // 지금 열려 있는 입력 창(기록·빠른 기록)의 내용을 글자 하나로 만들어 둬요
@@ -3194,7 +3142,7 @@ function fieldHTML(f, value, type) {
     return `<div class="field" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label>${esc(f.label)}</label>${f.keys.map((k, i) => `<input id="f_${k}" name="${k}" type="text" class="multi-in" value="${esc(vals[k] || '')}" placeholder="${esc((f.placeholders || [])[i] || '')}" autocomplete="off">`).join('')}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
   }
   const req = f.required ? ' <span class="req">*</span>' : '';
-  const v = value ?? '';
+  const v = f.flat && typeof value === 'string' ? oneLine(value) : (value ?? ''); // flat: 한 줄짜리 칸 (예전에 줄바꿈이 들어 있으면 " / "로 이어서 보여줘요)
   const ph = f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : '';
   const rows = f.rows ? ` rows="${f.rows}"` : '';
   let input;
@@ -3210,10 +3158,10 @@ function fieldHTML(f, value, type) {
     input = `<select id="${id}" name="${f.key}">${f.required ? '' : '<option value="">(선택 안 함)</option>'}${opts}</select>`;
   } else if (f.type === 'choice' || f.type === 'chips') { // 버튼 칸 (연습량·기분·각종 칩)
     input = choiceHTML(f.key, choicesOf(f), value, f.type === 'chips', f.manage === 'books' ? MANAGE_BOOKS_BTN : '');
-  } else if (f.type === 'images') { // 여러 장 (워치 캡처 · 그림 사진)
+  } else if (f.type === 'images') { // 여러 장 (그림 사진)
     input = `<input id="${id}" type="file" accept="image/*" multiple class="sr-only" data-shots>
       <label class="dropzone" id="dropZone" data-multi="1" for="${id}"><span>🖼 여기에 ${esc(withJosa(f.noun || '사진', '을/를'))} 끌어다 놓거나, 눌러서 고르세요</span>
-        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${f.max || SHOT_MAX}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
+        <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${f.max || ART_MAX_PHOTOS}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
       <div class="hint" id="imgNote"></div>
       <div id="imgPreviewBox"></div>`;
   } else if (f.type === 'audio') { // 🎙 녹음 (value 는 이 기록의 id예요. 이미 붙어 있는 녹음을 보여주려고요)
@@ -3245,11 +3193,15 @@ function syncKindFields(form) {
   if (!schema.kindKey) return;
   const kind = form.elements[schema.kindKey].value;
   form.querySelectorAll('.field[data-only]').forEach((el) => { el.hidden = !!el.dataset.only && el.dataset.only !== kind; });
+  schema.fields.filter((f) => f.placeholderByKind).forEach((f) => { // 종류마다 다른 회색 예시 문장
+    const input = form.elements[f.key];
+    if (input) input.placeholder = f.placeholderByKind[kind] || f.placeholder || '';
+  });
   const more = form.querySelector('#moreBox');
   if (more) more.hidden = !more.querySelector('.field:not([hidden])');
 }
 
-// 여러 장(워치 캡처): 작은 그림들과 '빼기' 버튼
+// 여러 장(그림 사진): 작은 그림들과 '빼기' 버튼
 function updateShotsPreview() {
   const box = $('#imgPreviewBox');
   if (!box) return;
@@ -3289,13 +3241,13 @@ function openForm(type, existing, presetDate, preset) {
   const schema = SCHEMAS[type];
   ui.backToDay = dlg.open && dlg.querySelector('.day-list') ? ui.dayOpen : null;
   ui.backToArt = dlg.open && dlg.querySelector('.art-detail') ? ui.artOpen : null; // 그림 상세 창에서 "수정"을 눌렀다면 저장·취소 뒤 그 창으로 돌아가요
-  const rec = existing ? { ...existing } : { date: presetDate || todayStr(), ...(preset || {}) };
+  const rec = existing ? { ...(type === 'workout' ? workoutLiteCopy(existing) : existing) } : { date: presetDate || todayStr(), ...(preset || {}) }; // 아직 정리하지 않은 예전 운동 기록은 "한 줄"로 옮겨 담은 모습으로 열려요
   if (type === 'art') { rec.artKind = existing ? artKindOf(existing) : (rec.artKind || '크로키'); rec.images = existing ? artPhotos(existing) : []; }
   // 종류 칸이 없던 예전 바이올린 기록은 '연습'으로 봐요
   if (schema.kindKey && !rec[schema.kindKey]) rec[schema.kindKey] = schema.fields.find((f) => f.key === schema.kindKey).options[0];
   formImages = {};
   schema.fields.filter((f) => f.type === 'image' && !f.hidden).forEach((f) => { formImages[f.key] = rec[f.key] || null; });
-  formShots = type === 'art' ? [...rec.images] : (Array.isArray(rec.shots) ? [...rec.shots] : []);
+  formShots = type === 'art' ? [...rec.images] : [];
   staged = [];
   const valueFor = (f) => (f.type === 'audio' ? (existing ? existing.id : '') : f.type === 'multi' ? Object.fromEntries(f.keys.map((k) => [k, rec[k]])) : rec[f.key]);
   const base = schema.fields.filter((f) => !f.more && !f.legacy && !f.hidden);
@@ -3361,7 +3313,7 @@ async function attachImage(file, key = 'image') {
   }
 }
 
-// 입력 창에 워치 캡처 여러 장 붙이기 (SHOT_MAX장까지)
+// 입력 창에 그림 사진 여러 장 붙이기
 async function attachShots(files) {
   const err = $('#formError');
   const note = $('#imgNote');
@@ -3369,7 +3321,7 @@ async function attachShots(files) {
   if (!imgs.length) { if (err) err.textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return false; }
   const form = $('#recForm');
   const fld = form ? SCHEMAS[form.dataset.type].fields.find((f) => f.type === 'images') : null; // 사진을 넣는 칸 (운동: 워치 캡처 · 그림: 사진)
-  const max = (fld && fld.max) || SHOT_MAX;
+  const max = (fld && fld.max) || ART_MAX_PHOTOS;
   const room = max - formShots.length;
   if (room <= 0) { if (note) note.textContent = `사진은 한 기록에 ${max}장까지 넣을 수 있어요. 필요 없는 것은 '빼기'를 눌러 주세요.`; return false; }
   let added = 0;
@@ -3545,10 +3497,11 @@ async function backupPayload() {
 }
 
 // 백업 파일에서 쓸 수 있는 기록만 골라요 (형식이 다르면 null)
-function validRecords(payload) {
+function validRecords(payload, bump = false) {
   if (!payload || payload.app !== 'my-journal' || !Array.isArray(payload.records)) return null;
-  // 더 이상 쓰지 않는 종류(경제 공부 메모·투자 기록)와 칸 값은 불러올 때 조용히 버려요
-  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string').map(cleanedCopy);
+  // 더 이상 쓰지 않는 종류(경제 공부 메모·투자 기록)와 칸 값은 불러올 때 조용히 버려요.
+  // 🧘 운동의 없어진 칸도 같아요: 지우고, 예전 "몸이 어땠나 한 줄"·"달리며 든 생각 한 줄"은 "한 줄"로 옮겨요. (bump: 바뀐 기록은 바꾼 시각도 새로 적어요)
+  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string').map((r) => workoutLiteCopy(cleanedCopy(r), bump));
 }
 
 /* ---------------------------------------------------------------------
@@ -3591,6 +3544,73 @@ async function runUpdateCleanup() {
   await saveSettings();
   render();
   toast('정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000);
+}
+
+/* ---------------------------------------------------------------------
+   0-2. 🧘 운동 입력 단순화 정리 (한 번만): 요가·슬로조깅의 칩과 "✍ 더 적기" 칸이 없어졌어요.
+        없어진 칸의 값은 지우고, 예전 "몸이 어땠나 한 줄"·"달리며 든 생각 한 줄"은 "한 줄"(memo)로 옮겨요. (둘 다 있으면 " · "로 이어 붙여요)
+        정리하기 직전에 백업 파일을 내려받고 확인을 물어봐요. 바뀐 기록은 바꾼 시각을 새로 적어서 ☁ 다른 기기에도 반영돼요. 한 번 하고 나면 flag(workoutLiteV1)가 켜져요.
+        예전 백업 파일을 불러올 때, 그리고 ☁ 에서 받아 올 때도 같은 규칙을 써요(workoutLiteCopy).
+   --------------------------------------------------------------------- */
+const WORKOUT_GONE = {                                         // 운동 기록에서 없어진 칸 (저장 이름 → 화면에 있던 이름)
+  did: '주로 한 것(요가 칩)', weather: '날씨(슬로조깅 칩)',
+  relief: '시원했던 곳(요가 칩)', course: '따라 한 영상·수업', refs: '영상·수업 링크',
+  place: '장소', pace: '대화할 수 있는 속도였나(칩)',
+  shots: '워치 캡처', claude: '클로드 피드백(붙여 둔 글)', condition: '컨디션(예전 칸)',
+};
+const WORKOUT_TO_LINE = { bodyNote: '몸이 어땠나 한 줄', runThought: '달리며 든 생각 한 줄' }; // 이 두 칸은 지우기 전에 "한 줄"(memo)로 옮겨요
+const workoutDirtyKeys = (r) => (r && r.type === 'workout' ? [...Object.keys(WORKOUT_GONE), ...Object.keys(WORKOUT_TO_LINE)].filter((k) => k in r) : []);
+function workoutLiteCopy(r, bump = false) {
+  const keys = workoutDirtyKeys(r);
+  if (!keys.length) return r;
+  const c = { ...r };
+  const base = hasValue(r.memo) ? String(r.memo).trim() : '';
+  let line = base;
+  Object.keys(WORKOUT_TO_LINE).forEach((k) => { // 옮길 글: 원래 한 줄 + 몸이 어땠나 + 달리며 든 생각 (이미 같은 글이 들어 있으면 또 붙이지 않아요)
+    const v = hasValue(r[k]) ? String(r[k]).trim() : '';
+    if (v && !line.includes(v)) line = line ? `${line} · ${v}` : v;
+  });
+  if (line !== base) c.memo = line;
+  keys.forEach((k) => delete c[k]);
+  if (bump) c.updatedAt = Math.max(Date.now(), (r.updatedAt || 0) + 1);
+  return c;
+}
+// 지워지는 값이 얼마나 되는지 세요 (확인 창에 보여줘요)
+function workoutLiteCounts(list) {
+  const has = (r, k) => (k === 'shots' ? Array.isArray(r.shots) && r.shots.length > 0 : hasValue(r[k]));
+  const out = {};
+  Object.keys(WORKOUT_GONE).forEach((k) => { out[k] = list.filter((r) => has(r, k)).length; });
+  out.shotCount = list.reduce((n, r) => n + (Array.isArray(r.shots) ? r.shots.length : 0), 0);
+  out.linkCount = list.reduce((n, r) => n + String(r.refs || '').split(/\s+/).filter(Boolean).length, 0);
+  out.moved = list.filter((r) => Object.keys(WORKOUT_TO_LINE).some((k) => hasValue(r[k]))).length;
+  return out;
+}
+function workoutLiteMessage(c, name) {
+  const lines = Object.entries(WORKOUT_GONE).filter(([k]) => c[k]).map(([k, label]) => `· ${label}: ${c[k]}개${k === 'shots' ? ` (사진 ${c.shotCount}장)` : k === 'refs' ? ` (링크 ${c.linkCount}개)` : ''}`);
+  return `🧘 운동 기록 입력이 간단해졌어요. 요가·슬로조깅의 칩과 "더 적기" 칸에 적어 둔 값을 지웁니다.\n${lines.length ? `${lines.join('\n')}\n` : ''}${c.moved ? `\n"몸이 어땠나 한 줄"·"달리며 든 생각 한 줄" ${c.moved}개는 지우지 않고 "한 줄"로 옮겨요.\n` : ''}\n정리하기 전에 백업을 저장했어요. (백업 파일: ${name} — 다운로드 폴더를 확인해 주세요)`;
+}
+
+async function migrateWorkoutLite() {
+  if (settings.workoutLiteV1) return;
+  const dirty = records.filter((r) => workoutDirtyKeys(r).length);
+  const real = dirty.filter((r) => !r.sample);
+  const counts = workoutLiteCounts(real);
+  const valuable = Object.keys(WORKOUT_GONE).some((k) => counts[k]) || counts.moved; // 진짜 기록에 지워질 값이 들어 있을 때만 백업·확인을 해요 (예시 기록이나 빈 칸뿐이면 조용히 정리)
+  if (valuable) {
+    const name = `my-journal-backup-before-workout-lite-${todayStr().replace(/-/g, '')}.json`;
+    await downloadBackup(name); // 정리하기 직전에 전체 백업
+    if (!confirm(workoutLiteMessage(counts, name))) return; // 취소하면 아무것도 지우지 않고, 다음에 열 때 다시 물어봐요
+  }
+  if (dirty.length) {
+    const at = Date.now();
+    const next = dirty.map((r, i) => { const c = workoutLiteCopy(r); c.updatedAt = Math.max(at + i, (r.updatedAt || 0) + 1); return c; }); // 바꾼 시각을 새로 적어서 ☁ 다른 기기에도 반영돼요
+    await Store.putMany(next);
+    const byId = new Map(next.map((r) => [r.id, r]));
+    records = records.map((r) => byId.get(r.id) || r);
+  }
+  settings.workoutLiteV1 = true;
+  await saveSettings();
+  if (dirty.length) { render(); if (valuable) toast('운동 기록을 정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000); }
 }
 
 async function refreshAutosaveState() {
@@ -3813,7 +3833,7 @@ async function downloadBackup(filename) {
 async function importBackup(file) {
   try {
     const payload = JSON.parse(await file.text());
-    const good = validRecords(payload);
+    const good = validRecords(payload, true);
     if (!good) throw new Error('형식 오류');
     if (!good.length) throw new Error('가져올 기록이 없어요');
     const audioCount = Array.isArray(payload.audios) ? payload.audios.length : 0;
@@ -3891,12 +3911,6 @@ document.addEventListener('click', async (e) => {
       break;
     }
     case 'removeShot': formShots.splice(Number(el.dataset.i), 1); updateShotsPreview(); { const n = $('#imgNote'); if (n) n.textContent = ''; } break;
-    case 'zoomShot': {
-      const r = records.find((x) => x.id === id);
-      const src = r && Array.isArray(r.shots) ? r.shots[Number(el.dataset.i)] : null;
-      if (src) openDlg(`<img class="zoom-img" src="${esc(src)}" alt="워치 캡처"><p class="meta" style="text-align:center">${esc(dayLabel(r.date))} · ${esc(r.kind || '운동')} · 워치 캡처 ${Number(el.dataset.i) + 1}/${r.shots.length}</p><div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
-      break;
-    }
     case 'pick': { // 칩 버튼: 하나짜리는 다시 누르면 풀리고, 여러 개짜리는 눌러서 켜고 끄기
       const box = el.closest('.choice');
       const input = box.querySelector('input[type=hidden]');
@@ -4085,7 +4099,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, claudeBoxOpen: !!st.claudeBoxOpen };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, claudeBoxOpen: !!st.claudeBoxOpen };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -4140,10 +4154,12 @@ async function start() {
   window.__journalReady = true;
   document.dispatchEvent(new Event('journal:ready')); // ☁ 동기화(sync.js)가 이때부터 시작해요
   setTimeout(() => { // 화면이 먼저 보인 뒤에 물어봐요
-    runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ }).finally(() => {
-      window.__cleanupDone = true;
-      document.dispatchEvent(new Event('journal:cleanup-done')); // 정리 확인이 끝난 뒤에 첫 동기화를 해요
-    });
+    runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
+      .then(() => migrateWorkoutLite()).catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
+      .finally(() => {
+        window.__cleanupDone = true;
+        document.dispatchEvent(new Event('journal:cleanup-done')); // 정리 확인이 끝난 뒤에 첫 동기화를 해요
+      });
   }, 500);
 }
 

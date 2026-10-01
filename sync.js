@@ -308,6 +308,7 @@
     const out = [];
     const scan = (v) => { if (isRef(v)) out.push(v.$img); else if (Array.isArray(v)) v.forEach(scan); };
     imageFields(rec.type).forEach((f) => scan(rec[f.key]));
+    if (rec.type === 'workout') scan(rec.shots); // 없어진 "워치 캡처" 칸: 그 사진 파일도 더는 쓰이지 않으면 휴지통으로 가도록 참조를 계속 읽어요
     return out;
   };
   const refFileIds = (journal) => {
@@ -359,7 +360,7 @@
       else if (isRef(v)) jobs.push(imgLimit(() => downloadImage(v.$img)).then((u) => { out[f.key] = u; }));
     });
     await Promise.all(jobs);
-    return out;
+    return typeof workoutLiteCopy === 'function' ? workoutLiteCopy(out, true) : out; // 아직 업데이트하지 않은 기기가 올린 운동 기록의 없어진 칸은 받을 때 정리해요 (바뀐 기록은 바꾼 시각이 새로워져서 정리된 모습이 Drive에도 올라가요)
   }
 
   /* ---------------------------------------------------------------------
