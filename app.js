@@ -506,6 +506,23 @@ const AudioStore = {
   put(rec) { return this._tx('readwrite', (s) => { s.put(rec); }); },
   remove(ids) { return this._tx('readwrite', (s) => { ids.forEach((id) => s.delete(id)); }); },
   clear() { return this.ok() ? this._tx('readwrite', (s) => { s.clear(); }) : Promise.resolve(); },
+  // 한 줄을 읽고 고치는 일을 한 번에 해요. (☁ 동기화와 화면이 같은 녹음을 동시에 고쳐도 서로 덮어쓰지 않게요)
+  //   fn(옛 줄 또는 undefined) → 새 줄 / null 이면 지워요 / undefined 면 그대로 둬요. fn 은 바로 끝나는 함수여야 해요.
+  update(id, fn) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction('audio', 'readwrite');
+      const store = tx.objectStore('audio');
+      let result;
+      const req = store.get(id);
+      req.onsuccess = () => {
+        result = fn(req.result);
+        if (result === null) store.delete(id); else if (result !== undefined) store.put(result);
+      };
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('aborted'));
+    });
+  },
 };
 
 /* ---------------------------------------------------------------------
@@ -513,6 +530,8 @@ const AudioStore = {
    --------------------------------------------------------------------- */
 let records = [];   // 전체 기록 (메모리에 복사해 두고 화면에 사용)
 let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·메모만. 파일은 재생할 때 꺼내 와요)
+//   local: 이 기기에 파일이 있나 (☁ 로 다른 기기에서 정보만 받은 녹음은 false 예요) · rf: Drive에 올라간 파일의 id · updatedAt: 바꾼 시각
+let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
 // 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2)
 let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false };
@@ -1878,6 +1897,19 @@ const shiftMonth = (ym, n) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 };
 
+// 머리 줄 맨 앞의 [오늘] 버튼 (캘린더와 도장 모음판이 함께 써요). 항상 같은 자리에 있어요.
+// 이미 이번 달을 보고 있으면 흐리게 보이지만 눌러도 돼요. (누르면 반짝임만)
+const todayBtnHTML = (act, here) => `<button type="button" class="btn ghost small cal-today-btn${here ? ' dim' : ''}" data-act="${act}" title="${here ? '지금 이번 달이에요' : '이번 달로 가요'}" aria-label="오늘로 가기">오늘</button>`;
+// 움직임 줄이기 설정이면 반짝이지 않고 이동만 해요
+const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function flashEl(el) {
+  if (!el || reduceMotion()) return;
+  el.classList.remove('flash-today');
+  void el.offsetWidth; // 연달아 눌러도 다시 반짝이게
+  el.classList.add('flash-today');
+  setTimeout(() => el.classList.remove('flash-today'), 1100);
+}
+
 function renderCalendar() {
   const today = todayStr();
   if (!ui.calMonth) ui.calMonth = today.slice(0, 7);
@@ -1933,11 +1965,11 @@ function renderCalendar() {
     <h2 class="page-title">캘린더</h2>
     <p class="page-sub">${startYear}년부터 이어지는 달력이에요. 날짜를 누르면 그날의 기록을 보고, 기록을 더할 수 있어요.</p>
     <div class="cal-head">
+      ${todayBtnHTML('calToday', ui.calMonth === today.slice(0, 7))}
       <button type="button" class="btn ghost small" data-act="calShift" data-d="-1" ${ui.calMonth <= CALENDAR_START ? 'disabled' : ''}>◀ 이전 달</button>
-      <select class="search" data-cal="year" aria-label="연도" style="min-width:0">${yearOpts.join('')}</select>
-      <select class="search" data-cal="month" aria-label="월" style="min-width:0">${monthOpts}</select>
+      <span class="cal-pick"><select class="search" data-cal="year" aria-label="연도" style="min-width:0">${yearOpts.join('')}</select>
+      <select class="search" data-cal="month" aria-label="월" style="min-width:0">${monthOpts}</select></span>
       <button type="button" class="btn ghost small" data-act="calShift" data-d="1">다음 달 ▶</button>
-      ${ui.calMonth !== today.slice(0, 7) ? '<button type="button" class="btn ghost small" data-act="calToday">이번 달로</button>' : ''}
     </div>
     ${filled}
     <div class="chips">${CAL_CHIPS.map((c) => `<button type="button" class="chip ${ui.calHidden.has(c.id) ? '' : 'active'}" data-act="calCat" data-id="${c.id}" aria-pressed="${!ui.calHidden.has(c.id)}">${c.icon} ${esc(c.label)}</button>`).join('')}</div>
@@ -1996,7 +2028,8 @@ function openBoard(ym) {
   const list = records.filter((r) => r.date && r.date.slice(0, 7) === ym && catOf(r)).sort(byReceived);
   openDlg(`
     <h2>🎴 도장 모음판</h2>
-    <div class="row between board-nav">
+    <div class="row board-nav">
+      ${todayBtnHTML('boardToday', ym === todayStr().slice(0, 7))}
       <button type="button" class="btn ghost small" data-act="boardShift" data-d="-1" ${ym <= CALENDAR_START ? 'disabled' : ''}>◀ 이전 달</button>
       <strong>${y}년 ${m}월</strong>
       <button type="button" class="btn ghost small" data-act="boardShift" data-d="1">다음 달 ▶</button>
@@ -2492,14 +2525,49 @@ async function addRecording(piece, { file, date, memo, name, recId }) {
     if (!confirm(`'${piece}'에는 녹음이 ${AUDIO_MAX_PER_PIECE}개 있어요.\n가장 오래된 녹음(첫 녹음 제외)을 지우고 올릴까요?\n\n지워지는 녹음: ${what}`)) return false;
   }
   const mime = file.type && file.type.startsWith('audio/') ? file.type : (AUDIO_MIME_BY_EXT[extOf(file.name)] || 'audio/mpeg');
-  const meta = { id: newId(), piece, date: date || todayStr(), memo: memo || '', createdAt: Date.now(), size: file.size, mime, name: name || file.name || '', first: list.length === 0, recId: recId || '' };
+  const at = Date.now();
+  const meta = { id: newId(), piece, date: date || todayStr(), memo: memo || '', createdAt: at, updatedAt: at, size: file.size, mime, name: name || file.name || '', first: list.length === 0, recId: recId || '' };
   try {
     await AudioStore.put({ ...meta, blob: new Blob([file], { type: mime }) });
   } catch (e) { alert('녹음을 저장하지 못했어요. 저장 공간이 부족할 수 있어요.'); return false; }
-  audios.push(meta);
+  audios.push({ ...meta, local: true });
   if (victim) await dropAudio(victim.id);
   if (meta.first) scheduleAutosave();
+  if (window.Sync) window.Sync.notify(); // ☁ 로그인 상태면 Drive에도 올라가요 (파일을 먼저, 정보는 그 뒤에)
   return true;
+}
+
+/* ---- 녹음 저장소 ↔ 메모리 (☁ 동기화가 같이 써요) ---- */
+const isAudioTomb = (r) => !!(r && r.deletedAt);
+// 저장된 줄 → 화면용 정보. 파일은 빼고, 이 기기에 파일이 있는지만 local 로 알려요. (바꾼 시각이 없던 예전 녹음은 올린 시각으로 봐요)
+function audioInfo(row) { const { blob, ...meta } = row; meta.local = !!blob; if (!meta.updatedAt) meta.updatedAt = meta.createdAt || 0; return meta; }
+function loadAudioRows(rows) {
+  audioTombs = rows.filter(isAudioTomb);
+  audios = rows.filter((r) => !isAudioTomb(r)).map(audioInfo);
+}
+async function reloadAudios() { if (AudioStore.ok()) loadAudioRows(await AudioStore.all()); }
+// 바꾼 시각(updatedAt)이 없던 예전 녹음에 올린 시각을 한 번 적어 둬요 (☁ 동기화가 기준으로 써요)
+async function backfillAudioTimes(rows) {
+  for (const r of rows) {
+    if (isAudioTomb(r) || r.updatedAt) continue;
+    try { await AudioStore.update(r.id, (cur) => (cur && !cur.updatedAt ? { ...cur, updatedAt: cur.createdAt || Date.now() } : undefined)); } catch (e) { /* 괜찮아요. 이번 사용에는 올린 시각으로 봐요 */ }
+  }
+}
+
+// ☁ 동기화가 가져온 녹음 변경을 반영해요.
+//   put: 녹음 정보 줄 (파일이 없어도 돼요. 이 기기에 이미 있는 파일은 그대로 남겨요) · tombs: 삭제 표시 · drop: 흔적 없이 지울 id
+async function applyAudioChanges({ put = [], tombs = [], drop = [] }) {
+  if (!AudioStore.ok()) return;
+  for (const r of put) await AudioStore.update(r.id, (cur) => ({ ...(cur && !isAudioTomb(cur) ? cur : {}), ...r }));
+  for (const t of tombs) await AudioStore.update(t.id, () => ({ ...t })); // 같은 id 자리를 삭제 표시로 바꿔요 (파일도 함께 사라져요)
+  if (drop.length) await AudioStore.remove(drop);
+  const gone = new Set([...tombs.map((t) => t.id), ...drop]);
+  gone.forEach((id) => { if (cardPlayer.aid === id && cardPlayer.el) cardPlayer.el.pause(); audioB64.delete(id); });
+  const putMap = new Map(put.map((r) => [r.id, r]));
+  audios = audios.filter((a) => !gone.has(a.id)).map((a) => (putMap.has(a.id) ? { ...a, ...putMap.get(a.id) } : a))
+    .concat(put.filter((r) => !gone.has(r.id) && !audios.some((a) => a.id === r.id)).map((r) => ({ ...r, local: false })));
+  const ids = new Set([...putMap.keys(), ...gone]);
+  audioTombs = audioTombs.filter((t) => !ids.has(t.id)).concat(tombs);
 }
 
 // 고른 녹음들을 곡에 붙여요 (날짜가 이른 것부터. 곡의 첫 녹음이 되는 건 가장 먼저 저장된 것이에요)
@@ -2519,10 +2587,15 @@ async function dropAudio(id) {
   const a = audios.find((x) => x.id === id);
   if (!a) return;
   if (cardPlayer.aid === id && cardPlayer.el) cardPlayer.el.pause();
-  try { await AudioStore.remove([id]); } catch (e) { /* 이미 없어도 괜찮아요 */ }
+  // 파일은 지우고, 같은 id 자리에 작은 "삭제 표시"만 남겨요. (☁ 다른 기기가 "지운 것"과 "아직 못 받은 것"을 구분하게요. rf: Drive 파일을 휴지통으로 보내려고 기억해 둬요)
+  const at = Math.max(Date.now(), (a.updatedAt || 0) + 1);
+  const tomb = { id, piece: a.piece, deletedAt: at, updatedAt: at, rf: a.rf || '' };
+  try { await AudioStore.put(tomb); } catch (e) { try { await AudioStore.remove([id]); } catch (e2) { /* 이미 없어도 괜찮아요 */ } }
   audios = audios.filter((x) => x.id !== id);
+  audioTombs = [...audioTombs.filter((t) => t.id !== id), tomb];
   audioB64.delete(id);
   if (a.first) scheduleAutosave();
+  if (window.Sync) window.Sync.notify();
 }
 
 async function deleteRecording(id) {
@@ -2539,13 +2612,15 @@ async function deleteRecording(id) {
 async function saveAudioMemo(id, memo) {
   const a = audios.find((x) => x.id === id);
   if (!a || a.memo === memo) return;
+  const at = Math.max(Date.now(), (a.updatedAt || 0) + 1); // 바꾼 시각은 늘 앞으로만 가요 (☁ 동기화가 어느 쪽이 바뀌었나 알아보는 기준이에요)
   try {
-    const full = await AudioStore.get(id);
-    if (full) await AudioStore.put({ ...full, memo });
+    await AudioStore.update(id, (row) => (row ? { ...row, memo, updatedAt: at } : undefined));
   } catch (e) { return; }
-  a.memo = memo;
-  if (a.first) scheduleAutosave();
+  const cur = audios.find((x) => x.id === id) || a;
+  cur.memo = memo; cur.updatedAt = at;
+  if (cur.first) scheduleAutosave();
   toast('녹음 메모를 남겼어요.', 1800);
+  if (window.Sync) window.Sync.notify();
 }
 
 /* ---- 재생 (한 번에 하나만 재생돼요) ---- */
@@ -2591,6 +2666,8 @@ async function toggleCardPlay(aid) {
   }
   const el = cardPlayer.el;
   if (cardPlayer.aid === aid && !el.paused) { el.pause(); return; }
+  const info = audios.find((x) => x.id === aid);
+  if (info && !info.local && !(await fetchAudioFile(aid))) return; // 다른 기기에서 올린 녹음이면 Drive에서 먼저 받아요 (진행은 ☁ 표시로 보여요)
   let full = null;
   try { full = await AudioStore.get(aid); } catch (e) { /* 아래에서 알려줘요 */ }
   if (!full || !full.blob) { toast('녹음 파일을 찾을 수 없어요.'); return; }
@@ -2604,15 +2681,60 @@ async function toggleCardPlay(aid) {
 const recMarksHTML = (r) => audios.filter((a) => a.recId === r.id).sort(byOldest).map((a) => `<button type="button" class="rec-play" data-act="playRec" data-aid="${esc(a.id)}" title="녹음 듣기${a.memo ? ` · ${esc(a.memo)}` : ''}" aria-label="녹음 재생" aria-pressed="false">🎙</button>`).join('');
 
 /* ---- 녹음 목록 (곡 노트와 입력 창에서 같이 써요) ---- */
+// 재생 칸. 다른 기기에서 올려서 아직 이 기기에 파일이 없는 녹음은 "☁ 눌러서 받기" 버튼이에요 (받고 나면 재생 칸으로 바뀌어요)
+function audioPlayerHTML(a) {
+  return a.local
+    ? `<audio class="rec-player" controls preload="metadata" data-aid="${esc(a.id)}"></audio>`
+    : `<button type="button" class="btn ghost small rec-fetch" data-act="fetchAudio" data-aid="${esc(a.id)}">${esc(window.Sync ? window.Sync.fetchLabel(a) : '☁ Drive에 있어요')}</button>`;
+}
 function audioRowHTML(a) {
   return `<div class="rec-row" data-aid="${esc(a.id)}">
     <div class="rec-row-head">
       ${a.first ? '<span class="tag first-rec">🌱 첫 녹음</span>' : ''}<span class="rec-date">${esc(dayLabel(a.date))}</span>
       <input class="rec-memo" type="text" maxlength="120" data-audio-memo="${esc(a.id)}" value="${esc(a.memo)}" placeholder="메모 - 선택" aria-label="녹음 메모">
+      <span class="rec-cloud" data-aid="${esc(a.id)}">${esc(window.Sync ? window.Sync.audioBadge(a) : '')}</span>
+      <button type="button" class="btn ghost small" data-act="saveAudio" data-aid="${esc(a.id)}" title="녹음 파일을 이 컴퓨터(기기)에 저장해요">⬇ 파일로 저장</button>
       <button type="button" class="btn danger small" data-act="delAudio" data-aid="${esc(a.id)}">삭제</button>
     </div>
-    <audio class="rec-player" controls preload="metadata" data-aid="${esc(a.id)}"></audio>
+    ${audioPlayerHTML(a)}
   </div>`;
+}
+
+// 다른 기기에서 올린 녹음의 파일을 Drive에서 받아 이 기기에 보관해요. 이 기기에 파일이 있으면 true
+async function fetchAudioFile(aid) {
+  const a = audios.find((x) => x.id === aid);
+  if (!a) return false;
+  if (a.local) return true;
+  if (!window.Sync || !(await window.Sync.fetchAudio(aid))) return false;
+  const now = audios.find((x) => x.id === aid);
+  if (dlg.open) refreshAudioUI(); else render();
+  return !!(now && now.local);
+}
+
+// ⬇ 파일로 저장: 원래 파일 형식 그대로. 이름은 원래 파일 이름이 있으면 그것, 없으면 "곡이름_날짜.확장자"
+const AUDIO_EXT_BY_MIME = { 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/flac': 'flac', 'audio/amr': 'amr', 'audio/x-ms-wma': 'wma', 'audio/aiff': 'aiff', 'audio/x-caf': 'caf', 'audio/3gpp': '3gp' };
+function audioFileName(a) {
+  const clean = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim();
+  const ext = extOf(a.name) || AUDIO_EXT_BY_MIME[a.mime] || 'm4a';
+  if (a.name && clean(a.name)) return extOf(a.name) ? clean(a.name) : `${clean(a.name)}.${ext}`;
+  return `${clean(a.piece) || '녹음'}_${a.date || todayStr()}.${ext}`;
+}
+async function saveAudioFile(aid) {
+  const a = audios.find((x) => x.id === aid);
+  if (!a) return;
+  if (!a.local && !(await fetchAudioFile(aid))) return; // 다른 기기에서 올린 것이면 Drive에서 받은 다음 저장해요
+  let full = null;
+  try { full = await AudioStore.get(aid); } catch (e) { /* 아래에서 알려줘요 */ }
+  if (!full || !full.blob) { toast('녹음 파일을 찾을 수 없어요.'); return; }
+  const name = audioFileName(audios.find((x) => x.id === aid) || a);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(full.blob);
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  toast(`⬇ "${name}" 파일로 저장했어요. (다운로드 폴더를 확인해 주세요)`, 4000);
 }
 
 // 처음 vs 지금: 첫 녹음(없으면 가장 오래된 것)과 가장 최근 녹음을 나란히
@@ -2621,7 +2743,7 @@ function audioPairHTML(list) {
   const start = list.find((a) => a.first) || list[0];
   const now = list.filter((a) => a.id !== start.id).pop();
   const col = (title, a) => `<div class="rec-pair-col"><div class="label" style="margin-top:0">${title} <span class="meta">${esc(dayLabel(a.date))}${a.memo ? ` · ${esc(a.memo)}` : ''}</span></div>
-    <audio class="rec-player" controls preload="metadata" data-aid="${esc(a.id)}"></audio></div>`;
+    ${audioPlayerHTML(a)}</div>`;
   return `<div class="rec-pair"><div class="label" style="margin:0 0 6px">처음 vs 지금</div><div class="rec-pair-cols">${col(start.first ? '🌱 처음 (첫 녹음)' : '처음', start)}${col('지금', now)}</div></div>`;
 }
 
@@ -2682,16 +2804,22 @@ async function importAudios(payload) {
   let added = 0;
   for (const a of list) {
     try {
-      if (!a || typeof a.id !== 'string' || typeof a.data !== 'string' || !pieceKey(a.piece) || audios.some((x) => x.id === a.id)) continue;
+      if (!a || typeof a.id !== 'string' || typeof a.data !== 'string' || !pieceKey(a.piece)) continue;
+      const mine = audios.find((x) => x.id === a.id);
+      if (mine && mine.local) continue; // 이 기기에 이미 있는 녹음은 그대로 둬요
       const have = audiosOf(a.piece);
-      if (have.length >= AUDIO_MAX_PER_PIECE) continue;
+      if (!mine && have.length >= AUDIO_MAX_PER_PIECE) continue;
       const blob = await (await fetch(a.data)).blob();
-      const meta = { id: a.id, piece: pieceKey(a.piece), date: typeof a.date === 'string' ? a.date : todayStr(), memo: typeof a.memo === 'string' ? a.memo : '', createdAt: Number(a.createdAt) || Date.now(), size: blob.size, mime: typeof a.mime === 'string' && a.mime ? a.mime : blob.type || 'audio/mpeg', name: typeof a.name === 'string' ? a.name : '', first: !!a.first && !have.some((x) => x.first), recId: typeof a.recId === 'string' ? a.recId : '' };
+      const gone = audioTombs.find((t) => t.id === a.id); // 지웠던 녹음을 백업에서 되살리는 경우는 "새로 고친 것"으로 봐요 (☁ 동기화에서 삭제가 다시 덮어쓰지 않게)
+      const at = Math.max(Date.now(), gone ? gone.updatedAt + 1 : 0, mine ? mine.updatedAt + 1 : 0);
+      const meta = { id: a.id, piece: pieceKey(a.piece), date: typeof a.date === 'string' ? a.date : todayStr(), memo: typeof a.memo === 'string' ? a.memo : '', createdAt: Number(a.createdAt) || Date.now(), updatedAt: at, size: blob.size, mime: typeof a.mime === 'string' && a.mime ? a.mime : blob.type || 'audio/mpeg', name: typeof a.name === 'string' ? a.name : '', first: !!a.first && !have.some((x) => x.first && x.id !== a.id), recId: typeof a.recId === 'string' ? a.recId : '', ...(mine && mine.rf ? { rf: mine.rf } : {}) };
       await AudioStore.put({ ...meta, blob: new Blob([blob], { type: meta.mime }) });
-      audios.push(meta);
+      audios = audios.filter((x) => x.id !== a.id).concat({ ...meta, local: true });
+      audioTombs = audioTombs.filter((t) => t.id !== a.id);
       added += 1;
     } catch (e) { /* 이 녹음만 건너뛰어요 */ }
   }
+  if (added && window.Sync) window.Sync.notify();
   return added;
 }
 
@@ -3751,9 +3879,9 @@ function openSettings() {
       </div>
       <div class="card" style="margin:0">
         <h3>🎙 녹음</h3>
-        ${AudioStore.ok() ? `<p class="meta">녹음은 곡마다 첫 녹음만 백업돼요. 나머지는 이 브라우저에만 저장돼서, 사이트 데이터를 지우면 사라져요.</p>
+        ${AudioStore.ok() ? `<p class="meta">백업 파일에는 곡마다 첫 녹음만 들어가요. ${window.Sync && Sync.isEnabled() ? '☁ 동기화를 켜 두어서 <b>녹음도 Drive에 올라가요.</b> (백업 파일과는 별개예요)' : '나머지는 이 브라우저에만 저장돼서, 사이트 데이터를 지우면 사라져요. (☁ 동기화를 켜면 녹음도 Drive에 올라가요)'}</p>
         <label class="meta"><input type="checkbox" data-act="audioSkip" ${settings.audioSkip ? 'checked' : ''}> 녹음은 백업에서 빼기 <span class="hint">(켜면 첫 녹음도 백업 파일·자동 저장 파일에 넣지 않아요)</span></label>
-        <p class="meta audio-size" style="margin:8px 0 0">저장된 녹음 ${esc(fmtMB(audios.reduce((n, a) => n + (a.size || 0), 0)))}</p>` : '<p class="meta">이 브라우저에서는 녹음을 저장할 수 없어요. 크롬에서 열어 주세요.</p>'}
+        <p class="meta audio-size" style="margin:8px 0 0">이 기기에 저장된 녹음 ${esc(fmtMB(audios.filter((a) => a.local).reduce((n, a) => n + (a.size || 0), 0)))}</p>` : '<p class="meta">이 브라우저에서는 녹음을 저장할 수 없어요. 크롬에서 열어 주세요.</p>'}
       </div>
       <div class="card" style="margin:0">
         <h3>🍂 계절 장식</h3>
@@ -3849,7 +3977,14 @@ document.addEventListener('click', async (e) => {
     case 'calDay': openDay(el.dataset.date); break;
     case 'addOn': openForm(type, undefined, el.dataset.date); break;
     case 'calShift': ui.calMonth = shiftMonth(ui.calMonth, Number(el.dataset.d)); render(); break;
-    case 'calToday': ui.calMonth = todayStr().slice(0, 7); render(); break;
+    case 'calToday': { // 이번 달로 가고, 오늘 칸을 한 번 반짝여요 (이미 이번 달이면 반짝임만)
+      ui.calMonth = todayStr().slice(0, 7);
+      render();
+      const cell = $('.cal-cell.today');
+      if (cell) { try { cell.scrollIntoView({ block: 'nearest' }); } catch (err) { /* 괜찮아요 */ } flashEl(cell); }
+      break;
+    }
+    case 'boardToday': openBoard(todayStr().slice(0, 7)); flashEl(dlg.querySelector('.board-nav strong')); break;
     case 'calCat':
       if (ui.calHidden.has(id)) ui.calHidden.delete(id); else ui.calHidden.add(id);
       render();
@@ -3926,6 +4061,8 @@ document.addEventListener('click', async (e) => {
     case 'bookHide': await hideBook(Number(el.dataset.i), true); break;
     case 'bookShow': await hideBook(Number(el.dataset.i), false); break;
     case 'delAudio': await deleteRecording(el.dataset.aid); break;
+    case 'saveAudio': await saveAudioFile(el.dataset.aid); break;
+    case 'fetchAudio': await fetchAudioFile(el.dataset.aid); break;
     case 'unstage': staged = staged.filter((x) => x.sid !== el.dataset.sid); renderStaged(); break;
     case 'uploadStaged': {
       const box = dlg.querySelector('#pieceAudio');
@@ -3978,7 +4115,14 @@ document.addEventListener('click', async (e) => {
         await Store.remove(records.filter((r) => !isSyncedRecord(r)).map((r) => r.id));
         tombstones = [...tombstones.filter((t) => !tombs.some((x) => x.id === t.id)), ...tombs];
         records = [];
-        if (audios.length) { try { await AudioStore.clear(); } catch (err) { /* 괜찮아요 */ } audios = []; audioB64.clear(); }
+        if (audios.length || audioTombs.length) { // 녹음도 지워요. 지운 흔적은 남겨서 ☁ 다른 기기와 Drive도 따라 지워요 (Drive 파일은 휴지통으로 가요)
+          const at = Date.now();
+          const atombs = audios.map((a, i) => ({ id: a.id, piece: a.piece, deletedAt: at + i, updatedAt: Math.max(at + i, (a.updatedAt || 0) + 1), rf: a.rf || '' }));
+          try { await AudioStore.clear(); for (const t of atombs) await AudioStore.put(t); } catch (err) { /* 괜찮아요 */ }
+          audioTombs = [...audioTombs.filter((t) => !atombs.some((x) => x.id === t.id)), ...atombs];
+          audios = []; audioB64.clear();
+          if (window.Sync) window.Sync.notify();
+        }
         closeDlg(); render();
       }
       break;
@@ -4088,7 +4232,9 @@ async function start() {
   await Store.init();
   records = await loadRecords();
   await AudioStore.init();
-  audios = (await AudioStore.all()).map(({ blob, ...meta }) => meta); // 녹음 파일은 재생할 때만 꺼내 와요
+  const audioRows = await AudioStore.all();
+  loadAudioRows(audioRows); // 녹음 파일은 재생할 때만 꺼내 와요 (여기서는 정보만 메모리에 둬요)
+  backfillAudioTimes(audioRows);
   await refreshAutosaveState();
   if (!seeded && records.length === 0) {
     const samples = buildSamples();
