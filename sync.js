@@ -8,7 +8,8 @@
    - Drive에 생기는 것 (내 드라이브 → "나의 기록장 (동기화)" 폴더)
        journal.json                        기록 글 전체 + 삭제 표시 + 동기화 정보 (이미지 데이터는 없어요)
        img-<기록id>-<칸>-<번호>-<해시>.jpg  그림·원본·워치 캡처 한 장에 파일 하나
-       audio-<녹음id>.<확장자>              🎙 녹음 한 개에 파일 하나 (녹음 정보는 journal.json 의 audios · 삭제 표시는 atombs)
+       바이올린 녹음/<곡 이름>/<날짜> <곡 이름>.<확장자>   🎙 녹음 한 개에 파일 하나 (녹음 정보는 journal.json 의 audios · 삭제 표시는 atombs)
+                                           예전 audio-<녹음id>.<확장자> 는 정리하기를 고르면 곡별 폴더로 옮겨요. 사이트는 늘 파일 id 로 찾아요.
    - 합치는 규칙: 두 기기의 시계를 견주지 않고, 각 기기가 "마지막 동기화 때의 나"(base)와만 비교해서 바뀌었는지 알아봐요.
    - 녹음: 파일을 먼저 올리고(큰 파일은 이어 올리기) 녹음 정보는 그 뒤에 journal.json 으로 올려요. 다른 기기에서는 정보만 먼저 받고,
      ▶ 재생·⬇ 파일로 저장을 누를 때 파일을 내려받아요.
@@ -68,6 +69,9 @@
     audioProg: {},          // 지금 올리는 녹음 id → { sent, total }
     audioDl: new Map(),     // 지금 받는 녹음 id → { pct, promise }
     audioIdx: null,         // 이번 동기화에서 본 Drive의 녹음 파일 목록 (audio id → 파일)
+    aroot: null, sfold: new Map(), nameCache: new Map(), // 이번 동기화에서 알아낸 "바이올린 녹음" 폴더 · 곡 폴더 · 폴더 안의 파일 이름들
+    legacy: null,           // 예전 audio-… 파일(동기화 폴더 바로 아래)을 본 결과 { ids: [녹음 id], n }
+    organizeNow: false, legacyScan: false,
     audioErr: null,         // 이번 동기화에서 올리지 못한 녹음의 이유 (다른 기록의 동기화는 막지 않아요)
   };
 
@@ -102,6 +106,8 @@
     abase: {},      // 녹음용 base (기록의 base 와 같은 모양이에요)
     up: {},         // 이어 올리는 중인 녹음 id → { uri, size, offset, folderId, at } (끊겨도 다음에 이어서 올려요)
     audioAsked: false, audioHold: [], // 기존 녹음을 올릴지 물어봤나 / "나중에"로 미뤄 둔 녹음 id
+    arootId: '',      // Drive의 "바이올린 녹음" 폴더 id
+    aorgAsked: false, aorg: '', alegacy: 0, // 예전 audio-… 파일을 곡별 폴더로 정리할지 물어봤나 / 'yes' 정리하기 · 'later' 나중에 / 마지막으로 본 예전 파일 개수
     wifiOnly: false,  // 와이파이에서만 녹음 올리기 (이 기기만의 설정)
     last: null,     // 로그아웃할 때 남겨 두는 마지막 동기화 정보 (같은 계정으로 다시 로그인하면 이어서 써요. 비밀 값은 없어요)
   });
@@ -234,7 +240,7 @@
         const f = await drive(`/files/${S.meta.folderId}`, { params: { fields: 'id,trashed' } });
         if (f && !f.trashed) return f.id;
       } catch (e) { if (e.kind !== 'notfound') throw e; }
-      S.meta.folderId = ''; S.meta.journalId = ''; S.meta.remoteVersion = ''; S.remote = { version: '', journal: null };
+      S.meta.folderId = ''; S.meta.journalId = ''; S.meta.remoteVersion = ''; S.meta.arootId = ''; S.remote = { version: '', journal: null };
     }
     const found = await findFolder();
     if (found) { S.meta.folderId = found.id; return found.id; }
@@ -258,7 +264,7 @@
     const mp = multipart(existingId ? {} : { name: JOURNAL_NAME, parents: [folderId], mimeType: 'application/json' }, new Blob([JSON.stringify(obj)], { type: 'application/json' }), 'application/json');
     return drive(existingId ? `/files/${existingId}` : '/files', { method: existingId ? 'PATCH' : 'POST', upload: true, params: { uploadType: 'multipart', fields: 'id,version,modifiedTime' }, body: mp.body, contentType: mp.contentType });
   }
-  const trashFile = (fid) => drive(`/files/${fid}`, { method: 'PATCH', json: { trashed: true }, params: { fields: 'id' } }); // 휴지통으로 (30일 안에 되살릴 수 있어요)
+  const trashFile = (fid) => drive(`/files/${fid}`, { method: 'PATCH', json: { trashed: true }, params: { fields: 'id,parents' } }); // 휴지통으로 (30일 안에 되살릴 수 있어요). 어느 폴더에 있었는지도 돌려줘요
 
   /* ---------------------------------------------------------------------
      4. 기록 ↔ Drive 형태 바꾸기 (이미지는 파일로 따로)
@@ -402,15 +408,90 @@
     renderChip();
   }
   const audioExt = (a) => extOf(a.name) || (typeof AUDIO_EXT_BY_MIME !== 'undefined' && AUDIO_EXT_BY_MIME[a.mime]) || 'm4a';
-  const audioDriveName = (a) => `audio-${a.id}.${audioExt(a)}`;
+  /* 🎙 Drive 안의 위치: 동기화 폴더 / 바이올린 녹음 / <곡 이름> / <날짜> <곡 이름>.<확장자>  (같은 날 같은 곡이 여럿이면 " (2)", " (3)")
+       곡 이름이 없으면 폴더 "곡 미정", 파일 "<날짜> 녹음". 파일 이름에 쓸 수 없는 문자(/ \ : 등)는 "-" 로 바꿔요.
+       사이트는 파일 이름이 아니라 파일 id 로 찾아서, Drive에서 이름을 바꾸거나 폴더 안에서 옮겨도 깨지지 않아요. */
+  const AUDIO_ROOT = '바이올린 녹음';
+  const NO_PIECE_FOLDER = '곡 미정';
+  const FOLDER_MIME = 'application/vnd.google-apps.folder';
+  const safeName = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().replace(/^\.+|\.+$/g, '').trim().slice(0, 100).trim();
+  const audioFolderName = (a) => safeName(pieceKey(a.piece)) || NO_PIECE_FOLDER;
+  const audioBaseName = (a) => `${a.date || ''} ${safeName(pieceKey(a.piece)) || '녹음'}`.trim();
+  const placeKey = (a) => `${a.date || ''}|${pieceKey(a.piece)}`; // 마지막으로 Drive에 맞춰 둔 곡·날짜 (a.pl). 곡이나 날짜가 바뀌면 달라져서 파일을 옮기고 이름을 바꿔요
+  const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const audioLegacyName = (a) => `audio-${a.id}.${audioExt(a)}`; // 예전 이름 (시험·안내용)
 
-  // Drive 폴더에 이미 올라가 있는 녹음 파일들 (같은 녹음을 두 번 올리지 않으려고 이번 동기화에서 한 번만 봐요)
+  async function findChildFolder(parentId, name) {
+    const r = await drive('/files', { params: { q: `name='${qEsc(name)}' and '${qEsc(parentId)}' in parents and mimeType='${FOLDER_MIME}' and trashed=false`, fields: 'files(id,name,createdTime)', orderBy: 'createdTime', pageSize: '10' } });
+    return (r.files || [])[0] || null;
+  }
+  const createChildFolder = (parentId, name) => drive('/files', { method: 'POST', json: { name, mimeType: FOLDER_MIME, parents: [parentId] }, params: { fields: 'id,name' } });
+  // "바이올린 녹음" 폴더 (동기화 폴더 안). 없으면 만들어요
+  async function ensureAudioRoot(folderId) {
+    if (S.aroot) return S.aroot;
+    if (S.meta.arootId) {
+      try { const f = await drive(`/files/${S.meta.arootId}`, { params: { fields: 'id,trashed' } }); if (f && !f.trashed) { S.aroot = f.id; return f.id; } } catch (e) { if (e.kind !== 'notfound') throw e; }
+      S.meta.arootId = '';
+    }
+    const found = await findChildFolder(folderId, AUDIO_ROOT) || await createChildFolder(folderId, AUDIO_ROOT);
+    S.meta.arootId = found.id; S.aroot = found.id;
+    return found.id;
+  }
+  // 곡 폴더 (이번 동기화 동안 기억해 둬요)
+  async function ensureSongFolder(rootId, name) {
+    if (S.sfold.has(name)) return S.sfold.get(name);
+    const found = await findChildFolder(rootId, name) || await createChildFolder(rootId, name);
+    S.sfold.set(name, found.id);
+    return found.id;
+  }
+  // 폴더 안의 파일 이름들 (같은 이름이 있으면 " (2)" 를 붙이려고요)
+  async function folderNames(folderId) {
+    if (S.nameCache.has(folderId)) return S.nameCache.get(folderId);
+    const names = new Map(); let pageToken;
+    do {
+      const r = await drive('/files', { params: { q: `'${qEsc(folderId)}' in parents and trashed=false`, fields: 'nextPageToken,files(id,name)', pageSize: '1000', pageToken } });
+      (r.files || []).forEach((f) => names.set(String(f.name).toLowerCase(), f.id));
+      pageToken = r.nextPageToken;
+    } while (pageToken);
+    S.nameCache.set(folderId, names);
+    return names;
+  }
+  async function uniqueAudioName(folderId, base, ext, selfId) {
+    const names = await folderNames(folderId);
+    const free = (n) => { const id = names.get(n.toLowerCase()); return !id || id === selfId; };
+    let name = `${base}.${ext}`;
+    for (let n = 2; !free(name) && n < 500; n += 1) name = `${base} (${n}).${ext}`;
+    return name;
+  }
+  const rememberName = (folderId, name, id) => { const m = S.nameCache.get(folderId); if (m) { for (const [k, v] of m) if (v === id) m.delete(k); m.set(String(name).toLowerCase(), id); } };
+  // 새 녹음이 들어갈 곳: { parent: 곡 폴더, name }
+  async function audioTarget(a, syncFolderId) {
+    const root = await ensureAudioRoot(syncFolderId);
+    const parent = await ensureSongFolder(root, audioFolderName(a));
+    return { parent, name: await uniqueAudioName(parent, audioBaseName(a), audioExt(a), ''), root };
+  }
+  // 곡 폴더가 비었으면 지워요 (휴지통으로). "바이올린 녹음" 아래의 폴더만 건드려요
+  async function cleanEmptySongFolder(parentId, syncFolderId) {
+    if (!parentId || parentId === syncFolderId || parentId === S.meta.arootId) return;
+    try {
+      const f = await drive(`/files/${parentId}`, { params: { fields: 'id,name,mimeType,parents,trashed' } });
+      if (!f || f.trashed || f.mimeType !== FOLDER_MIME || !S.meta.arootId || (f.parents || [])[0] !== S.meta.arootId) return;
+      const r = await drive('/files', { params: { q: `'${qEsc(parentId)}' in parents and trashed=false`, fields: 'files(id)', pageSize: '1' } });
+      if ((r.files || []).length) return;
+      await trashFile(parentId);
+      for (const [k, v] of [...S.sfold]) if (v === parentId) S.sfold.delete(k);
+      S.nameCache.delete(parentId);
+    } catch (e) { if (e.kind === 'auth' || e.kind === 'offline') throw e; /* 폴더 정리는 못 해도 괜찮아요 */ }
+  }
+
+  // Drive에 이미 올라가 있는 녹음 파일들 (같은 녹음을 두 번 올리지 않으려고 이번 동기화에서 한 번만 봐요).
+  //   곡 폴더 안으로 옮겨져 있어도 찾을 수 있게 appProperties 로 찾고, 이 동기화 폴더의 것만 골라요 (예전 파일은 폴더 바로 아래, 새 파일은 sf 표시)
   async function listRemoteAudio(folderId) {
     if (S.audioIdx) return S.audioIdx;
     const idx = new Map(); let pageToken;
     do {
-      const r = await drive('/files', { params: { q: `'${qEsc(folderId)}' in parents and appProperties has { key='kind' and value='audio' } and trashed=false`, fields: 'nextPageToken,files(id,size,appProperties)', pageSize: '1000', pageToken } });
-      (r.files || []).forEach((f) => { const aid = f.appProperties && f.appProperties.aid; if (aid) idx.set(aid, f); });
+      const r = await drive('/files', { params: { q: `appProperties has { key='kind' and value='audio' } and trashed=false`, fields: 'nextPageToken,files(id,name,size,parents,appProperties)', pageSize: '1000', pageToken } });
+      (r.files || []).forEach((f) => { const ap = f.appProperties || {}; if (ap.aid && ((f.parents || []).includes(folderId) || ap.sf === folderId)) idx.set(ap.aid, f); });
       pageToken = r.nextPageToken;
     } while (pageToken);
     S.audioIdx = idx;
@@ -483,20 +564,23 @@
     }
     throw new SyncError('server', '녹음을 올리지 못했어요');
   }
-  // 녹음 파일 하나를 Drive에 올려요 (이미 올라가 있으면 다시 올리지 않아요). 올라간 파일의 id 를 돌려줘요. 이 기기에 파일이 없으면 ''
+  // 녹음 파일 하나를 Drive의 곡 폴더에 올려요 (이미 올라가 있으면 다시 올리지 않아요). { id, placed } 를 돌려줘요. 이 기기에 파일이 없으면 id 는 ''
+  //   placed: 곡 폴더 안에 있어요 (예전처럼 동기화 폴더 바로 아래의 audio-… 파일이면 false)
   async function ensureAudioUploaded(a, folderId) {
     const idx = await listRemoteAudio(folderId);
     const found = idx.get(a.id);
-    if (found && Number(found.size) === a.size) return found.id;
+    if (found && Number(found.size) === a.size) return { id: found.id, placed: !(found.parents || []).includes(folderId) };
     const full = await AudioStore.get(a.id);
-    if (!full || !full.blob) return '';
+    if (!full || !full.blob) return { id: '', placed: false };
     const blob = full.blob;
-    const meta = { name: audioDriveName(a), parents: [folderId], mimeType: a.mime, appProperties: { kind: 'audio', aid: a.id } };
+    const loc = await audioTarget(a, folderId);
+    const meta = { name: loc.name, parents: [loc.parent], mimeType: a.mime, appProperties: { kind: 'audio', aid: a.id, sf: folderId } };
     audioProgress(a, 0, blob.size);
     try {
       const f = blob.size <= AUDIO_ONE_SHOT ? await verifyUploaded(await uploadAudioOnce(meta, blob), blob.size) : await uploadAudioResumable(a, meta, blob);
-      idx.set(a.id, f);
-      return f.id;
+      idx.set(a.id, { ...f, parents: [loc.parent], appProperties: meta.appProperties });
+      rememberName(loc.parent, loc.name, f.id);
+      return { id: f.id, placed: true };
     } finally { delete S.audioProg[a.id]; renderChip(); }
   }
   // 올릴 녹음 파일들을 먼저 올려요 (녹음 정보는 그 뒤에 journal.json 으로 올라가요). 미뤄 둔 것·와이파이를 기다리는 것은 이번에 올리지 않아요.
@@ -510,16 +594,78 @@
       S.progress = { label: AUDIO_PROG, i: n, n: todo.filter((x) => !(audioHeld(x.L) || wifiBlocked() || !x.L.local)).length, pct: 0, audio: true };
       renderChip();
       try {
-        const rf = await ensureAudioUploaded(a, folderId);
+        const up = await ensureAudioUploaded(a, folderId);
+        const rf = up.id;
         if (!rf) { it.act = 'skip'; it.deferred = true; continue; }
-        await AudioStore.update(a.id, (row) => (row && !isAudioTomb(row) ? { ...row, rf } : undefined));
-        a.rf = rf;
+        const pl = up.placed ? placeKey(a) : '';
+        await AudioStore.update(a.id, (row) => (row && !isAudioTomb(row) ? { ...row, rf, ...(pl ? { pl } : {}) } : undefined));
+        a.rf = rf; if (pl) a.pl = pl;
       } catch (e) {
         if (!(e instanceof SyncError) || ['offline', 'auth', 'gis'].includes(e.kind)) throw e; // 인터넷·로그인 문제는 처음부터 다시
         it.act = 'skip'; it.failed = true; S.audioErr = S.audioErr || e; // 이 녹음만 못 올렸어요. 다른 기록의 동기화는 계속해요 (이 기기의 녹음은 그대로예요)
       }
     }
     S.progress = null;
+  }
+
+  // 녹음 파일 하나를 Drive 안에서 곡 폴더로 옮기고 이름을 "날짜 곡 이름"으로 바꿔요 (파일은 다시 올리지 않아요). 맞췄으면 true
+  //   이미 같은 곡 폴더 안에 있고 이름이 "날짜 곡 이름" 모양이면 그대로 둬요 (사용자가 Drive에서 바꾼 이름·위치는 곡이나 날짜가 바뀔 때만 다시 맞춰요)
+  async function placeAudio(a, fileId, syncFolderId) {
+    let cur;
+    try { cur = await drive(`/files/${fileId}`, { params: { fields: 'id,name,parents,trashed' } }); } catch (e) { if (e.kind === 'notfound') return false; throw e; }
+    if (!cur || cur.trashed) return false;
+    const root = await ensureAudioRoot(syncFolderId);
+    const parent = await ensureSongFolder(root, audioFolderName(a));
+    const ext = audioExt(a); const base = audioBaseName(a);
+    const oldParents = cur.parents || [];
+    const sameFolder = oldParents.length === 1 && oldParents[0] === parent;
+    const nameOk = new RegExp(`^${escRe(base)}( \\(\\d+\\))?\\.${escRe(ext)}$`, 'i').test(cur.name || '');
+    if (sameFolder && nameOk) return true;
+    const name = await uniqueAudioName(parent, base, ext, fileId);
+    const params = { fields: 'id,name,parents' };
+    if (!sameFolder) { params.addParents = parent; if (oldParents.length) params.removeParents = oldParents.join(','); }
+    await drive(`/files/${fileId}`, { method: 'PATCH', params, json: { name, appProperties: { kind: 'audio', aid: a.id, sf: syncFolderId } } });
+    rememberName(parent, name, fileId);
+    if (!sameFolder) for (const old of oldParents) await cleanEmptySongFolder(old, syncFolderId); // 비어 버린 곡 폴더는 지워요
+    return true;
+  }
+
+  // 곡이나 날짜가 바뀐 녹음은 Drive 안에서 옮기고 이름을 바꿔요. 정리하기를 골랐다면 예전 audio-… 파일도 곡별 폴더로 옮겨요.
+  //   (처음에는 예전 파일이 몇 개인지만 세어서 물어봐요. 인터넷·로그인 문제가 아닌 실패는 이 녹음만 건너뛰고 다음에 다시 해요)
+  async function organizeAudio(folderId) {
+    if (!AudioStore.ok()) return;
+    const changed = audios.filter((a) => a.rf && a.pl && a.pl !== placeKey(a));
+    const wantMove = S.meta.aorg === 'yes' && (S.organizeNow || S.legacyScan);
+    const wantCount = !S.meta.aorgAsked;
+    let legacy = [];
+    if (changed.length || wantMove || wantCount) {
+      try {
+        if (wantMove || wantCount) {
+          const idx = await listRemoteAudio(folderId);
+          legacy = [...idx.entries()].filter(([aid, f]) => (f.parents || []).includes(folderId) && audios.some((x) => x.id === aid && x.rf === f.id)).map(([aid, f]) => ({ a: audios.find((x) => x.id === aid), f }));
+          S.legacy = { ids: legacy.map((x) => x.a.id), n: legacy.length };
+        }
+        const todo = [...changed.map((a) => ({ a, f: { id: a.rf } })), ...(wantMove ? legacy : [])];
+        let i = 0;
+        for (const { a, f } of todo) {
+          i += 1;
+          S.progress = { label: '녹음 정리하는 중', i, n: todo.length };
+          renderChip();
+          try {
+            if (await placeAudio(a, f.id, folderId)) {
+              const pl = placeKey(a);
+              await AudioStore.update(a.id, (row) => (row && !isAudioTomb(row) ? { ...row, pl } : undefined));
+              a.pl = pl;
+            }
+          } catch (e) {
+            if (!(e instanceof SyncError) || ['offline', 'auth', 'gis'].includes(e.kind)) throw e;
+            S.audioErr = S.audioErr || e;
+          }
+        }
+        if (wantMove) { S.meta.alegacy = 0; S.organizeNow = false; S.legacyScan = false; }
+        else if (wantCount) S.meta.alegacy = S.legacy.n;
+      } finally { S.progress = null; }
+    }
   }
 
   // Drive에서 녹음 파일을 받아 Blob 으로 (진행은 onPct 로 알려요)
@@ -727,6 +873,7 @@
       if (n && n !== S.conflictsSeen && typeof toast === 'function') toast(`☁ 충돌 ${n}개가 있어요. 위쪽 ☁ 를 눌러 확인해 주세요.`, 6000);
       S.conflictsSeen = n;
       setTimeout(maybeAskAudio, 50); // 이번 동기화가 끝난 뒤에
+      setTimeout(maybeAskOrganize, 120);
     } catch (e) {
       S.progress = null;
       handleError(e);
@@ -785,7 +932,7 @@
       if (found) { jm = found; S.meta.journalId = found.id; }
     }
     if (!jm && S.meta.firstDone && !S.createMissing) throw new SyncError('missing');
-    S.audioIdx = null; S.audioErr = null;
+    S.audioIdx = null; S.audioErr = null; S.aroot = null; S.sfold = new Map(); S.nameCache = new Map(); S.legacy = null;
     for (let round = 0; round < 3; round += 1) {
       const remote = jm ? await getRemote(jm) : emptyJournal();
       const remoteEff = S.force === 'replaceRemote' ? emptyJournal() : remote;
@@ -793,6 +940,7 @@
       const aitems = S.force === 'replaceLocal' ? planReplaceLocalAudio(remote) : await makeAudioPlan(remoteEff);
       await applyPulls(items);
       await applyAudioPulls(aitems);
+      await organizeAudio(folderId); // 곡·날짜가 바뀐 녹음은 Drive 안에서 옮기고 이름을 바꿔요
       const res = await pushAll(items, aitems, remote, jm, folderId);
       if (res === 'retry') { jm = await journalMeta(S.meta.journalId); if (!jm) throw new SyncError('missing'); continue; }
       finishPass(items, aitems, remote);
@@ -862,6 +1010,7 @@
       else if (it.act === 'dropLocal') { drop.push(it.id); it.applied = true; }
       else if (it.act === 'converge' && it.L && !isTombLike(it.L) && it.R && it.R.file && it.L.rf !== it.R.file.f) { put.push({ id: it.id, rf: it.R.file.f }); } // 같은 녹음이 이미 Drive에 있으면 그 파일을 쓰고 다시 올리지 않아요
     });
+    if (S.meta.aorg === 'yes' && aitems.some((it) => it.act === 'pull')) S.legacyScan = true; // 업데이트하지 않은 기기가 예전 이름으로 올렸을 수도 있어서, 정리하기를 고른 뒤에는 새 녹음을 받을 때 한 번 살펴봐요
     if (put.length || tombs.length || drop.length) {
       await applyAudioChanges({ put, tombs, drop });
       tellOtherTabs();
@@ -907,7 +1056,10 @@
     const keep = refFileIds(journal);
     const old = refFileIds(remote);
     apushes.forEach((it) => { if (it.act === 'pushDel' && it.L && it.L.rf) old.add(it.L.rf); });
-    for (const f of old) { if (!keep.has(f)) { try { await trashFile(f); } catch (e) { /* 이미 없어도 괜찮아요 */ } } }
+    const audioFiles = new Set([...(remote.audios || []).map((e) => e.file && e.file.f), ...apushes.map((it) => it.L && it.L.rf)].filter(Boolean));
+    const emptied = new Set();
+    for (const f of old) { if (!keep.has(f)) { try { const r = await trashFile(f); if (audioFiles.has(f) && r && r.parents) r.parents.forEach((p) => emptied.add(p)); } catch (e) { /* 이미 없어도 괜찮아요 */ } } }
+    for (const p of emptied) await cleanEmptySongFolder(p, folderId); // 지운 녹음으로 비어 버린 곡 폴더는 지워요
     items.forEach((it) => { if (it.act === 'push' || it.act === 'pushDel') it.applied = true; });
     apushes.forEach((it) => { it.applied = true; });
     return 'pushed';
@@ -1020,8 +1172,11 @@
         <div><span class="meta">올리기 대기</span><b>${st.waiting}개</b>${st.held.length ? ` <span class="meta">(나중에로 미뤄 둔 ${st.held.length}개는 따로예요)</span>` : ''}</div>
       </div>
       ${st.held.length ? `<p style="margin:6px 0"><button type="button" class="btn" data-sync="audio-start">🎙 녹음 올리기 (${st.held.length}개 · 약 ${esc(fmtMB(st.heldBytes))})</button></p>` : ''}
+      ${S.meta.aorg === 'later' && S.meta.alegacy ? `<p style="margin:6px 0"><button type="button" class="btn" data-sync="audio-organize">🎙 녹음을 곡별 폴더로 정리 (${S.meta.alegacy}개)</button></p>` : ''}
+      <p style="margin:6px 0"><button type="button" class="btn ghost" data-sync="audio-folder">🎙 바이올린 녹음 폴더 열기</button></p>
       <label class="meta"><input type="checkbox" data-sync="wifi" ${S.meta.wifiOnly ? 'checked' : ''}> 와이파이에서만 녹음 올리기 <span class="hint">(꺼 두면 모바일 데이터로도 올라가요)</span></label>
       ${!ci.known ? '<p class="meta" style="margin:4px 0 0">이 브라우저는 연결 종류를 알 수 없어서 그냥 올려요.</p>' : (S.meta.wifiOnly && ci.cellular ? '<p class="meta" style="margin:4px 0 0">지금은 모바일 데이터라서, 와이파이에 연결되면 올릴게요.</p>' : '')}
+      <p class="meta" style="margin:6px 0 0">Drive에는 <b>"${esc(CFG.folderName)} / ${esc(AUDIO_ROOT)} / 곡 이름"</b> 폴더에 <b>"날짜 곡 이름"</b> 파일로 올라가요. <b>Drive에서 파일을 지우지 말고 사이트에서 지워 주세요.</b> (이름을 바꾸거나 폴더 안에서 옮겨도 사이트는 파일을 찾아요)</p>
       <p class="meta" style="margin:6px 0 0">다른 기기에서 올린 녹음은 목록에만 먼저 나타나요. <b>▶ 재생</b>이나 <b>⬇ 파일로 저장</b>을 누를 때 파일을 내려받아요. 올리는 도중 끊겨도 다음에 이어서 올려요.</p>
     </div>`;
   }
@@ -1076,6 +1231,16 @@
       <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
   }
 
+  async function openAudioFolder() {
+    try {
+      let id = S.meta.arootId;
+      if (!id && S.meta.folderId) { const f = await findChildFolder(S.meta.folderId, AUDIO_ROOT); id = f ? f.id : ''; if (id) { S.meta.arootId = id; await saveMeta(); } }
+      if (!id) { toast('아직 Drive에 올라간 녹음이 없어요. 녹음을 올리면 "바이올린 녹음" 폴더가 생겨요.', 4500); return; }
+      const f = await drive(`/files/${id}`, { params: { fields: 'webViewLink,trashed' } });
+      if (f && f.webViewLink && !f.trashed) window.open(f.webViewLink, '_blank', 'noopener');
+      else toast('Drive에서 "바이올린 녹음" 폴더를 찾지 못했어요. 다음 녹음을 올리면 다시 만들어요.', 4500);
+    } catch (e) { toast('폴더 주소를 가져오지 못했어요. 잠시 뒤에 다시 눌러 주세요.', 3500); }
+  }
   async function openFolder() {
     try {
       const f = await drive(`/files/${S.meta.folderId}`, { params: { fields: 'webViewLink' } });
@@ -1092,7 +1257,7 @@
       try { email = await fetchEmail(); } catch (e) { /* 이메일 표시는 없어도 돼요 */ }
       const keepDevice = S.meta.deviceId; const last = S.meta.last;
       const same = !!(last && last.email && last.email === email && last.firstDone); // 로그아웃했던 그 계정이면 이어서 써요
-      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, wifiOnly: S.meta.wifiOnly, ...(same ? { base: last.base, abase: last.abase || {}, audioAsked: !!last.audioAsked, audioHold: last.audioHold || [], folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
+      S.meta = { ...emptyMeta(), deviceId: keepDevice, enabled: true, email, wifiOnly: S.meta.wifiOnly, ...(same ? { base: last.base, abase: last.abase || {}, audioAsked: !!last.audioAsked, audioHold: last.audioHold || [], arootId: last.arootId || '', aorgAsked: !!last.aorgAsked, aorg: last.aorg || '', alegacy: last.alegacy || 0, folderId: last.folderId, journalId: last.journalId, firstDone: true, lastSyncAt: last.lastSyncAt, conflicts: last.conflicts || {} } : {}) };
       if (!same) await forgetAudioRefs(true); // 다른 계정이면 예전 Drive의 녹음 주소는 쓸 수 없어요
       S.needReconnect = false; S.remote = { version: '', journal: null };
       await saveMeta();
@@ -1211,7 +1376,7 @@
     S.token = null; S.tokenExp = 0; S.needReconnect = false; S.remote = { version: '', journal: null };
     clearTimeout(S.debounceT); clearTimeout(S.retryT);
     const keepDevice = S.meta.deviceId; const m0 = S.meta;
-    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, wifiOnly: m0.wifiOnly, last: wipe ? null : { email: m0.email, base: m0.base, abase: m0.abase, audioAsked: m0.audioAsked, audioHold: m0.audioHold, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
+    S.meta = { ...emptyMeta(), deviceId: keepDevice, email: m0.email, wifiOnly: m0.wifiOnly, last: wipe ? null : { email: m0.email, base: m0.base, abase: m0.abase, audioAsked: m0.audioAsked, audioHold: m0.audioHold, arootId: m0.arootId, aorgAsked: m0.aorgAsked, aorg: m0.aorg, alegacy: m0.alegacy, folderId: m0.folderId, journalId: m0.journalId, firstDone: m0.firstDone, lastSyncAt: m0.lastSyncAt, conflicts: m0.conflicts } };
     await saveMeta();
     if (wipe) {
       await Store.remove([...records.map((r) => r.id), ...tombstones.map((t) => t.id)]);
@@ -1416,12 +1581,15 @@
       case 'conflicts': openConflicts(); break;
       case 'fl-merge': case 'fl-upload': case 'fl-download': firstChoice(act); break;
       case 'stale-fresh': case 'stale-merge': staleChoice(act); break;
-      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.base = {}; S.meta.abase = {}; forgetAudioRefs(false).then(() => runSync('recreate')); break;
+      case 'recreate': closeDlg(); S.createMissing = true; S.meta.journalId = ''; S.meta.arootId = ''; S.meta.base = {}; S.meta.abase = {}; forgetAudioRefs(false).then(() => runSync('recreate')); break;
       case 'cf-local': case 'cf-remote': case 'cf-both': resolveConflict(b.dataset.id, act); break;
       case 'cf-newest': resolveAllNewest(); break;
       case 'wifi': S.meta.wifiOnly = !!b.checked; saveMeta().then(() => { if (dlg.open && dlg.querySelector('.sync-audio')) openDetail(); if (!S.meta.wifiOnly) runSync('wifi'); }); break;
       case 'audio-up': case 'audio-start': S.meta.audioAsked = true; S.meta.audioHold = []; saveMeta().then(() => { closeDlg(); runSync('audio'); }); break;
       case 'audio-later': closeDlg(); break;
+      case 'audio-folder': openAudioFolder(); break;
+      case 'audio-organize': case 'org-yes': S.meta.aorg = 'yes'; S.meta.aorgAsked = true; S.organizeNow = true; saveMeta().then(() => { closeDlg(); runSync('organize'); }); break; // 예전 녹음 파일을 곡별 폴더로 정리해요
+      case 'org-later': closeDlg(); break;
       default: break;
     }
   });
@@ -1433,7 +1601,7 @@
     const ghosts = dropGhosts ? audios.filter((a) => !a.local).map((a) => a.id) : [];
     const stale = audioTombs.map((t) => t.id);
     await applyAudioChanges({ drop: [...ghosts, ...(dropGhosts ? stale : [])] });
-    for (const a of audios) { await AudioStore.update(a.id, (row) => (row ? { ...row, rf: '' } : undefined)); a.rf = ''; }
+    for (const a of audios) { await AudioStore.update(a.id, (row) => { if (!row) return undefined; const { pl, ...rest } = row; return { ...rest, rf: '' }; }); a.rf = ''; delete a.pl; }
     S.meta.up = {};
   }
 
@@ -1451,6 +1619,22 @@
       <p>이 기기에 있는 녹음 <b>${mine.length}개 (약 ${esc(fmtMB(bytes))})</b>를 Drive에 올릴 수 있어요. 올리면 다른 기기에서도 듣고 파일로 저장할 수 있어요.</p>
       <p class="meta">큰 파일은 이어 올리기로 올려요. 데이터가 걱정되면 ☁ 상세 창의 "와이파이에서만 녹음 올리기"를 켜 두세요. "나중에"를 골라도 ☁ 상세 창에서 언제든 올릴 수 있어요.</p>
       <div class="dlg-actions"><button type="button" class="btn ghost" data-sync="audio-later">나중에</button><button type="button" class="btn" data-sync="audio-up">올리기</button></div>`);
+  }
+
+  // 🎙 예전에 올린 녹음(audio-… 파일)이 있으면 곡별 폴더로 정리할지 물어봐요. 창을 그냥 닫아도 "나중에"로 봐요. (☁ 상세 창에서 언제든 다시 할 수 있어요)
+  //   새로 올리는 녹음은 묻지 않고 곡별 폴더로 올라가요. 예전 파일이 없으면 묻지 않고 정리하기로 둬요.
+  function maybeAskOrganize() {
+    const m = S.meta;
+    if (!m || !m.enabled || envMode() !== 'ok' || !m.firstDone || S.running || dlg.open || dlg2.open || !AudioStore.ok() || !S.legacy || m.aorgAsked) return;
+    m.aorgAsked = true;
+    if (!S.legacy.n) { m.aorg = 'yes'; m.alegacy = 0; saveMeta(); return; }
+    m.aorg = 'later'; m.alegacy = S.legacy.n;
+    saveMeta();
+    const bytes = audios.filter((a) => S.legacy.ids.includes(a.id)).reduce((n, a) => n + (a.size || 0), 0);
+    openDlg(`<h2>🎙 녹음을 곡별 폴더로 정리할까요?</h2>
+      <p>Drive에 올라가 있는 녹음 <b>${S.legacy.n}개 (약 ${esc(fmtMB(bytes))})</b>를 <b>"${esc(AUDIO_ROOT)} / 곡 이름"</b> 폴더로 옮기고, 파일 이름을 <b>"날짜 곡 이름"</b>으로 바꿔요.</p>
+      <p class="meta">파일을 다시 올리지 않고 Drive 안에서 옮기기만 해서 금방 끝나요. 앞으로 올리는 녹음은 처음부터 곡별 폴더로 올라가요. "나중에"를 골라도 ☁ 상세 창에서 언제든 정리할 수 있어요.</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" data-sync="org-later">나중에</button><button type="button" class="btn" data-sync="org-yes">정리하기</button></div>`);
   }
 
   function notify() {
@@ -1487,7 +1671,7 @@
     setInterval(renderChip, 60000); // "N분 전" 갱신
     const conn = navigator.connection;
     if (conn && conn.addEventListener) conn.addEventListener('change', () => { if (S.meta && S.meta.enabled && S.meta.wifiOnly && !wifiBlocked()) runSync('conn'); }); // 와이파이에 연결되면 기다리던 녹음을 올려요
-    dlg.addEventListener('close', () => setTimeout(maybeAskAudio, 400));
+    dlg.addEventListener('close', () => { setTimeout(maybeAskAudio, 400); setTimeout(maybeAskOrganize, 700); });
     purgeOldTombs();
     if (envMode() !== 'ok' || !S.meta.enabled) return;
     loadGIS().catch(() => { /* 오프라인이면 나중에 다시 해요 */ });
@@ -1501,7 +1685,7 @@
     audioBadge, fetchLabel, fetchAudio,
     // 자동 시험용 (화면에서는 쓰지 않아요)
     __t: {
-      S, T, CFG, maybeAskAudio, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote, fmtVal, resolveConflict,
+      S, T, CFG, maybeAskAudio, maybeAskOrganize, safeName, audioFolderName, audioBaseName, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote, fmtVal, resolveConflict,
       setNow: (fn) => { nowFn = fn; }, resetNow: () => { nowFn = () => Date.now(); }, gisReady, requestToken,
     },
   };
