@@ -19,34 +19,27 @@ const HIDDEN_KEYS = ['minutes'];
 // 하루가 바뀌는 시각: 새벽 4시 전에 남긴 기록은 전날 기록으로 쳐요. (자정 기준으로 돌리려면 0)
 const DAY_STARTS_AT = 4;
 
-// 연습량(살짝 / 적당히 / 듬뿍)과 하고 나서 기분. 시간을 숫자로 적지 않고 버튼으로만 골라요.
+// 연습량(살짝 / 적당히 / 듬뿍). 시간을 숫자로 적지 않고 버튼으로만 골라요.
 //   v: 저장되는 값, icon: 버튼과 카드에 보이는 그림, label: 이름
 const AMOUNTS = [
   { v: 1, icon: '●○○', label: '살짝' },
   { v: 2, icon: '●●○', label: '적당히' },
   { v: 3, icon: '●●●', label: '듬뿍' },
 ];
-const MOODS = [
-  { v: 'good', icon: '😊', label: '좋았어요' },
-  { v: 'ok', icon: '🙂', label: '보통이에요' },
-  { v: 'tired', icon: '😮‍💨', label: '지쳤어요' },
-];
+
+// 화면에서는 뺐지만, 저장된 값은 지우지 않고 보관하는 칸 (종류별: 저장 이름 → 예전 화면 이름)
+//   예전 기록과 백업에는 그대로 남아 있고, 그 기록을 수정해서 저장해도 지워지지 않아요. 카드·복사 글·돌아보기에는 나오지 않아요.
+const RETIRED = {
+  violin: { whatDid: '오늘 한 것', part: '연습한 부분', ask: '레슨 때 물어볼 것', mood: '하고 나서 기분' },
+  workout: { mood: '하고 나서 기분' },
+  englishArticle: { title: '기사 제목', phrases: '가져갈 표현', speak: '말해 볼 주제로 표시' },
+};
 
 // 🎨 그림 종류와 한 기록에 붙일 수 있는 사진 수
 //   예전 기록의 "단계"는 종류로 읽어요: 그대로 모작·조금 바꿔 그리기 → 모작, 창작 → 창작, 값이 없으면 모작
 const ART_KINDS = ['크로키', '모작', '창작'];
 const ART_STAGE_TO_KIND = { '그대로 모작': '모작', '조금 바꿔 그리기': '모작', '창작': '창작' };
 const ART_MAX_PHOTOS = 30;
-
-/* ---------------------------------------------------------------------
-   ✏️ 칩(눌러서 고르는 버튼) 선택지 - 메모장으로 고쳐도 돼요
-   - 따옴표 안의 글자만 바꾸거나, 쉼표로 이어서 더하거나 빼세요. (따옴표와 쉼표는 지우지 마세요)
-   - 이미 저장한 기록은 그대로 남아요. (예전에 고른 글자는 지워도 카드에 계속 보여요)
-   --------------------------------------------------------------------- */
-const CHIPS = {
-  // 🎻 바이올린 (기본기 = 스케일·에튀드·개방현·포지션 이동을 모두 포함해요)
-  violinDid: ['활', '기본기', '곡'],
-};
 
 // 🎻 교재 칩의 처음 목록이에요. 그 뒤로는 바이올린 기록 창의 "⚙︎ 교재 관리"에서 더하고·숨기고·순서를 바꿔요. (그 목록은 백업에 함께 들어가요)
 const TEXTBOOKS_DEFAULT = ['스즈키 4권'];
@@ -57,26 +50,25 @@ const TEXTBOOKS_DEFAULT = ['스즈키 4권'];
    - more: true 인 칸은 "✍ 더 적기" 접힘 영역 안에 들어가요. (새 기록에서는 접혀 있고, 수정할 때 내용이 있으면 펼쳐져요)
    - legacy: true 는 예전 칸이에요. 새 기록에서는 안 보이고, 값이 들어 있는 예전 기록을 고칠 때만 보여요. (카드에는 값이 있으면 계속 보여요)
    - only: 해당 종류일 때만 보이는 칸   placeholder: 회색 예시 문장   suggest: true 는 전에 쓴 값을 최근 순으로 제안
-   - type: text / textarea / number / date / select / choice(버튼 하나) / chips(버튼 여러 개) / lines(한 줄에 하나) / tasks(체크 목록) / image / images
+   - type: text / textarea / number / date / select / choice(버튼 하나) / tasks(체크 목록) / multi(칸 여러 개) / bookLines(교재별 한 줄) / image / images / audio
    - keep: 이 창에서 고치지 않아도 그대로 보관할 칸 (복기 창에서 적는 값 등)
    --------------------------------------------------------------------- */
 // 🧘 운동 "한 줄" 칸의 회색 예시 문장 (종류별)
 const WORKOUT_LINE_HINTS = { '요가': '예: 골반이 좀 풀렸다', '슬로조깅': '예: 바람이 시원했다' };
 const AMOUNT_FIELD = { key: 'amount', label: '연습량 - 선택', type: 'choice', choices: AMOUNTS, hint: '시간 대신 느낌으로 골라요. 다시 누르면 선택이 풀려요.' };
 const WORKOUT_AMOUNT_FIELD = { ...AMOUNT_FIELD, label: '운동량 - 선택' }; // 운동은 "운동량", 바이올린·그림은 "연습량"이에요
-const MOOD_FIELD = { key: 'mood', label: '하고 나서 기분 - 선택', type: 'choice', choices: MOODS };
 
 const SCHEMAS = {
-  // 🧘 운동 기록 (요가 / 슬로조깅): 날짜 · 종류 · 거리 · 운동량 · 기분 · 한 줄, 이게 전부예요 ("더 적기"는 없어요)
+  // 🧘 운동 기록 (요가 / 슬로조깅): 날짜 · 종류 · 거리 · 운동량 · 한 줄, 이게 전부예요 ("더 적기"는 없어요)
   workout: {
     label: '운동 기록',
     kindKey: 'kind', // '종류'에 따라 보이는 칸이 달라져요
+    keep: Object.keys(RETIRED.workout), // 화면에서 뺀 칸(기분)의 예전 값은 그대로 보관
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['요가', '슬로조깅'], required: true },
       { key: 'distance', label: '거리 (km) - 선택', type: 'number', min: 0, step: 0.01, only: '슬로조깅', placeholder: '예: 3.2' },
       WORKOUT_AMOUNT_FIELD,
-      MOOD_FIELD,
       // 한 줄 (예전 "한 줄 메모", "몸이 어땠나 한 줄", "달리며 든 생각 한 줄"이 모두 여기에 모여요). 종류마다 회색 예시 문장이 달라요
       { key: 'memo', label: '한 줄 - 선택', type: 'text', flat: true, placeholder: '예: 퇴근 후 짧게 했다', placeholderByKind: WORKOUT_LINE_HINTS },
     ],
@@ -85,24 +77,20 @@ const SCHEMAS = {
   violin: {
     label: '바이올린 기록',
     kindKey: 'kind',
-    keep: ['stage'], // 예전에 고른 "이 곡 지금 어디쯤?"은 이 창에서 고치지 않아도 그대로 보관 (곡 노트에서 보여요)
+    keep: ['stage', ...Object.keys(RETIRED.violin)], // 예전에 고른 "이 곡 지금 어디쯤?"(곡 노트에서 보여요)과, 화면에서 뺀 칸(오늘 한 것·연습한 부분·물어볼 것·기분)의 예전 값은 이 창에서 고치지 않아도 그대로 보관
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['연습', '레슨'], required: true },
-      { key: 'whatDid', label: '오늘 한 것 - 선택', type: 'chips', choices: CHIPS.violinDid, only: '연습', hint: '기본기 = 스케일·에튀드·개방현·포지션 이동' },
       // 교재 칩을 켜면 그 교재의 "곡 이름이나 번호" 한 줄 칸이 생겨요. 저장은 books: [{ name, piece }] (칩 순서). 하루에 기록 하나는 그대로예요.
       { key: 'books', label: '교재 - 선택', type: 'bookLines', manage: 'books', only: '연습' },
       { key: 'piece', label: '그 밖에 연습한 곡 - 선택', type: 'text', only: '연습', suggest: true, placeholder: '예: 비발디 a단조 1악장, 자이츠 협주곡 5번' },
       { ...AMOUNT_FIELD, only: '연습' },
-      MOOD_FIELD,
       { key: 'feedback', label: '선생님 피드백', type: 'textarea', only: '레슨', placeholder: '예: 활을 줄에 수직으로 두는 연습을 더 하면 좋겠다고 하셨다' },
       { key: 'homework', label: '다음 레슨까지 과제', type: 'tasks', only: '레슨', hint: '한 줄에 과제 하나씩 적어 주세요. 체크는 목록에서 바로 할 수 있어요.', placeholder: '예: G장조 스케일 두 옥타브, 매일' },
       // ✍ 더 적기 (연습) - 잘 된 것을 가장 먼저
       { key: 'good', label: '오늘 잘 된 것 하나', type: 'text', only: '연습', more: true, placeholder: '예: 비브라토가 두 박 정도 고르게 됐다' },
       { key: 'next', label: '다음에 해볼 것 하나', type: 'textarea', rows: 2, only: '연습', more: true, placeholder: '예: 메트로놈 60에 비브라토 4박 느리게 두 번' },
-      { key: 'ask', label: '레슨 때 물어볼 것', type: 'tasks', only: '연습', more: true, hint: '한 줄에 하나씩. 물어봤으면 바이올린 화면 위쪽의 레슨 패널에서 체크해요.', placeholder: '예: 비브라토할 때 손목은 어떻게 두는지' },
       { key: 'tempo', label: '템포 (BPM) - 선택', type: 'number', min: 1, step: 1, only: '연습', more: true, placeholder: '예: 60', hint: '메트로놈 숫자예요. 곡 이름을 누르면 템포 변화를 그래프로 볼 수 있어요. (적은 곡 모두에 기록돼요)' },
-      { key: 'part', label: '연습한 부분', type: 'textarea', rows: 2, only: '연습', more: true, placeholder: '예: 1~8마디 운지, 활 다운-업' },
       { key: 'audio', label: '🎙 녹음', type: 'audio', only: '연습', more: true }, // 녹음 파일은 기록이 아니라 곡에 붙어서 따로 저장돼요
       { key: 'hard', label: '어려웠던 점 (예전 칸)', type: 'textarea', only: '연습', legacy: true, more: true },
       // ✍ 더 적기 (레슨)
@@ -137,18 +125,16 @@ const SCHEMAS = {
       { key: 'image', label: '내 그림 (예전 칸)', type: 'image', hidden: true }, // 예전에 한 장만 넣던 칸. 동기화가 이미지를 올릴 수 있도록 남겨 두고, 화면에는 나오지 않아요.
     ],
   },
-  // 📰 영어 기사 (주 1회, 읽고 세 줄로 정리해요)
+  // 📰 영어 기사 (주 1회, 읽고 세 줄로 정리해요): 날짜 · 링크 · 요약 3줄 (+ 더 적기의 내 생각 한 줄)
   englishArticle: {
     label: '영어 기사',
+    keep: Object.keys(RETIRED.englishArticle), // 화면에서 뺀 칸(제목·가져갈 표현·말해 볼 주제)의 예전 값은 그대로 보관
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'link', label: '기사 링크 - 선택', type: 'text', placeholder: '붙여 넣으면 도메인(예: theguardian.com)이 카드에 나와요' },
-      { key: 'title', label: '기사 제목 - 선택', type: 'text', placeholder: '예: Why prices keep rising' },
       { key: 'sum', label: '요약 3줄 - 선택', type: 'multi', keys: ['sum1', 'sum2', 'sum3'], placeholders: ['1. What happened', '2. Why it matters', "3. What's next / my takeaway"], hint: '영어로 한두 줄만 써도 저장돼요.' },
       // ✍ 더 적기
-      { key: 'phrases', label: '가져갈 표현 (최대 3개)', type: 'lines', max: 3, rows: 3, more: true, hint: '한 줄에 하나씩, 최대 3개까지예요.', placeholder: '예: crack down on' },
       { key: 'thought', label: '내 생각 한 줄', type: 'text', more: true, placeholder: '영어로 써도, 한국어로 써도 돼요' },
-      { key: 'speak', label: '말해 볼 주제로 표시', type: 'check', more: true },
     ],
   },
   // 💬 클로드에게 받은 피드백: scope('violin'|'exercise'|'econ'|'english'|'drawing') / period('day'|'week'|'month'|'card') / rangeStart·rangeEnd / targetId(카드에서 보낸 기록) / question / text(붙여 넣은 답변) / todo(해볼 것 한 줄) / todoDone / todoHidden
@@ -206,8 +192,6 @@ const EMPTY_TEXT = {
   shelf: '곡 이름을 적은 기록이 생기면 여기에 책처럼 꽂혀요.',
   workout: '아직 기록이 없어요. 위의 + 운동 기록으로 남겨 보세요.',
   english: '이번 주 기사 하나를 올려 보세요. 세 줄이면 돼요.',
-  phrases: '기사 요약에 가져갈 표현을 적으면 여기에 모여요.',
-  speak: '말해 볼 주제로 표시한 기사가 여기에 모여요.',
   pastNotes: '저장한 한 줄이 여기에 쌓여요.', // 경제 루틴 "지난 한 줄 보기"
 };
 // 🌱 "지금까지 쌓인 기록" 카드는 첫 기록으로부터 이만큼 날이 지난 뒤에 숫자를 보여 줘요. (그전에는 "이제 시작했어요"만)
@@ -216,23 +200,33 @@ const TOTALS_AFTER_DAYS = 10;
 // 캘린더가 시작되는 달 (이 달부터 앞으로 계속 이어져요)
 const CALENDAR_START = '2026-01';
 
-// 도장: 기록을 저장하면 이 중에서 하나가 랜덤으로 나타나요. 앞의 그림이 도장, 뒤가 한 마디예요.
-//   문구는 마음대로 고치거나 더해도 돼요. (평가나 비교하는 말은 넣지 않아요)
-//   workout / practice(바이올린 연습) / lesson / routine(경제 루틴) / english(영어) / art / rest : 종류별 문구
+// 💮 도장 토스트: 기록을 저장하면 화면 아래에 카드 하나가 잠깐 나타나요.
+//   첫 줄 = 아래 문구 중 하나가 랜덤으로 (영역별 · 밤에는 night) / 둘째 줄 = 방금 저장한 내용 / 셋째 줄 = "이번 달 도장 N개째" · 왼쪽 도장 자리에는 늘 💮 가 찍혀요.
+//   문구는 마음대로 고치거나 더해도 돼요. (평가나 비교하는 말, 재촉하는 말은 넣지 않아요)
+//   workout / practice(바이올린 연습) / lesson / routine(경제 루틴) / english(영어) / art / rest / feedback(받은 피드백 저장) : 영역별 문구
 //   general : 위에 없는 종류일 때, night : 밤에 저장했을 때(NIGHT_START시 ~ 다음 날 NIGHT_END시)
 const STAMPS = {
-  general: ['🌱 한 칸 남겼어요', '📌 도장 꾹!', '🍀 오늘의 기록 완료', '☕ 잠깐 숨 돌리기', '✨ 꾹, 도장', '📓 기록장에 한 줄', '🌱 남겨 뒀어요'],
-  workout: ['🧘 오늘도 몸을 움직였다', '🌿 몸을 한번 풀었다', '🍃 숨을 크게 쉬었다', '☀️ 몸이 기억해요', '🧘 몸을 챙긴 하루', '🏃 한 걸음 남겼어요', '🌿 숨 한 번 크게'],
-  practice: ['🎻 오늘도 켰다', '🎼 활을 잡았다', '🎶 소리를 냈다', '🎼 한 소절 남겼어요', '🎻 활이 지나간 자리'],
-  lesson: ['🎓 레슨 기록 완료', '📝 배운 것을 적어 뒀다', '🎼 선생님 말씀을 남겼다'],
-  english: ['📰 기사 하나 읽었어요', '✍ 세 줄로 정리했어요', '🔤 표현 하나 챙겼어요', '☕ 영어 한 줄 남겼어요'],
-  routine: ['🎧 귀로 한 줄 배웠어요', '📮 한 통 읽었어요', '📰 오늘의 경제 한 칸', '✅ 루틴 한 칸', '☕ 가볍게 체크', '💡 흐름 하나 잡았어요'],
-  art: ['🎨 오늘도 그렸다', '✏️ 선을 그었다', '🖌️ 손이 움직였다', '🎨 한 장 남겼어요', '✏️ 선 하나 더', '🖌 오늘의 그림 도장'],
-  rest: ['😴 쉬는 것도 기록이에요', '🛋️ 충전하는 날', '🍵 푹 쉬었다', '😴 쉬는 날도 기록', '🛋 푹 쉬어요', '🌿 오늘은 쉬어 가기'],
-  night: ['🌙 늦은 밤 수고했어요', '⭐ 하루 마무리 도장 꾹', '🌃 밤에도 남겼어요', '🛌 이제 쉬어도 돼요', '🌙 오늘 하루도 여기까지', '⭐ 이제 푹 쉬어요', '🌙 밤의 기록 한 줄'],
+  general: ['한 칸 남겼어요', '도장 꾹!', '오늘의 기록 완료', '잠깐 숨 돌리기', '기록장에 한 줄', '남겨 뒀어요'],
+  practice: ['참 잘했어요', '오늘도 켰어요', '소리가 쌓이고 있어요', '활을 잡았어요', '한 소절 남겼어요', '활이 지나간 자리'],
+  lesson: ['레슨 잘 다녀왔어요', '배운 것을 적어 뒀어요', '선생님 말씀을 남겼어요', '새로 배운 걸 챙겼어요', '레슨 기록, 잘 남겼어요'],
+  workout: ['몸이 고마워해요', '몸을 한번 풀었어요', '숨을 크게 쉬었어요', '오늘도 몸을 챙겼어요', '한 걸음 남겼어요', '몸이 기억해요'],
+  routine: ['오늘도 한 걸음', '오늘의 경제 한 칸', '가볍게 한 칸', '흐름 하나 잡았어요', '차곡차곡 쌓여요', '오늘도 체크했어요'],
+  english: ['세 줄, 잘 정리했어요', '기사 하나 읽었어요', '영어 한 줄 남겼어요', '오늘도 영어 한 칸', '읽고 정리했어요'],
+  art: ['오늘도 그렸어요', '선 하나 더 그었어요', '손이 움직였어요', '한 장 남겼어요', '그림 한 칸 남겼어요'],
+  rest: ['쉬는 것도 기록이에요', '충전하는 날이에요', '푹 쉬었어요', '쉬는 날도 기록이에요', '오늘은 쉬어 가요'],
+  feedback: ['피드백, 잘 받아 뒀어요', '해볼 것 하나 남겼어요', '다음에 써먹을 한 줄 저장', '답변을 잘 챙겼어요', '피드백 한 칸 남겼어요'],
+  night: ['늦은 밤까지 수고했어요', '오늘 하루도 잘 마무리했어요', '밤에도 남겼어요', '이제 쉬어도 돼요', '오늘 하루도 여기까지', '이제 푹 쉬어요'],
+};
+// 💮 도장 모음판에 찍히는 작은 그림: 기록을 저장할 때 영역마다 하나를 골라 기록에 남겨 둬요. (토스트의 도장 자리에는 늘 💮)
+const STAMP_ICONS = {
+  general: ['🌱', '📌', '🍀', '☕', '✨', '📓'],
+  practice: ['🎻', '🎼', '🎶'], lesson: ['🎓', '📝', '🎼'], workout: ['🧘', '🌿', '🍃', '☀️', '🏃'],
+  routine: ['🎧', '📮', '📰', '✅', '💡'], english: ['📰', '✍', '🔤', '☕'], art: ['🎨', '✏️', '🖌️'], rest: ['😴'],
+  night: ['🌙', '⭐', '🌃', '🛌'],
 };
 const NIGHT_START = 22; // 밤 10시부터
-const NIGHT_END = 5;    // 새벽 5시 전까지는 밤 문구를 써요
+const NIGHT_END = 4;    // 새벽 4시 전까지는 밤 문구를 써요 (하루가 바뀌는 시각 DAY_STARTS_AT 과 같아요)
+const STAMP_TOAST_MS = 3500; // 도장 토스트가 보이는 시간 (누르면 바로 닫혀요)
 
 // "그때의 나": 캘린더 아래에, 몇 달 전 오늘의 기록이 있으면 하나만 보여줘요. (위에서부터 먼저 있는 것 하나)
 const MEMORY_LOOKBACKS = [{ months: 1, label: '한 달 전' }, { months: 3, label: '석 달 전' }, { months: 12, label: '1년 전' }];
@@ -275,15 +269,13 @@ const CLAUDE_SCOPES = [
     request: '아래 기록과 한 줄 메모를 보고 이번 흐름을 쉽게 정리해 주고, 다음에 눈여겨볼 것 하나를 알려 줘.' },
   { id: 'english', icon: '📰', label: '영어',
     info: '영어 강사라 영어는 능숙한 편. 주 1회 기사를 읽고 3줄 요약으로 감을 유지하는 중.',
-    request: '요약을 더 자연스럽고 간결하게 고쳐 주고 바꾼 이유를 짧게 알려 줘. 가져갈 표현은 예문을 하나씩 만들어 줘. 기사를 직접 확인할 수 있으면 요약 내용이 맞는지도 봐 줘.' },
+    request: '요약을 더 자연스럽고 간결하게 고쳐 주고 바꾼 이유를 짧게 알려 줘. 기사를 직접 확인할 수 있으면 요약 내용이 맞는지도 봐 줘.' },
   { id: 'drawing', icon: '🎨', label: '그림',
     info: '그림은 사이드 취미. 이제 크로키부터 주 1~2회 그리려고 함. 모작 위주였고, 창작할 실력을 키우는 게 목표.',
     request: '원본과 내 그림(첨부)을 비교해서 다음에 연습할 것을 알려 줘.' },
 ];
 // 모든 범위의 요청 문구 끝에 자동으로 붙는 공통 문장
 const CLAUDE_COMMON = '제안은 3개 이내로, 가장 중요한 것 하나를 맨 앞에 써 줘. 밤에 읽기 편하게 짧게.';
-// 받은 피드백을 저장했을 때 나타나는 도장 문구 (앞의 그림이 도장, 뒤가 한 마디예요)
-const FEEDBACK_STAMPS = ['💬 피드백 저장했어요', '🌱 해볼 것 하나 남겼어요', '📌 피드백 도장 꾹', '✨ 다음에 써먹을 한 줄 저장'];
 
 
 /* ---------------------------------------------------------------------
@@ -348,12 +340,10 @@ function suggestions(type, key) {
   });
   return out.slice(0, 40);
 }
-// 다른 곳(기능 확장 프로젝트)에서 만든 기록은 연습량이 글자, 기분이 이모지로 들어 있어요. 이 앱의 값으로 맞춰서 읽어요.
+// 다른 곳(기능 확장 프로젝트)에서 만든 기록은 연습량이 글자로 들어 있어요. 이 앱의 값으로 맞춰서 읽어요.
 const LEGACY_AMOUNT = { '살짝': 1, '약간': 1, '적당히': 2, '중': 2, '듬뿍': 3, '많이': 3 };
-const LEGACY_MOOD = { '😊': 'good', '🙂': 'ok', '😮‍💨': 'tired' };
 function normalizeRecord(r) {
   if (typeof r.amount === 'string' && r.amount !== '') r.amount = LEGACY_AMOUNT[r.amount.trim()] || Number(r.amount) || '';
-  if (typeof r.mood === 'string' && LEGACY_MOOD[r.mood]) r.mood = LEGACY_MOOD[r.mood];
   return r;
 }
 
@@ -512,7 +502,7 @@ const ui = {
   exView: 'records',  // 운동: records | feedback
   vnView: 'records',  // 바이올린: records | shelf | feedback
   econView: 'routine', // 경제 루틴: routine | feedback
-  enView: 'list',     // 영어: list | phrases | speak | feedback
+  enView: 'list',     // 영어: list | feedback
   noteDraft: null,    // 경제 루틴 "오늘 한 줄"에 쓰는 중이지만 아직 저장하지 않은 글 { date, text }
   noteSavedUntil: 0,  // 한 줄을 저장한 직후 "저장됨 ✓"를 보여 주는 시각
   claudePeriod: 'day', // 🤖 클로드에게 보내기: 기간 day | week | month
@@ -618,20 +608,20 @@ function buildSamples() {
   const artA = mk('art', d(8), { stamp: '🎨', artKind: '모작', images: [SAMPLE_IMAGES.shaded], srcImage: SAMPLE_IMAGES.color, amount: 2, topic: '명암 연습', liked: '그림자 경계가 부드럽게 나왔다', next: '표정만 웃는 얼굴로 바꿔 보기 (예시 기록)' });
   return [
     // 🧘 운동
-    mk('workout', d(1), { stamp: '🍃', kind: '요가', amount: 2, mood: 'good', memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
-    mk('workout', d(2), { stamp: '🏃', kind: '슬로조깅', amount: 1, mood: 'ok', distance: 3.1, memo: '바람이 시원해서 발이 가벼웠다. 대화할 수 있는 속도로 천천히. (예시 기록)' }),
-    mk('workout', d(4), { stamp: '🌿', kind: '요가', amount: 1, mood: 'tired', memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
+    mk('workout', d(1), { stamp: '🍃', kind: '요가', amount: 2, memo: '아침에 스트레칭 위주로 했다. 어깨가 한결 가벼워졌다. (예시 기록)' }),
+    mk('workout', d(2), { stamp: '🏃', kind: '슬로조깅', amount: 1, distance: 3.1, memo: '바람이 시원해서 발이 가벼웠다. 대화할 수 있는 속도로 천천히. (예시 기록)' }),
+    mk('workout', d(4), { stamp: '🌿', kind: '요가', amount: 1, memo: '피곤해서 가볍게만 했다. (예시 기록)' }),
     mk('workout', d(8), { kind: '슬로조깅', distance: 3.6, memo: '' }),
     mk('workout', d(9), { kind: '요가', memo: '' }),
     mk('workout', d(3), { kind: '요가', amount: 1, memo: '퇴근 후 짧게 (예시 기록)' }),
     mk('rest', d(7), { stamp: '😴', memo: '야근한 날. 푹 잤다. (예시 기록)' }),
     // 🎻 바이올린
-    mk('violin', d(1), { stamp: '🎶', kind: '연습', amount: 3, mood: 'good', tempo: 60, whatDid: ['기본기', '곡'], books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '비브라토가 두 박 정도 고르게 됐다', part: '1~8마디 운지', stage: '천천히 치는 중', ask: [{ text: '비브라토할 때 손목은 어떻게 두는지', done: false }, { text: '활을 줄에서 떼는 타이밍', done: false }], next: '메트로놈 60에 비브라토 4박 느리게 두 번 (예시 기록)' }),
-    mk('violin', d(3), { stamp: '🎼', kind: '연습', amount: 2, tempo: 52, whatDid: ['활'], books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '활이 줄에 수직으로 유지되는 순간이 늘었다', part: '활 쓰는 법(다운-업)', stage: '악보 익히는 중', next: '활을 줄에 수직으로 유지하기' }),
-    mk('violin', d(9), { kind: '연습', tempo: 76, whatDid: ['곡'], books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], stage: '원래 템포 가까이', part: '1악장 앞부분', next: '천천히 박자 세며 치기' }),
-    mk('violin', d(6), { kind: '연습', amount: 2, mood: 'ok', tempo: 48, whatDid: ['기본기', '곡'], books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], part: '9~16마디', stage: '천천히 치는 중', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
-    mk('violin', d(5), { stamp: '🎓', kind: '레슨', mood: 'good', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', praise: '음정이 지난주보다 안정적이라고 하셨다', newLearn: '자리를 옮길 때 팔꿈치를 먼저 움직인다', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '비발디 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습', done: false }] }),
-    mk('violin', monthsAgo(t, 1), { kind: '연습', amount: 2, mood: 'good', whatDid: ['곡'], books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], part: '처음으로 1악장을 끝까지 이어서 켜 봤다. (한 달 전 예시 기록)' }),
+    mk('violin', d(1), { stamp: '🎶', kind: '연습', amount: 3, tempo: 60, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '비브라토가 두 박 정도 고르게 됐다', stage: '천천히 치는 중', next: '메트로놈 60에 비브라토 4박 느리게 두 번 (예시 기록)' }),
+    mk('violin', d(3), { stamp: '🎼', kind: '연습', amount: 2, tempo: 52, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '활이 줄에 수직으로 유지되는 순간이 늘었다', stage: '악보 익히는 중', next: '활을 줄에 수직으로 유지하기' }),
+    mk('violin', d(9), { kind: '연습', tempo: 76, books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], stage: '원래 템포 가까이', next: '천천히 박자 세며 치기' }),
+    mk('violin', d(6), { kind: '연습', amount: 2, tempo: 48, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], stage: '천천히 치는 중', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
+    mk('violin', d(5), { stamp: '🎓', kind: '레슨', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', praise: '음정이 지난주보다 안정적이라고 하셨다', newLearn: '자리를 옮길 때 팔꿈치를 먼저 움직인다', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '비발디 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습', done: false }] }),
+    mk('violin', monthsAgo(t, 1), { kind: '연습', amount: 2, books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], good: '처음으로 1악장을 끝까지 이어서 켜 봤다. (한 달 전 예시 기록)' }),
     mk('piecenote', d(1), { piece: '비발디 a단조 1악장', memo: '5마디부터 멜로디가 올라가는 부분이 제일 좋다 (예시)' }),
     // 📚 레퍼토리 책장 예시: 비발디는 책상 위(연습 중), 자이츠 5번은 책장(마무리)
     mk('piecenote', d(2), { piece: '자이츠 협주곡 5번', memo: '', status: 'done', doneAt: d(2) }),
@@ -642,10 +632,10 @@ function buildSamples() {
     mk('econRoutine', d(5), { checks: { podcast: true, newsletter: true }, letters: ['잘쓸레터', '머니레터'], note: '물가가 오를 때 금리를 왜 올리는지 조금 이해됐다 (예시)' }),
     mk('econRoutine', d(6), { checks: { podcast: true }, letters: [], note: '' }),
     // 📰 영어 (기사 하나)
-    mk('englishArticle', d(4), { stamp: '📰', link: 'https://www.theguardian.com/business/2026/sep/20/rents-keep-rising-example', title: 'Rents keep rising in big cities (예시)', sum1: 'Rents in major cities rose again this quarter.', sum2: 'Housing costs now take a bigger share of monthly income.', sum3: 'Governments are looking at ways to crack down on sharp rent hikes.', phrases: ['crack down on', 'a wave of'], thought: '월세 얘기는 어느 나라나 비슷하다', speak: true }),
+    mk('englishArticle', d(4), { stamp: '📰', link: 'https://www.theguardian.com/business/2026/sep/20/rents-keep-rising-example', sum1: 'Rents in major cities rose again this quarter.', sum2: 'Housing costs now take a bigger share of monthly income.', sum3: 'Governments are looking at ways to crack down on sharp rent hikes. (예시)', thought: '월세 얘기는 어느 나라나 비슷하다' }),
     // 🎨 그림 (원본 없이, 단계와 가져갈 것을 채운 예시)
     artA,
-    mk('art', d(1), { stamp: '🖌️', artKind: '크로키', images: [SAMPLE_IMAGES.color, SAMPLE_IMAGES.shaded, SAMPLE_IMAGES.color], amount: 3, mood: 'good', topic: '손 크로키 1분씩 (예시)', liked: '따뜻한 색이 자연스럽게 섞였다', next: '머리색만 차가운 색으로 바꿔 보기' }),
+    mk('art', d(1), { stamp: '🖌️', artKind: '크로키', images: [SAMPLE_IMAGES.color, SAMPLE_IMAGES.shaded, SAMPLE_IMAGES.color], amount: 3, topic: '손 크로키 1분씩 (예시)', liked: '따뜻한 색이 자연스럽게 섞였다', next: '머리색만 차가운 색으로 바꿔 보기' }),
     // 💬 클로드 피드백 (바이올린 이번 주 1개 - 해볼 것 아직, 그림 카드 1개 - 해봤음)
     mk('claudeFeedback', d(1), { scope: 'violin', period: 'week', rangeStart: mondayOf(t), rangeEnd: addDays(mondayOf(t), 6), targetId: '', question: '3포지션에서 음정이 자꾸 높아지는 이유', text: '3포지션으로 옮길 때 손 전체가 앞으로 쏠리면서 음정이 높아지는 경우가 많아요.\n엄지 위치를 먼저 옮기고 손가락을 따라오게 하면 좋아요.\n이번 주는 활을 줄에 수직으로 두는 연습도 잘 이어졌어요. (예시)', todo: '비브라토는 개방현 옆 줄에서 4번 손가락으로 먼저', todoDone: false }),
     mk('claudeFeedback', d(7), { scope: 'drawing', period: 'card', rangeStart: d(8), rangeEnd: d(8), targetId: artA.id, question: '', text: '그림자 경계가 부드러워서 입체감이 잘 살았어요. 다음에는 빛이 오는 방향을 한 번 더 확인하고 그림자 색을 한 톤만 정해 보세요. (예시)', todo: '그림자 색을 한 톤으로 정해서 칠하기', todoDone: true }),
@@ -679,14 +669,12 @@ function render() {
 }
 
 
-// 연습량 ●●○ 와 기분 😊 (카드 머리줄에 작게 붙어요. 안 적었으면 아무것도 안 보여요)
+// 연습량 ●●○ (카드 머리줄에 작게 붙어요. 안 적었으면 아무것도 안 보여요)
 const amountOf = (r) => AMOUNTS.find((a) => a.v === Number(r.amount));
 const amountWord = (r) => (r && r.type === 'workout' ? '운동량' : '연습량'); // 운동은 "운동량", 바이올린·그림은 "연습량"
-const moodOf = (r) => MOODS.find((m) => m.v === r.mood);
 function marksHTML(r) {
   const a = amountOf(r);
-  const m = moodOf(r);
-  return `${a ? `<span class="amt" role="img" aria-label="${amountWord(r)} ${a.label}" title="${amountWord(r)} ${a.label}">${a.icon} ${a.label}</span>` : ''}${m ? `<span class="mood" role="img" aria-label="기분 ${m.label}" title="하고 나서 기분: ${m.label}">${m.icon}</span>` : ''}`;
+  return a ? `<span class="amt" role="img" aria-label="${amountWord(r)} ${a.label}" title="${amountWord(r)} ${a.label}">${a.icon} ${a.label}</span>` : '';
 }
 
 // 칩 선택지 하나를 {v, icon, label}로 맞춰요 (글자만 있는 것도 돼요)
@@ -751,7 +739,7 @@ function memoryPick(today) {
 }
 
 function memoryText(r) {
-  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.part || r.hard), econRoutine: r.note, englishArticle: r.thought || r.title, art: r.liked || r.next || r.topic }[r.type] || '';
+  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.good || r.next || r.hard), econRoutine: r.note, englishArticle: r.thought || r.sum1, art: r.liked || r.next || r.topic }[r.type] || '';
   const t = String(raw).replace(/\s+/g, ' ').trim();
   return t.length > 120 ? `${t.slice(0, 120)}…` : t;
 }
@@ -816,13 +804,11 @@ function guideHTML(type, r, skip = [], opts = {}) {
   const blocks = [];
   SCHEMAS[type].fields.forEach((f) => {
     const value = r[f.key];
-    if (['date', 'image', 'images', 'audio', 'number', 'select', 'multi', 'check', 'bookLines'].includes(f.type) || ['amount', 'mood'].includes(f.key) || skip.includes(f.key) || !hasValue(value)) return;
+    if (['date', 'image', 'images', 'audio', 'number', 'select', 'multi', 'bookLines'].includes(f.type) || f.key === 'amount' || skip.includes(f.key) || !hasValue(value)) return;
     const label = cleanLabel(f.label);
     if (f.type === 'choice' || f.type === 'chips') {
       const list = Array.isArray(value) ? value : [value];
       tags.push(`<div class="chip-line"><span class="chip-label">${esc(label)}</span>${list.map((v) => `<span class="tag chip-tag">${esc(v)}</span>`).join('')}</div>`);
-    } else if (f.type === 'lines') {
-      blocks.push(`<div class="label">${esc(label)}</div><ol class="lines">${value.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`);
     } else if (f.type === 'tasks') {
       blocks.push(`<div class="label">${esc(label)}</div>${opts.readonly ? `<ul class="lines">${value.map((t) => `<li>${t.done ? '✓ ' : ''}${esc(t.text)}</li>`).join('')}</ul>` : tasksList(r, f.key)}`);
     } else if (f.links) {
@@ -858,7 +844,7 @@ function restCard(r) {
   </div>`;
 }
 
-// 체크 목록 (레슨 과제 · 레슨 때 물어볼 것 · 헷갈리는 것). 여기서 체크하면 바로 저장돼요.
+// 체크 목록 (레슨 과제). 여기서 체크하면 바로 저장돼요.
 function tasksList(r, key) {
   const list = Array.isArray(r[key]) ? r[key] : [];
   if (!list.length) return '';
@@ -877,34 +863,16 @@ async function toggleTask(id, key, i, done) {
   refreshDay();
 }
 
-// 아직 안 물어본 "레슨 때 물어볼 것" (바이올린 연습 기록들에서 모아요)
-function collectAsks() {
-  const out = [];
-  ofType('violin').filter((r) => r.kind !== '레슨' && Array.isArray(r.ask)).sort(byNewest)
-    .forEach((r) => r.ask.forEach((t, i) => { if (!t.done) out.push({ r, i, text: t.text }); }));
-  return out;
-}
-
-function asksListHTML(items) {
-  return `<ul class="hw">${items.map(({ r, i, text }) => `<li><label>
-    <input type="checkbox" data-act="task" data-key="ask" data-id="${esc(r.id)}" data-i="${i}">
-    <span>${esc(text)}</span> <span class="meta">${pieceNamesOf(r).length ? `${esc(pieceNamesOf(r).join(', '))} · ` : ''}${esc(shortDay(r.date))}</span></label></li>`).join('')}</ul>`;
-}
-
-// 바이올린 탭 맨 위: 가장 최근 레슨의 과제, 그리고 다음 레슨 때 물어볼 것
+// 바이올린 탭 맨 위: 가장 최근 레슨의 과제
 function lessonPanel() {
   const l = ofType('violin').filter((r) => r.kind === '레슨').sort(byNewest)[0];
   const hw = l && Array.isArray(l.homework) ? l.homework : [];
-  const asks = collectAsks();
-  if (!hw.length && !asks.length) return '';
+  if (!hw.length) return '';
   return `<section class="card lesson-panel">
-    ${hw.length ? `<div class="item-head">
+    <div class="item-head">
       <div><h3>📌 다음 레슨까지 과제</h3><div class="meta">${esc(dayLabel(l.date))} 레슨</div></div>
       <button type="button" class="btn ghost purple small" data-act="edit" data-type="violin" data-id="${esc(l.id)}">수정</button>
-    </div>${tasksList(l, 'homework')}` : ''}
-    ${asks.length ? `<div class="${hw.length ? 'lp-sep' : ''}">
-      <h3>🙋 다음 레슨 때 물어볼 것</h3><div class="meta">물어봤으면 체크해 주세요. 체크한 것은 목록에서 빠져요.</div>
-      ${asksListHTML(asks)}</div>` : ''}
+    </div>${tasksList(l, 'homework')}
   </section>`;
 }
 
@@ -1317,7 +1285,7 @@ function updateRoutine(date, patch) {
 function routineToast(rec) {
   const s = stampPhrases.get(rec.id) || pickStamp(rec);
   stampPhrases.delete(rec.id);
-  if (!settings.celebrateOff) toast(s.text, 3500, { stamp: s.icon });
+  if (!settings.celebrateOff) stampToast({ head: s.text, line: savedLine(rec), foot: monthStampLine(rec) });
 }
 
 const refreshRoutineViews = () => { render(); refreshDay(); };
@@ -1623,14 +1591,11 @@ function domainOf(link) {
 function englishCard(r) {
   const dom = domainOf(r.link);
   const sums = [r.sum1, r.sum2, r.sum3].map((t, i) => ({ n: i + 1, t: String(t || '').trim() })).filter((x) => x.t);
-  const phrases = Array.isArray(r.phrases) ? r.phrases : [];
   return `<article class="card en-card" data-rid="${esc(r.id)}">
     <div class="item-head">
-      <div class="meta">${esc(dayLabel(r.date))}${dom ? ` · <a href="${esc(linkHref(r.link))}" target="_blank" rel="noopener noreferrer" class="en-dom">${esc(dom)}</a>` : ''}${r.speak ? ' <span class="tag">🗣 말해 볼 주제</span>' : ''}</div>
+      <div class="meta">${esc(dayLabel(r.date))}${dom ? ` · <a href="${esc(linkHref(r.link))}" target="_blank" rel="noopener noreferrer" class="en-dom">${esc(dom)}</a>` : ''}</div>
     </div>
-    <h3>${esc(r.title || dom || '(제목 없음)')}</h3>
     ${sums.length ? `<ol class="en-sum">${sums.map((x) => `<li value="${x.n}">${esc(x.t)}</li>`).join('')}</ol>` : ''}
-    ${phrases.length ? `<div class="chip-line"><span class="chip-label">가져갈 표현</span>${phrases.map((c) => `<span class="tag chip-tag">${esc(c)}</span>`).join('')}</div>` : ''}
     ${hasValue(r.thought) ? textBlock('내 생각', r.thought) : ''}
     ${feedbackDoneNote(r)}
     <div class="row card-btns" style="margin-top:10px">
@@ -1653,24 +1618,8 @@ function englishWeekLabel() {
 }
 
 function englishBodyHTML() {
-  const arts = ofType('englishArticle').sort(byNewest);
-  if (ui.enView === 'phrases') {
-    const rows = arts.flatMap((r) => (Array.isArray(r.phrases) ? r.phrases : []).map((ph) => ({ ph, r })));
-    if (!rows.length) return `<div class="empty">${esc(EMPTY_TEXT.phrases)}</div>`;
-    return rows.map(({ ph, r }) => `<button type="button" class="card phrase-item" data-act="goto" data-id="${esc(r.id)}" title="누르면 그 기사로 가요">
-      <b>${esc(ph)}</b><span class="meta">${esc(dayLabel(r.date))} · ${esc(r.title || domainOf(r.link) || '영어 기사')}</span></button>`).join('');
-  }
-  if (ui.enView === 'speak') {
-    const rows = arts.filter((r) => r.speak);
-    if (!rows.length) return `<div class="empty">${esc(EMPTY_TEXT.speak)}</div>`;
-    return rows.map((r) => `<div class="card speak-item" data-rid="${esc(r.id)}">
-      <div class="row between"><div><button type="button" class="link-btn" data-act="goto" data-id="${esc(r.id)}"><b>${esc(r.title || domainOf(r.link) || '영어 기사')}</b></button>
-        <div class="meta">${esc(dayLabel(r.date))}</div></div>
-        <label class="meta"><input type="checkbox" data-en-speak="${esc(r.id)}" checked> 말해 볼 주제</label></div>
-      ${hasValue(r.sum1) ? `<p class="pre" style="margin:6px 0 0">1. ${esc(r.sum1)}</p>` : ''}
-    </div>`).join('');
-  }
   if (ui.enView === 'feedback') return feedbackViewHTML('english');
+  const arts = ofType('englishArticle').sort(byNewest);
   return `<p class="meta area-line" id="enWeek">${esc(englishWeekLabel())}</p>${arts.length ? arts.map(englishCard).join('') : `<div class="empty">${esc(EMPTY_TEXT.english)}</div>`}`;
 }
 
@@ -1681,7 +1630,7 @@ function renderEnglish() {
     <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="englishArticle">＋ 이번 주 기사 추가</button>
     </div>
-    <div class="chips">${viewChips('enView', ui.enView, [['list', '📖 기사'], ['phrases', '💬 표현 모음'], ['speak', '🗣 말해 볼 주제'], ['feedback', '💬 피드백']])}</div>
+    <div class="chips">${viewChips('enView', ui.enView, [['list', '📖 기사'], ['feedback', '💬 피드백']])}</div>
     ${englishBodyHTML()}`;
 }
 
@@ -1716,7 +1665,7 @@ function calTitle(r) {
     case 'workout': return r.kind || '운동';
     case 'violin': return r.kind === '레슨' ? '레슨' : (pieceNamesOf(r)[0] || '연습');
     case 'econRoutine': return '경제 루틴';
-    case 'englishArticle': return r.title || domainOf(r.link) || '영어 기사';
+    case 'englishArticle': return domainOf(r.link) || '영어 기사';
     case 'rest': return '쉼';
     default: return r.topic || artKindOf(r);
   }
@@ -1743,13 +1692,11 @@ function renderCalendar() {
 
   // 이 달의 기록을 날짜별·종류별로 모아요
   const byDate = new Map();
-  const monthCount = new Map();
   records.forEach((r) => {
     if (!r.date || r.date.slice(0, 7) !== ui.calMonth) return;
     const c = catOf(r);
     if (!c) return;
     if (c.id === 'routine' && !routineIcons(r).length) return; // 체크한 항목이 없는 날(한 줄만 남긴 날)은 달력에 표시하지 않아요
-    monthCount.set(c.id, (monthCount.get(c.id) || 0) + 1);
     if (ui.calHidden.has(c.chip)) return;
     if (!byDate.has(r.date)) byDate.set(r.date, new Map());
     const g = byDate.get(r.date);
@@ -1782,7 +1729,6 @@ function renderCalendar() {
   const yearOpts = [];
   for (let yy = startYear; yy <= lastYear; yy += 1) yearOpts.push(`<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}년</option>`);
   const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''}>${i + 1}월</option>`).join('');
-  const summary = CAL_CATS.filter((c) => monthCount.get(c.id)).map((c) => `${c.icon} ${c.label} ${monthCount.get(c.id)}`).join(' · ');
   const older = records.filter((r) => r.date && r.date.slice(0, 7) < CALENDAR_START).length;
   const filled = filledDaysHTML(y, m);
 
@@ -1802,7 +1748,6 @@ function renderCalendar() {
       ${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div class="cal-dow">${w}</div>`).join('')}
       ${cells.join('')}
     </div>
-    <p class="meta" style="margin-top:12px">${summary ? `${y}년 ${m}월의 기록: ${summary}` : `${y}년 ${m}월에는 기록이 없어요.`}</p>
     <div class="row" style="margin-top:14px">
       <button type="button" class="btn purple" data-act="recap">📖 ${ui.calMonth === today.slice(0, 7) ? '이번 달' : `${m}월`} 돌아보기</button>
       <button type="button" class="btn ghost purple" data-act="board">💮 도장 모음판</button>
@@ -1943,10 +1888,6 @@ const RECAP_SECTIONS = [
     const names = [...byPiece].filter(([, d]) => d.size === most).map(([k]) => k);
     return { title: '가장 많이 연습한 곡', html: `<p class="recap-big">${names.map((n) => `🎼 ${pieceButton(n)}`).join('<br>')}</p><p class="meta" style="margin:0">${most}일 연습했어요${names.length > 1 ? ' (같은 날 수의 곡이 여럿이에요)' : ''}</p>` };
   } },
-  { id: 'mood', build: (c) => {
-    const rows = MOODS.map((m) => [m.icon, m.label, c.real.filter((r) => r.mood === m.v).length]).filter((row) => row[2]);
-    return rows.length ? { title: '하고 나서 기분', html: chipsOf(rows) } : null;
-  } },
   { id: 'good', build: (c) => { // 이번 달 "잘 된 것": 바이올린 '오늘 잘 된 것', 그림 '마음에 드는 곳'
     const items = [
       ...c.real.filter((r) => r.type === 'violin' && hasValue(r.good)).map((r) => ({ r, icon: '🎻', text: r.good })),
@@ -1973,11 +1914,9 @@ const RECAP_SECTIONS = [
     if (!ls.length) return null;
     return { title: '레슨 피드백 모음', html: ls.map((r) => `<div class="recap-quote"><div class="meta">${esc(dayLabel(r.date))}</div>${hasValue(r.feedback) ? `<p class="pre">${esc(r.feedback)}</p>` : ''}${hasValue(r.praise) ? `<p class="pre">👍 ${esc(r.praise)}</p>` : ''}${hasValue(r.newLearn) ? `<p class="pre">📝 ${esc(r.newLearn)}</p>` : ''}</div>`).join('') };
   } },
-  { id: 'english', build: (c) => { // 영어: 이번 달 기사 수와 가져갈 표현 (다른 달과 비교하지 않아요)
-    const mine = c.real.filter((r) => r.type === 'englishArticle').sort(byOldest);
-    if (!mine.length) return null;
-    const phrases = mine.flatMap((r) => (Array.isArray(r.phrases) ? r.phrases : []).map((ph) => ({ ph, r })));
-    return { title: '영어', html: `<p class="recap-big">📰 기사 ${mine.length}개</p>${phrases.length ? `<div class="label">가져갈 표현</div><ul class="note-list">${phrases.map(({ ph, r }) => `<li><span class="meta">${esc(shortDay(r.date))}</span><span class="pre">${esc(ph)}</span></li>`).join('')}</ul>` : ''}` };
+  { id: 'english', build: (c) => { // 영어: 이번 달 기사 수 (다른 달과 비교하지 않아요)
+    const mine = c.real.filter((r) => r.type === 'englishArticle');
+    return mine.length ? { title: '영어', html: `<p class="recap-big">📰 기사 ${mine.length}개</p>` } : null;
   } },
   { id: 'feedbackTodos', build: (c) => { // 💬 이번 달 받은 해볼 것 (해봤음 표시만. 개수·퍼센트는 없어요)
     const list = records.filter((r) => r.type === 'claudeFeedback' && !r.sample && hasValue(r.todo) && (r.date || '').slice(0, 7) === c.ym).sort(byOldest);
@@ -2047,25 +1986,49 @@ function hideToast() {
   try { if (el.hidePopover && el.matches(':popover-open')) el.hidePopover(); } catch (e) { /* 괜찮아요 */ }
 }
 
-// extra.stamp: 맨 앞에 크게 찍히는 도장 그림
-function toast(msg, ms = 6000, extra = {}) {
-  const el = $('#toast');
-  el.replaceChildren();
-  if (extra.stamp) {
-    const st = document.createElement('span');
-    st.className = 'stamp';
-    st.textContent = extra.stamp;
-    el.append(st);
-  }
-  const text = document.createElement('span');
-  text.textContent = msg;
-  el.append(text);
+// 토스트 칸을 비우고 다시 보여줘요. 칸은 하나뿐이라서, 연달아 부르면 이전 것을 바꿔치기해요 (쌓이지 않아요)
+function showToastEl(el, ms) {
   el.hidden = false;
   // popover로 띄우면 열려 있는 창(날짜 창 등) 위에도 보여요. 못 쓰는 브라우저에서는 그냥 아래쪽에 떠요.
   try { if (el.showPopover) { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); } } catch (e) { /* 괜찮아요 */ }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, ms);
 }
+
+// 일반 알림 (동기화 오류·"저장했어요" 같은 짧은 안내): 어두운 한 줄이에요
+function toast(msg, ms = 6000) {
+  const el = $('#toast');
+  el.className = 'toast';
+  el.replaceChildren();
+  const text = document.createElement('span');
+  text.textContent = msg;
+  el.append(text);
+  showToastEl(el, ms);
+}
+
+// 💮 도장 토스트: 왼쪽 도장 자리 + 한 마디(굵게) · 방금 저장한 내용(작게) · 이번 달 도장 N개째(회색 작게). 값이 없는 줄은 그리지 않아요.
+//   누르면 바로 닫혀요. (도장이 찍히는 움직임은 style.css 의 seal-thump 예요)
+function stampToast({ head, line = '', foot = '' }, ms = STAMP_TOAST_MS) {
+  const el = $('#toast');
+  el.className = 'toast stamp-toast';
+  el.replaceChildren();
+  const seal = document.createElement('span');
+  seal.className = 'st-seal';
+  seal.setAttribute('aria-hidden', 'true');
+  seal.textContent = '💮';
+  const body = document.createElement('span');
+  body.className = 'st-body';
+  [['st-head', head], ['st-line', line], ['st-foot', foot]].forEach(([cls, text]) => {
+    if (!text) return;
+    const row = document.createElement('span');
+    row.className = cls;
+    row.textContent = text;
+    body.append(row);
+  });
+  el.append(seal, body);
+  showToastEl(el, ms);
+}
+$('#toast').addEventListener('click', () => { if ($('#toast').classList.contains('stamp-toast')) hideToast(); });
 
 /* ---------------------------------------------------------------------
    도장과 축하 한 줄 (새 기록을 저장한 뒤 잠깐 나타나요. 점수나 평가가 아니라 '남겼다'는 사실만 알려줘요)
@@ -2086,18 +2049,42 @@ function milestoneText(rec) {
   return '';
 }
 
-// 도장 하나 고르기: 밤이면 밤 문구, 아니면 종류별 문구 (바로 전에 나온 것은 피해요)
+// 도장 하나 고르기: 밤이면 밤 문구, 아니면 영역별 문구 (바로 전에 나온 것은 피해요). text = 토스트의 한 마디, icon = 💮 도장 모음판에 찍히는 그림
 let lastStamp = '';
 function pickStamp(rec) {
   const h = new Date().getHours();
   const night = h >= NIGHT_START || h < NIGHT_END;
   const c = catOf(rec);
-  const pool = night ? STAMPS.night : [...((c && STAMPS[c.id]) || []), ...STAMPS.general];
+  const area = night ? 'night' : (c && STAMPS[c.id] ? c.id : 'general');
+  const pool = STAMPS[area];
   const options = pool.length > 1 ? pool.filter((p) => p !== lastStamp) : pool;
-  const phrase = options[Math.floor(Math.random() * options.length)];
-  lastStamp = phrase;
-  const i = phrase.indexOf(' ');
-  return i < 0 ? { icon: '', text: phrase } : { icon: phrase.slice(0, i), text: phrase.slice(i + 1) };
+  const text = options[Math.floor(Math.random() * options.length)];
+  lastStamp = text;
+  const icons = STAMP_ICONS[area] || STAMP_ICONS.general;
+  return { icon: icons[Math.floor(Math.random() * icons.length)], text };
+}
+
+// 방금 저장한 내용 한 줄 (둘째 줄). 값이 없으면 빈 글자라서 그 줄은 나오지 않아요.
+function savedLine(rec) {
+  const amount = amountOf(rec) ? amountOf(rec).label : '';
+  const join = (...a) => a.filter(Boolean).join(' · ');
+  switch (rec.type) {
+    case 'violin': return rec.kind === '레슨' ? '레슨 기록' : join(pieceNamesOf(rec)[0], amount); // 첫 교재의 곡(없으면 그 밖에 연습한 곡) · 연습량
+    case 'workout': return join(rec.kind, rec.distance ? `${fmtNum(rec.distance)}km` : '', amount);
+    case 'econRoutine': return routineIcons(rec).join(' '); // 체크한 항목 (🎧 📮)
+    case 'englishArticle': return domainOf(rec.link);
+    case 'art': return join(artKindOf(rec), amount);
+    default: return '';
+  }
+}
+
+// 셋째 줄: 그 기록이 속한 달에 지금까지 받은 도장 수. 사실만 알려줘요. (예시 기록은 세지 않아요)
+function monthStampLine(rec) {
+  if (!rec || !rec.date) return '';
+  const ym = rec.date.slice(0, 7);
+  const n = records.filter((r) => !r.sample && r.date && r.date.slice(0, 7) === ym && catOf(r)).length;
+  if (!n) return '';
+  return `${ym === todayStr().slice(0, 7) ? '이번 달' : `${Number(ym.slice(5, 7))}월`} 도장 ${n}개째`;
 }
 
 // 새 기록을 저장하기 직전에 부르면, 이 기록이 받는 도장을 골라서 기록에 남겨 둬요(stamp). 💮 도장 모음판이 이 그림을 써요.
@@ -2111,14 +2098,12 @@ function assignStamp(rec, remember = true) {
   return rec;
 }
 
-// 새 기록을 저장한 직후에 부르는 함수. 축하 한 줄(도장)을 잠깐 보여줘요. (축하를 꺼 두면 아무것도 안 보여요)
+// 새 기록을 저장한 직후에 부르는 함수. 도장 토스트를 잠깐 보여줘요. (축하를 꺼 두면 아무것도 안 보여요)
 function afterNewRecord(rec) {
   const s = stampPhrases.get(rec.id) || pickStamp(rec);
   stampPhrases.delete(rec.id);
   if (settings.celebrateOff) return;
-  const m = milestoneText(rec);
-  if (m) { toast(m, 5000); return; }
-  toast(s.text, 5000, { stamp: s.icon });
+  stampToast({ head: milestoneText(rec) || s.text, line: savedLine(rec), foot: monthStampLine(rec) });
 }
 
 // 사진 파일(여러 장도 돼요) → 사진이 붙은 새 그림 올리기 창. 여러 장은 기록 하나로 묶여요.
@@ -2715,13 +2700,12 @@ function claudeRange(period) {
 }
 const SCOPE_TYPE = { violin: 'violin', exercise: 'workout', econ: 'econRoutine', english: 'englishArticle', drawing: 'art' };
 const scopeRecords = (scope, start, end) => ofType(SCOPE_TYPE[scope]).filter((r) => r.date >= start && r.date <= end).sort(byOldest);
-const joinList = (a) => (Array.isArray(a) ? a.join(', ') : '');
 
 // 기록 한 줄 (채운 칸만)
 function claudeLine(r) {
   const bits = [mdLabel(r.date)];
   const add = (label, v) => { if (hasValue(v)) bits.push(label ? `${label}: ${oneLine(v)}` : oneLine(v)); };
-  const feel = () => { if (amountOf(r)) bits.push(`${amountWord(r)}: ${amountOf(r).label}`); if (moodOf(r)) bits.push(`기분: ${moodOf(r).label}`); };
+  const feel = () => { if (amountOf(r)) bits.push(`${amountWord(r)}: ${amountOf(r).label}`); };
   const done = () => { const f = r.feedbackId && records.find((x) => x.id === r.feedbackId); if (f && hasValue(f.todo)) bits.push(`해본 것(지난 제안): ${oneLine(f.todo)}`); };
   if (r.type === 'violin' && r.kind === '레슨') {
     bits.push('레슨');
@@ -2730,12 +2714,11 @@ function claudeLine(r) {
     feel();
   } else if (r.type === 'violin') {
     const bks = bookRows(r);
-    add(bks.length ? '그 밖에 연습한 곡' : '곡', r.piece); add('한 것', joinList(r.whatDid));
+    add(bks.length ? '그 밖에 연습한 곡' : '곡', r.piece);
     if (bks.length) bits.push(`교재: ${bks.map((b) => (b.piece ? `${b.name} · ${oneLine(b.piece)}` : b.name)).join(' / ')}`);
     add('교재 위치', r.bookPart); // 아직 옮기지 않은 예전 기록에만 있어요
     if (r.tempo) bits.push(`템포: ${r.tempo}`);
-    feel(); add('잘 된 것', r.good); add('연습한 부분', r.part); add('다음에', r.next); add('단계', r.stage);
-    if (Array.isArray(r.ask) && r.ask.length) bits.push(`레슨 때 물어볼 것: ${r.ask.map((t) => t.text).join(' / ')}`);
+    feel(); add('잘 된 것', r.good); add('다음에', r.next); add('단계', r.stage);
     done();
   } else if (r.type === 'workout') {
     bits.push(r.kind || '운동');
@@ -2749,11 +2732,10 @@ function claudeLine(r) {
     });
     add('한 줄', r.note);
   } else if (r.type === 'englishArticle') {
-    add('제목', r.title); add('링크', r.link);
+    add('링크', r.link);
     const sums = [r.sum1, r.sum2, r.sum3].map((t, i) => (String(t || '').trim() ? `${i + 1}) ${oneLine(t)}` : '')).filter(Boolean);
     if (sums.length) bits.push(`요약: ${sums.join(' ')}`);
-    add('표현', joinList(r.phrases)); add('내 생각', r.thought);
-    if (r.speak) bits.push('말해 볼 주제');
+    add('내 생각', r.thought);
     done();
   } else if (r.type === 'art') { // 그림: 종류 · 장수 · 한 줄 · 마음에 드는 곳 · 다음에 해볼 것
     bits.push(`종류: ${artKindOf(r)}`);
@@ -2795,11 +2777,7 @@ function claudeText({ scope, period, list, question = '' }) {
 }
 
 /* ---- 받은 피드백 저장·바꾸기 ---- */
-function feedbackStamp() {
-  const phrase = FEEDBACK_STAMPS[Math.floor(Math.random() * FEEDBACK_STAMPS.length)] || '💬 피드백 저장했어요';
-  const i = phrase.indexOf(' ');
-  return i < 0 ? { icon: '', text: phrase } : { icon: phrase.slice(0, i), text: phrase.slice(i + 1) };
-}
+const feedbackPhrase = () => STAMPS.feedback[Math.floor(Math.random() * STAMPS.feedback.length)];
 
 async function saveFeedback({ scope, period, rangeStart, rangeEnd, targetId = '', question = '', text = '', todo = '' }) {
   text = text.trim();
@@ -2810,7 +2788,7 @@ async function saveFeedback({ scope, period, rangeStart, rangeEnd, targetId = ''
   const rec = { id: newId(), type: 'claudeFeedback', date: todayStr(), scope, period, rangeStart, rangeEnd, targetId, question, text, todo, todoDone: false, createdAt: at, updatedAt: at };
   if (!(await saveRecord(rec))) return null;
   if (settings.celebrateOff) toast('피드백을 저장했어요', 3000);
-  else { const s = feedbackStamp(); toast(s.text, 4000, { stamp: s.icon }); }
+  else stampToast({ head: feedbackPhrase(), line: '💬 피드백을 저장했어요' }); // 도장은 새로 받지 않아서 "도장 N개째" 줄은 없어요
   return rec;
 }
 
@@ -2821,16 +2799,10 @@ async function setTodoDone(id, done) {
   refreshFeedbackViews();
 }
 
-async function hideTodo(id) { // 입력 창에 더 이상 안 뜨게 (지우는 게 아니에요)
-  const f = records.find((x) => x.id === id);
-  if (!f) return;
-  await saveRecord({ ...f, todoHidden: true, updatedAt: Date.now() });
-}
-
 const refreshFeedbackViews = () => { render(); refreshDay(); refreshArtDetail(); };
 
 /* ---- 지난 피드백에서 "해볼 것" ---- */
-// 이 범위에서 아직 해봤음 체크가 안 됐고 숨기지도 않은 가장 최근 해볼 것 하나
+// 이 범위에서 아직 해봤음 체크가 안 됐고 가장 최근인 해볼 것 하나 (예전에 "숨기기"를 눌러 둔 것(todoHidden)은 계속 안 보여요)
 const pendingTodo = (scope) => ofType('claudeFeedback').filter((f) => f.scope === scope && hasValue(f.todo) && !f.todoDone && !f.todoHidden).sort(byCreatedDesc)[0];
 
 // 입력 창 맨 위 (체크하고 저장하면 그 기록에 "오늘 해본 것"으로 연결돼요)
@@ -2839,8 +2811,7 @@ function feedbackHintHTML(scope, existing) {
   const f = pendingTodo(scope);
   if (!f) return '';
   return `<div class="fb-hint" data-fb-hint="${esc(f.id)}"><span class="fb-hint-t">💡 지난 피드백에서: ${esc(f.todo)}</span>
-    <label class="fb-hint-c"><input type="checkbox" name="feedbackDone" value="${esc(f.id)}"> 오늘 해봤음</label>
-    <button type="button" class="link-btn" data-act="fbHide" data-id="${esc(f.id)}">✕ 숨기기</button></div>`;
+    <label class="fb-hint-c"><input type="checkbox" name="feedbackDone" value="${esc(f.id)}"> 오늘 해봤음</label></div>`;
 }
 
 // 경제 루틴 화면: 체크박스 아래 한 줄 (그 자리에서 바로 체크)
@@ -2848,8 +2819,7 @@ function routineHintHTML() {
   const f = pendingTodo('econ');
   if (!f) return '';
   return `<div class="fb-hint routine-hint"><span class="fb-hint-t">💡 지난 피드백에서: ${esc(f.todo)}</span>
-    <label class="fb-hint-c"><input type="checkbox" data-fb-done="${esc(f.id)}"> 오늘 해봤음</label>
-    <button type="button" class="link-btn" data-act="fbHide" data-id="${esc(f.id)}" data-refresh="1">✕ 숨기기</button></div>`;
+    <label class="fb-hint-c"><input type="checkbox" data-fb-done="${esc(f.id)}"> 오늘 해봤음</label></div>`;
 }
 
 /* ---- 기록 카드 안의 🤖 · 💬 ---- */
@@ -3121,9 +3091,6 @@ function syncBookRows() {
 function fieldHTML(f, value, type) {
   const id = `f_${f.key}`;
   if (f.type === 'bookLines') return bookFieldHTML(f, value);
-  if (f.type === 'check') { // 체크 상자 하나
-    return `<div class="field" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label class="chk-line" for="${id}"><input type="checkbox" id="${id}" name="${f.key}" value="1" ${value ? 'checked' : ''}> ${esc(f.label)}</label>${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
-  }
   if (f.type === 'multi') { // 한 칸 제목 아래 입력 칸 여러 개 (영어 요약 3줄)
     const vals = value || {};
     return `<div class="field" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label>${esc(f.label)}</label>${f.keys.map((k, i) => `<input id="f_${k}" name="${k}" type="text" class="multi-in" value="${esc(vals[k] || '')}" placeholder="${esc((f.placeholders || [])[i] || '')}" autocomplete="off">`).join('')}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
@@ -3135,15 +3102,13 @@ function fieldHTML(f, value, type) {
   let input;
   if (f.type === 'textarea') {
     input = `<textarea id="${id}" name="${f.key}"${rows}${ph}>${esc(v)}</textarea>`;
-  } else if (f.type === 'lines') { // 한 줄에 하나씩 (근거 세 가지 등)
-    input = `<textarea id="${id}" name="${f.key}"${rows}${ph}>${esc(Array.isArray(value) ? value.join('\n') : v)}</textarea>`;
-  } else if (f.type === 'tasks') { // 한 줄에 하나씩 적는 체크 목록 (레슨 과제, 헷갈리는 것, 레슨 때 물어볼 것)
+  } else if (f.type === 'tasks') { // 한 줄에 하나씩 적는 체크 목록 (레슨 과제)
     const text = Array.isArray(value) ? value.map((t) => t.text).join('\n') : '';
     input = `<textarea id="${id}" name="${f.key}"${rows || ' rows="2"'}${ph}>${esc(text)}</textarea>`;
   } else if (f.type === 'select') {
     const opts = (f.options || []).map((o) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('');
     input = `<select id="${id}" name="${f.key}">${f.required ? '' : '<option value="">(선택 안 함)</option>'}${opts}</select>`;
-  } else if (f.type === 'choice' || f.type === 'chips') { // 버튼 칸 (연습량·기분·각종 칩)
+  } else if (f.type === 'choice' || f.type === 'chips') { // 버튼 칸 (연습량·종류·교재 칩)
     input = choiceHTML(f.key, choicesOf(f), value, f.type === 'chips', f.manage === 'books' ? MANAGE_BOOKS_BTN : '');
   } else if (f.type === 'images') { // 여러 장 (그림 사진)
     input = `<input id="${id}" type="file" accept="image/*" multiple class="sr-only" data-shots>
@@ -3227,14 +3192,6 @@ function afterSave() {
   if (back) openDay(back); else if (backArt && records.some((r) => r.id === backArt)) openArt(backArt, ui.artPhoto); else closeDlg();
 }
 
-// 레슨 기록을 만들 때 창 위쪽에 보여줄 "아직 안 물어본 것" 목록
-function askBoxHTML() {
-  const items = collectAsks();
-  if (!items.length) return '';
-  return `<div class="field ask-box" data-only="레슨" data-key="askBox"><label>🙋 레슨 때 물어보려던 것 <span class="meta">(물어봤으면 체크)</span></label>
-    ${asksListHTML(items)}</div>`;
-}
-
 function openForm(type, existing, presetDate, preset) {
   const schema = SCHEMAS[type];
   ui.backToDay = dlg.open && dlg.querySelector('.day-list') ? ui.dayOpen : null;
@@ -3258,7 +3215,6 @@ function openForm(type, existing, presetDate, preset) {
     <h2>${esc(schema.label)} ${existing ? '수정' : '추가'}</h2>
     <form id="recForm" novalidate>
       ${SCOPE_OF_TYPE[type] ? feedbackHintHTML(SCOPE_OF_TYPE[type], existing) : ''}
-      ${type === 'violin' && !existing ? askBoxHTML() : ''}
       ${base.map((f) => fieldHTML(f, valueFor(f), type)).join('')}
       ${more.length ? `<details class="more" id="moreBox"${moreOpen ? ' open' : ''}>
         <summary>✍ 더 적기 <span class="meta">(선택이에요)</span></summary>
@@ -3371,7 +3327,6 @@ async function submitForm(form) {
     if (f.legacy && !form.elements[f.key]) continue; // 안 보였던 예전 칸은 손대지 않아요
     if (f.hidden) continue; // 화면에 없는 칸
     if (f.type === 'audio') continue; // 녹음은 기록 안에 저장하지 않고, 저장한 뒤 곡에 붙여요
-    if (f.type === 'check') { data[f.key] = !!form.elements[f.key].checked; continue; }
     if (f.type === 'bookLines') { // 교재 칩 + 교재마다 한 줄 → books: [{ name, piece }] (칩 순서)
       const lines = new Map([...form.querySelectorAll('#bookRows [data-book-piece]')].map((i) => [i.dataset.bookPiece, i.value.trim()]));
       data.books = readChoice(form, { key: 'books', type: 'chips' }).map((name) => ({ name, piece: lines.get(name) || '' }));
@@ -3381,10 +3336,6 @@ async function submitForm(form) {
     if (f.type === 'image') { data[f.key] = formImages[f.key] || ''; continue; }
     if (f.type === 'images') { data[f.key] = [...formShots]; continue; }
     if (f.type === 'choice' || f.type === 'chips') { data[f.key] = readChoice(form, f); continue; } // 안 골랐으면 빈 값 (연습량은 숫자로 저장)
-    if (f.type === 'lines') {
-      data[f.key] = form.elements[f.key].value.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, f.max || 99);
-      continue;
-    }
     if (f.type === 'tasks') {
       const prev = new Map((old && Array.isArray(old[f.key]) ? old[f.key] : []).map((t) => [t.text, !!t.done]));
       data[f.key] = form.elements[f.key].value.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -3411,7 +3362,7 @@ async function submitForm(form) {
   const newAudio = type === 'violin' && kind === '연습' ? staged.length : 0;
   const pieceList = type === 'violin' ? piecesOf(data) : [];
   if (newAudio && !pieceList.length) { err.textContent = '녹음을 붙이려면 곡 이름을 먼저 적어 주세요.'; (form.querySelector('#bookRows [data-book-piece]') || form.elements.piece).focus(); return; }
-  const carry = [...HIDDEN_KEYS, 'stamp', 'feedbackId', ...(schema.keep || [])]; // 이 창에서 고치지 않는 칸은 그대로 보관
+  const carry = [...HIDDEN_KEYS, 'stamp', 'feedbackId', ...(schema.keep || [])]; // 이 창에서 고치지 않는 칸(화면에서 뺀 칸의 예전 값 포함)은 그대로 보관
   const rec = {
     id: old ? old.id : newId(),
     type,
@@ -3837,7 +3788,7 @@ function openSettings() {
       </div>
       <div class="card" style="margin:0">
         <h3>🎉 도장과 축하 한 줄</h3>
-        <p class="meta">새 기록을 저장하면 화면 아래에 도장과 짧은 한 마디가 잠깐 나타나요. 점수나 평가가 아니라, 남겼다는 사실만 알려줘요. 문구는 <b>app.js 맨 위의 STAMPS</b>에서 고칠 수 있어요. 예시 기록은 세지 않아요.</p>
+        <p class="meta">새 기록을 저장하면 화면 아래에 💮 도장 카드(짧은 한 마디 · 방금 저장한 내용 · 이번 달 도장 수)가 잠깐 나타나요. 점수나 평가가 아니라, 남겼다는 사실만 알려줘요. 문구는 <b>app.js 맨 위의 STAMPS</b>에서 고칠 수 있어요. 예시 기록은 세지 않아요.</p>
         <label class="meta"><input type="checkbox" data-act="celebrate" ${settings.celebrateOff ? '' : 'checked'}> 새 기록을 저장할 때 도장·축하 한 줄 보이기</label>
       </div>
       <div class="card" style="margin:0">
@@ -4006,12 +3957,6 @@ document.addEventListener('click', async (e) => {
     case 'fbMore': if (ui.fbOpenText.has(id)) ui.fbOpenText.delete(id); else ui.fbOpenText.add(id); render(); break;
     case 'fbEdit': openFeedbackEdit(id); break;
     case 'fbDelete': if (confirm('이 피드백을 지울까요?\n지운 피드백은 되돌릴 수 없어요.')) { await deleteRecord(id); refreshFeedbackViews(); } break;
-    case 'fbHide': {
-      await hideTodo(id);
-      const hint = el.closest('.fb-hint');
-      if (el.dataset.refresh) render(); else if (hint) hint.remove(); // 입력 창은 그대로 두고 그 줄만 없애요
-      break;
-    }
     case 'manageBooks': openBooksManager(); break;
     case 'closeDlg2': dlg2.close(); break;
     case 'bookMove': await moveBook(Number(el.dataset.i), Number(el.dataset.d)); break;
@@ -4124,7 +4069,6 @@ document.addEventListener('change', async (e) => {
   const t = e.target;
   if (t.dataset.act === 'task') { await toggleTask(t.dataset.id, t.dataset.key, Number(t.dataset.i), t.checked); }
   else if ('fbDone' in t.dataset) { await setTodoDone(t.dataset.fbDone, t.checked); }
-  else if (t.dataset.enSpeak) { const r = records.find((x) => x.id === t.dataset.enSpeak); if (r) { await saveRecord({ ...r, speak: t.checked, updatedAt: Date.now() }); render(); } }
   else if (t.dataset.routine && t.type === 'checkbox') { await setRoutineCheck(t.dataset.date, t.dataset.routine, t.checked); }
   else if (t.id === 'f_kind' && t.form && t.form.id === 'recForm') { syncKindFields(t.form); }
   else if (t.id === 'f_date') { // 날짜를 바꾸면 "새벽 4시 전이라 어제 기록" 안내는 사라져요

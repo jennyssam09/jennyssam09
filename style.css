@@ -282,7 +282,6 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .choice-btn.on { border-color: var(--purple); background: var(--purple-soft); color: var(--purple); }
 .choice-btn .ci { letter-spacing: 1px; }
 .amt { margin-right: 6px; color: var(--purple); letter-spacing: 2px; font-size: .85rem; }
-.mood { margin-right: 6px; font-size: 1rem; }
 
 /* 그때의 나 */
 .memory { margin-top: 22px; }
@@ -295,16 +294,31 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .memory-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .memory-line { color: var(--muted); font-size: .92rem; }
 
-/* 도장 토스트 */
-/* 도장: 동그란 도장이 찍히듯 나타나요 */
-.stamp {
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 46px; height: 46px; border-radius: 50%; font-size: 1.5rem; line-height: 1;
-  background: var(--purple-soft); border: 2px solid var(--purple);
-  transform: rotate(-12deg); animation: stamp-in .4s ease-out;
+/* 💮 도장 토스트: 화면 아래 가운데의 카드 하나. 왼쪽에 도장이 쿵 찍히고, 오른쪽에 한 마디 · 저장한 내용 · 이번 달 도장 수. 누르면 바로 닫혀요. */
+.toast.stamp-toast {
+  gap: 14px; align-items: center; cursor: pointer;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  max-width: min(calc(100vw - 32px), 380px); padding: 12px 20px 12px 14px; border-radius: 16px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0, 0, 0, .2);
 }
-@keyframes stamp-in { from { transform: scale(1.7) rotate(-12deg); opacity: 0; } to { transform: scale(1) rotate(-12deg); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .stamp { animation: none; } }
+.st-seal {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 54px; height: 54px; border-radius: 50%; font-size: 1.7rem; line-height: 1;
+  background: var(--red-soft); border: 2px solid color-mix(in srgb, var(--red) 40%, var(--card));
+  animation: seal-thump .28s ease-out;
+}
+/* 살짝 크게 → 제자리로 쿵, 약간 기울었다가 바로잡혀요 (0.3초 안쪽) */
+@keyframes seal-thump {
+  0% { transform: scale(1.35) rotate(-14deg); opacity: 0; }
+  60% { transform: scale(.96) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.st-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-head { font-size: 1.05rem; font-weight: 700; line-height: 1.35; }
+.st-line { font-size: .88rem; line-height: 1.4; }
+.st-foot { font-size: .78rem; color: var(--muted); }
+@media (max-width: 560px) { .toast.stamp-toast { width: calc(100vw - 32px); max-width: none; } } /* 폴드 커버 폭: 좌우 16px 여백 */
+@media (prefers-reduced-motion: reduce) { .st-seal { animation: none; } } /* 움직임 없이 그냥 나타나요 */
 
 /* ---------- 📖 돌아보기 창 ---------- */
 .recap-sec { margin-top: 16px; }
@@ -358,10 +372,7 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .tag.art-kind { background: var(--purple-soft); color: var(--purple); vertical-align: 2px; }
 
 /* 레슨 패널, 물어볼 것 */
-.lp-sep { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .lesson-panel h3 { font-size: 1rem; }
-.ask-box { padding: 10px 14px; border: 1px solid var(--purple); border-radius: 10px; background: var(--purple-soft); }
-.ask-box .meta { font-weight: 400; }
 
 /* 링크 모양 버튼 · 이동했을 때 잠깐 표시 */
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--purple); cursor: pointer; text-align: left; }
@@ -600,11 +611,6 @@ dialog.roomy { width: min(900px, 92vw); }
 .en-sum { margin: 4px 0 6px; padding-left: 1.6em; }
 .en-sum li { margin: 3px 0; }
 .en-dom { color: var(--purple); font-weight: 600; }
-.phrase-item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 16px; text-align: left; cursor: pointer; font: inherit; color: inherit; border: 1px solid transparent; }
-.phrase-item:hover { border-color: var(--purple); }
-.speak-item .pre { margin-top: 6px; }
-.chk-line { display: flex !important; align-items: center; gap: 10px; font-weight: 600 !important; cursor: pointer; }
-.chk-line input { width: 20px !important; height: 20px; margin: 0; accent-color: var(--purple); }
 .multi-in, .field .multi-in { margin-bottom: 6px; }
 .cal-mark.icon-only .cal-ico { margin-right: 2px; }
 

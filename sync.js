@@ -1395,7 +1395,9 @@
   const typeLabel = (t) => (SCHEMAS[t] ? SCHEMAS[t].label : t);
   function labelOf(type, key) {
     const f = ((SCHEMAS[type] && SCHEMAS[type].fields) || []).find((x) => x.key === key || (x.keys && x.keys.includes(key)));
-    return f ? String(f.label).replace(/\s*-\s*선택$/, '') : key;
+    if (f) return String(f.label).replace(/\s*-\s*선택$/, '');
+    const gone = typeof RETIRED !== 'undefined' && RETIRED[type] && RETIRED[type][key]; // 화면에서는 뺐지만 값은 남아 있는 칸
+    return gone || key;
   }
   function fmtVal(v) {
     if (v == null || v === '') return '(비어 있음)';
@@ -1407,6 +1409,7 @@
   function titleOf(rec) {
     if (!rec) return '';
     if (rec.type === 'violin' && typeof pieceNamesOf === 'function') return pieceNamesOf(rec)[0] || '';
+    if (rec.type === 'englishArticle' && !rec.title && typeof domainOf === 'function') return domainOf(rec.link) || '';
     const k = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'kind', rest: 'memo', econRoutine: 'note', claudeFeedback: 'todo', piecenote: 'piece' }[rec.type];
     return (k && rec[k]) || '';
   }
