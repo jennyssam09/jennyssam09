@@ -740,6 +740,7 @@ dialog.roomy { width: min(900px, 92vw); }
   summary { padding: 11px 0; }
   .piece-link { display: inline-flex; align-items: center; min-height: 44px; }
   .toast-act { min-height: 44px; min-width: 44px; padding: 6px 14px; } /* 토스트의 [바로 가기] */
+  .tab.fold-toggle { min-width: 44px; } /* 메뉴 끝의 ‹ › */
   .rec-play, .line-aux .link-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; } /* 곡 줄의 🎙 · ▶ · 빼기도 손가락 크기로 */
   .wk-dot { height: 44px; }
   .links a { display: inline-flex; align-items: center; min-height: 44px; }
