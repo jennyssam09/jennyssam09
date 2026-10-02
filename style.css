@@ -98,9 +98,9 @@ main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
 }
 .chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
-/* ---------- 주간 요약 ---------- */
-.week-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.week-head strong { font-size: 1.05rem; }
+/* ---------- 영역 화면의 공통 틀 (제목 → ＋ 기록 버튼 → 칩 줄 → 요약 한 줄 → 목록) ---------- */
+.add-row { margin: 6px 0 14px; }
+.area-line { margin: 0 0 12px; line-height: 1.5; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .stat { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .stat b { display: block; font-size: 1.3rem; }
@@ -269,6 +269,8 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 .copy-text { width: 100%; min-height: 300px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; line-height: 1.55; }
 .copy-state { min-height: 1.5em; margin: 6px 0 0; color: var(--accent); font-weight: 700; font-size: .9rem; }
 .total-card h3 { font-size: .95rem; color: var(--accent); }
+.total-start { padding: 10px 14px; }
+.total-start .meta { margin: 0; }
 
 /* ---------- 연습량·기분 버튼, 카드의 작은 표시 ---------- */
 .choice { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -582,7 +584,6 @@ dialog.roomy { width: min(900px, 92vw); }
 .cal-mark.routine .cal-ico { margin-right: 2px; }
 
 /* ---------- 📰 영어 ---------- */
-.week-mark { margin-top: 6px; padding: 5px 14px; border-radius: 999px; background: var(--bg); color: var(--muted); font-weight: 600; font-size: .9rem; white-space: nowrap; }
 .en-card h3 { margin: 4px 0 6px; }
 .en-sum { margin: 4px 0 6px; padding-left: 1.6em; }
 .en-sum li { margin: 3px 0; }
@@ -618,7 +619,6 @@ dialog.roomy { width: min(900px, 92vw); }
 .fb-todo input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
 .fb-todo .done { color: var(--muted); }
 .fb-answer.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.fb-todo-card { padding: 10px 16px; margin-bottom: 8px; }
 .fb-badge { color: var(--purple); }
 .fb-done { margin: 6px 0 0; padding: 4px 12px; border-radius: 10px; background: var(--purple-soft); color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-size: .9rem; }
 .fb-done-mark { color: var(--purple); font-weight: 700; font-size: .85rem; }

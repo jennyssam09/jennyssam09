@@ -199,6 +199,20 @@ const TABS = [
 const PLAYGROUND = { id: 'art', icon: '🎈', name: '놀이터' };
 const HIDDEN_TABS = [PLAYGROUND.id]; // 메뉴에는 없지만 열 수 있는 화면
 
+// 빈 화면 문구: "다음에 뭘 하면 되는지"만 알려 줘요. (평가나 재촉하는 말은 넣지 않아요. 여기서 고치면 모든 화면에 반영돼요)
+const EMPTY_TEXT = {
+  feedback: '아직 받은 피드백이 없어요. 캘린더의 🤖 클로드에게 보내기로 시작해 보세요.', // 💬 피드백 모음 (모든 영역)
+  violin: '아직 기록이 없어요. 위의 + 바이올린 기록으로 오늘 연습을 남겨 보세요. 10분도 괜찮아요.',
+  shelf: '곡 이름을 적은 기록이 생기면 여기에 책처럼 꽂혀요.',
+  workout: '아직 기록이 없어요. 위의 + 운동 기록으로 남겨 보세요.',
+  english: '이번 주 기사 하나를 올려 보세요. 세 줄이면 돼요.',
+  phrases: '기사 요약에 가져갈 표현을 적으면 여기에 모여요.',
+  speak: '말해 볼 주제로 표시한 기사가 여기에 모여요.',
+  pastNotes: '저장한 한 줄이 여기에 쌓여요.', // 경제 루틴 "지난 한 줄 보기"
+};
+// 🌱 "지금까지 쌓인 기록" 카드는 첫 기록으로부터 이만큼 날이 지난 뒤에 숫자를 보여 줘요. (그전에는 "이제 시작했어요"만)
+const TOTALS_AFTER_DAYS = 10;
+
 // 캘린더가 시작되는 달 (이 달부터 앞으로 계속 이어져요)
 const CALENDAR_START = '2026-01';
 
@@ -494,13 +508,11 @@ let autosaveTimer = null;
 
 const ui = {
   tab: 'cal',         // 처음 열면 캘린더 (이번 달)
-  weekOffset: 0,      // 0 = 이번 주, -1 = 지난 주 ...
-  bodyAllRange: true, // true = 전체 기간, false = 선택한 주만 (운동·바이올린 기록 목록)
+  // 영역 화면의 칩 (다른 메뉴에서 들어올 때마다 첫 칩으로 돌아가요: 📖 기록 · ✅ 오늘 루틴 · 📖 기사)
   exView: 'records',  // 운동: records | feedback
   vnView: 'records',  // 바이올린: records | shelf | feedback
   econView: 'routine', // 경제 루틴: routine | feedback
   enView: 'list',     // 영어: list | phrases | speak | feedback
-  fbMode: 'all',      // 💬 피드백 모음: all | todo
   noteDraft: null,    // 경제 루틴 "오늘 한 줄"에 쓰는 중이지만 아직 저장하지 않은 글 { date, text }
   noteSavedUntil: 0,  // 한 줄을 저장한 직후 "저장됨 ✓"를 보여 주는 시각
   claudePeriod: 'day', // 🤖 클로드에게 보내기: 기간 day | week | month
@@ -1080,56 +1092,26 @@ async function togglePieceDone(piece) {
   toast(done ? '📕 이 곡을 마무리했어요. 책장에 꽂아 뒀어요.' : '다시 연습 중인 곡으로 돌려놨어요.', 2500);
 }
 
-// 한 주의 숫자들 (화면의 주간 요약과 '클로드에게 보낼 요약'이 함께 써요)
-function weekStats(start) {
+// 목록 맨 위 요약 한 줄 (이번 주, 작게). 값이 없는 부분은 빼고, 아무것도 없으면 줄 자체를 그리지 않아요. 숫자 합계는 없어요.
+//   바이올린: "이 주에 연습한 곡: … · 다음에 해볼 것: …"   운동: "이 주: 요가 2 · 슬로조깅 1" (한 것만)
+function areaLineHTML(area) {
+  const start = mondayOf(todayStr());
   const end = addDays(start, 6);
   const inWeek = (r) => r.date >= start && r.date <= end;
-  const ws = ofType('workout').filter(inWeek);
-  const vs = ofType('violin').filter(inWeek);
-  const count = (list, k, v) => list.filter((r) => r[k] === v).length;
-  const prac = vs.filter((r) => r.kind !== '레슨'); // 연습 기록만 (레슨은 따로 세요)
-  const wOptions = SCHEMAS.workout.fields.find((f) => f.key === 'kind').options;
-  return {
-    end, ws, vs, prac,
-    restDays: new Set(ofType('rest').filter(inWeek).map((r) => r.date)).size,
-    lessons: vs.length - prac.length,
-    violinDays: new Set(prac.map((r) => r.date)).size,
-    kindText: wOptions.map((k) => `${k} ${count(ws, 'kind', k)}회`).join(' · '),
-    pieces: [...new Set(prac.map((r) => r.piece).filter(Boolean))],
-    lastNext: prac.filter((r) => r.next).sort(byNewest)[0],
-  };
-}
-
-const amountLine = (list) => {
-  const m = list.filter((r) => amountOf(r) && supportsAmount(r.type, r.kind));
-  return m.length ? AMOUNTS.map((a) => `${a.label} ${m.filter((r) => amountOf(r).v === a.v).length}`).join(' · ') : '';
-};
-
-// 주간 요약 (area: 'exercise' | 'violin'). 합계·점수 없이 개수만 보여줘요.
-function weekSummaryHTML(start, area) {
-  const { end, ws, vs, lessons, violinDays, kindText, pieces, lastNext, restDays } = weekStats(start);
-  const label = ui.weekOffset === 0 ? '이번 주' : ui.weekOffset === -1 ? '지난 주' : '';
-  const isEx = area === 'exercise';
-  const mine = isEx ? ws : vs;
-  const amountText = amountLine(mine);
-  return `<section class="card">
-    <div class="week-head">
-      <button type="button" class="btn ghost small" data-act="week" data-d="-1">◀ 이전 주</button>
-      <strong>${label ? label + ' · ' : ''}${esc(shortDay(start))} ~ ${esc(shortDay(end))}</strong>
-      <button type="button" class="btn ghost small" data-act="week" data-d="1">다음 주 ▶</button>
-      ${ui.weekOffset !== 0 ? '<button type="button" class="btn ghost small" data-act="week" data-d="0">이번 주로</button>' : ''}
-    </div>
-    <div class="stats">
-      ${isEx ? `<div class="stat"><b>${ws.length}회</b><span>운동 횟수</span></div>` : `<div class="stat"><b>${violinDays}일</b><span>바이올린 연습한 날</span></div>`}
-    </div>
-    ${isEx && ws.length ? `<p class="meta" style="margin:10px 0 0">운동 종류: ${esc(kindText)}</p>` : ''}
-    ${amountText ? `<p class="meta" style="margin:4px 0 0">${isEx ? '운동량' : '연습량'}: ${esc(amountText)}</p>` : ''}
-    ${isEx && restDays ? `<p class="meta" style="margin:4px 0 0">쉰 날 ${restDays}일</p>` : ''}
-    ${!isEx && lessons ? `<p class="meta" style="margin:4px 0 0">레슨 ${lessons}회</p>` : ''}
-    ${!isEx && pieces.length ? `<p class="meta" style="margin:4px 0 0">이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}</p>` : ''}
-    ${!isEx && lastNext ? `<p class="meta" style="margin:4px 0 0">가장 최근에 적은 다음 연습 목표: ${esc(lastNext.next)}</p>` : ''}
-    ${!mine.length && !(isEx && restDays) ? `<p class="meta" style="margin:10px 0 0">이 주에는 ${isEx ? '운동' : '바이올린'} 기록이 없어요.</p>` : ''}
-  </section>`;
+  const parts = [];
+  if (area === 'exercise') {
+    const ws = ofType('workout').filter(inWeek);
+    const kinds = SCHEMAS.workout.fields.find((f) => f.key === 'kind').options
+      .map((k) => [k, ws.filter((r) => r.kind === k).length]).filter(([, n]) => n > 0);
+    if (kinds.length) parts.push(`이 주: ${kinds.map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}`);
+  } else {
+    const prac = ofType('violin').filter(inWeek).filter((r) => r.kind !== '레슨'); // 연습 기록만
+    const pieces = [...new Set(prac.map((r) => r.piece).filter(Boolean))];
+    const lastNext = prac.filter((r) => hasValue(r.next)).sort(byNewest)[0];
+    if (pieces.length) parts.push(`이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}`);
+    if (lastNext) parts.push(`다음에 해볼 것: ${esc(oneLine(lastNext.next))}`);
+  }
+  return parts.length ? `<p class="meta area-line">${parts.join(' · ')}</p>` : '';
 }
 
 // 글 만들기에 쓰는 작은 도구들
@@ -1152,28 +1134,31 @@ async function copyText(text, okMsg, title = '복사할 글') {
   return ok;
 }
 
-// 지금까지 쌓인 기록 (예시 기록은 세지 않아요). area: 'exercise' | 'violin'
+// 지금까지 쌓인 기록 (예시 기록은 세지 않아요). area: 'exercise' | 'violin'. 목록 맨 아래에 작게 보여요.
+//   첫 기록으로부터 TOTALS_AFTER_DAYS(10)일이 지나기 전에는 숫자 대신 "이제 시작했어요"만. 진짜 기록이 아직 없으면 아무것도 그리지 않아요.
 function totalsCardHTML(area) {
   const real = records.filter((r) => !r.sample);
-  const sampleNote = records.some((r) => r.sample) ? ' 예시 기록은 세지 않았어요.' : '';
+  const sampleNote = records.some((r) => r.sample) ? '예시 기록은 세지 않았어요.' : '';
+  const mine = real.filter((r) => r.type === (area === 'exercise' ? 'workout' : 'violin'));
+  if (!mine.length) return '';
+  const first = mine.reduce((m, r) => (r.date < m ? r.date : m), mine[0].date);
+  const passed = Math.round((parseDate(todayStr()) - parseDate(first)) / 86400000);
+  if (passed < TOTALS_AFTER_DAYS) return '<section class="card total-card total-start"><p class="meta">🌱 이제 시작했어요</p></section>';
+  const note = sampleNote ? `<p class="meta" style="margin:8px 0 0">${sampleNote}</p>` : '';
   if (area === 'exercise') {
-    const w = real.filter((r) => r.type === 'workout');
-    if (!w.length) return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3><p class="meta" style="margin:4px 0 0">첫 기록을 남기면 여기에 차곡차곡 쌓여요.${sampleNote}</p></section>`;
     return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3>
-      <div class="stats" style="margin-top:8px"><div class="stat"><b>${w.length}회</b><span>운동</span></div></div>${sampleNote ? `<p class="meta" style="margin:8px 0 0">${sampleNote.trim()}</p>` : ''}
+      <div class="stats" style="margin-top:8px"><div class="stat"><b>${mine.length}회</b><span>운동</span></div></div>${note}
     </section>`;
   }
-  const v = real.filter((r) => r.type === 'violin');
-  const prac = v.filter((r) => r.kind !== '레슨');
-  const lessons = v.length - prac.length;
+  const prac = mine.filter((r) => r.kind !== '레슨');
+  const lessons = mine.length - prac.length;
   const pieces = new Set(prac.map((r) => (r.piece || '').trim()).filter(Boolean)).size;
-  if (!v.length) return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3><p class="meta" style="margin:4px 0 0">첫 기록을 남기면 여기에 차곡차곡 쌓여요.${sampleNote}</p></section>`;
   return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3>
     <div class="stats" style="margin-top:8px">
       <div class="stat"><b>${new Set(prac.map((r) => r.date)).size}일</b><span>바이올린 연습한 날</span></div>
       <div class="stat"><b>${pieces}곡</b><span>연습한 곡</span></div>
       ${lessons ? `<div class="stat"><b>${lessons}회</b><span>레슨</span></div>` : ''}
-    </div>${sampleNote ? `<p class="meta" style="margin:8px 0 0">${sampleNote.trim()}</p>` : ''}
+    </div>${note}
   </section>`;
 }
 
@@ -1200,6 +1185,7 @@ const monthLabel = (date) => { const d = parseDate(date); return `${d.getFullYea
 
 function shelfHTML() {
   const all = repertoire();
+  if (!all.length) return `<div class="empty">${esc(EMPTY_TEXT.shelf)}</div>`;
   const desk = all.filter((p) => !p.done).sort((a, b) => (b.lastDate || '').localeCompare(a.lastDate || '') || a.name.localeCompare(b.name, 'ko'));
   const shelf = all.filter((p) => p.done).sort((a, b) => (a.doneAt || '').localeCompare(b.doneAt || '') || a.name.localeCompare(b.name, 'ko'));
   const mic = (p) => (p.hasAudio ? '<span class="book-mic" title="녹음이 있어요" aria-label="녹음 있음">🎙</span>' : '');
@@ -1223,8 +1209,8 @@ function shelfHTML() {
 const viewChips = (key, cur, items) => items.map(([id, text]) => `<button type="button" class="chip ${cur === id ? 'active' : ''}" data-act="setView" data-key="${key}" data-id="${id}" aria-pressed="${cur === id}">${text}</button>`).join('');
 
 // 날짜별로 묶은 기록 카드 목록
-function dayGroupedHTML(list, cardFn) {
-  if (!list.length) return '<div class="empty">보이는 기록이 없어요. 위의 버튼으로 첫 기록을 남겨 보세요.</div>';
+function dayGroupedHTML(list, cardFn, emptyText) {
+  if (!list.length) return `<div class="empty">${esc(emptyText)}</div>`;
   let out = '';
   let lastDate = '';
   list.forEach((r) => {
@@ -1234,49 +1220,31 @@ function dayGroupedHTML(list, cardFn) {
   return out;
 }
 
+// 영역 화면의 공통 틀 (위에서 아래로): 제목·설명 한 줄 → ＋ 기록 버튼 → 칩 줄(첫 칩이 기본) → [기록 보기] 요약 한 줄 → 목록
 function renderExercise() {
-  const start = addDays(mondayOf(todayStr()), ui.weekOffset * 7);
-  const end = addDays(start, 6);
   const feedback = ui.exView === 'feedback';
-  let list = ofType('workout');
-  if (!ui.bodyAllRange) list = list.filter((r) => r.date >= start && r.date <= end);
-  list.sort(byNewest);
+  const list = ofType('workout').sort(byNewest);
   view.innerHTML = `
     <h2 class="page-title">운동</h2>
     <p class="page-sub">요가와 슬로조깅을 가볍게 남겨요. 잘했는지 못했는지 점수는 매기지 않아요.</p>
-    ${weekSummaryHTML(start, 'exercise')}
-    ${totalsCardHTML('exercise')}
-    <div class="row actions-row" style="margin:14px 0">
+    <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="workout">＋ 운동 기록</button>
     </div>
-    <div class="row between">
-      <div class="chips">${viewChips('exView', ui.exView, [['records', '📖 기록'], ['feedback', '💬 피드백']])}</div>
-      ${feedback ? '' : `<label class="meta"><input type="checkbox" data-act="bodyRange" ${ui.bodyAllRange ? '' : 'checked'}> 위에서 고른 주만 보기</label>`}
-    </div>
-    ${feedback ? feedbackViewHTML('exercise') : dayGroupedHTML(list, workoutCard)}`;
+    <div class="chips">${viewChips('exView', ui.exView, [['records', '📖 기록'], ['feedback', '💬 피드백']])}</div>
+    ${feedback ? feedbackViewHTML('exercise') : `${areaLineHTML('exercise')}${dayGroupedHTML(list, workoutCard, EMPTY_TEXT.workout)}${totalsCardHTML('exercise')}`}`;
 }
 
 function renderViolin() {
-  const start = addDays(mondayOf(todayStr()), ui.weekOffset * 7);
-  const end = addDays(start, 6);
   const mode = ui.vnView;
-  let list = ofType('violin');
-  if (!ui.bodyAllRange) list = list.filter((r) => r.date >= start && r.date <= end);
-  list.sort(byNewest);
+  const list = ofType('violin').sort(byNewest);
   view.innerHTML = `
     <h2 class="page-title">바이올린</h2>
     <p class="page-sub">손을 쓴 날을 가볍게 남겨요. 잘했는지 못했는지 점수는 매기지 않아요.</p>
-    ${lessonPanel()}
-    ${weekSummaryHTML(start, 'violin')}
-    ${totalsCardHTML('violin')}
-    <div class="row actions-row" style="margin:14px 0">
+    <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="violin">＋ 바이올린 기록</button>
     </div>
-    <div class="row between">
-      <div class="chips">${viewChips('vnView', mode, [['records', '📖 기록'], ['shelf', '📚 레퍼토리 책장'], ['feedback', '💬 피드백']])}</div>
-      ${mode === 'records' ? `<label class="meta"><input type="checkbox" data-act="bodyRange" ${ui.bodyAllRange ? '' : 'checked'}> 위에서 고른 주만 보기</label>` : ''}
-    </div>
-    ${mode === 'shelf' ? shelfHTML() : mode === 'feedback' ? feedbackViewHTML('violin') : dayGroupedHTML(list, violinCard)}`;
+    <div class="chips">${viewChips('vnView', mode, [['records', '📖 기록'], ['shelf', '📚 레퍼토리 책장'], ['feedback', '💬 피드백']])}</div>
+    ${mode === 'shelf' ? shelfHTML() : mode === 'feedback' ? feedbackViewHTML('violin') : `${lessonPanel()}${areaLineHTML('violin')}${dayGroupedHTML(list, violinCard, EMPTY_TEXT.violin)}${totalsCardHTML('violin')}`}`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1395,7 +1363,7 @@ function openPastNotes() {
   openDlg(`<h2>지난 한 줄</h2>
     ${list.length
     ? `<ul class="note-list">${list.map((r) => `<li><span class="meta">${esc(noteDay(r.date))}</span><span class="pre">${esc(r.note)}</span></li>`).join('')}</ul>`
-    : '<p class="meta">아직 적어 둔 한 줄이 없어요.</p>'}
+    : `<p class="meta">${esc(EMPTY_TEXT.pastNotes)}</p>`}
     <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
 }
 
@@ -1472,8 +1440,8 @@ function goToRecord(id) {
   if (r.type === 'econRoutine') { ui.tab = 'econ'; }
   else if (r.type === 'art') { ui.tab = 'art'; ui.artView = 'gallery'; }
   else if (r.type === 'englishArticle') { ui.tab = 'english'; ui.enView = 'list'; }
-  else if (r.type === 'violin') { ui.tab = 'violin'; ui.vnView = 'records'; ui.bodyAllRange = true; }
-  else { ui.tab = 'exercise'; ui.exView = 'records'; ui.bodyAllRange = true; }
+  else if (r.type === 'violin') { ui.tab = 'violin'; ui.vnView = 'records'; }
+  else { ui.tab = 'exercise'; ui.exView = 'records'; }
   ui.query = '';
   render();
   setTimeout(() => {
@@ -1658,13 +1626,13 @@ function englishBodyHTML() {
   const arts = ofType('englishArticle').sort(byNewest);
   if (ui.enView === 'phrases') {
     const rows = arts.flatMap((r) => (Array.isArray(r.phrases) ? r.phrases : []).map((ph) => ({ ph, r })));
-    if (!rows.length) return '<div class="empty">아직 없어요. 기사 기록의 "✍ 더 적기"에 가져갈 표현을 적으면 여기에 모여요.</div>';
+    if (!rows.length) return `<div class="empty">${esc(EMPTY_TEXT.phrases)}</div>`;
     return rows.map(({ ph, r }) => `<button type="button" class="card phrase-item" data-act="goto" data-id="${esc(r.id)}" title="누르면 그 기사로 가요">
       <b>${esc(ph)}</b><span class="meta">${esc(dayLabel(r.date))} · ${esc(r.title || domainOf(r.link) || '영어 기사')}</span></button>`).join('');
   }
   if (ui.enView === 'speak') {
     const rows = arts.filter((r) => r.speak);
-    if (!rows.length) return '<div class="empty">말해 볼 주제로 표시한 기사가 없어요. 기사 기록의 "✍ 더 적기"에서 표시할 수 있어요.</div>';
+    if (!rows.length) return `<div class="empty">${esc(EMPTY_TEXT.speak)}</div>`;
     return rows.map((r) => `<div class="card speak-item" data-rid="${esc(r.id)}">
       <div class="row between"><div><button type="button" class="link-btn" data-act="goto" data-id="${esc(r.id)}"><b>${esc(r.title || domainOf(r.link) || '영어 기사')}</b></button>
         <div class="meta">${esc(dayLabel(r.date))}</div></div>
@@ -1673,19 +1641,17 @@ function englishBodyHTML() {
     </div>`).join('');
   }
   if (ui.enView === 'feedback') return feedbackViewHTML('english');
-  return arts.length ? arts.map(englishCard).join('') : '<div class="empty">아직 기록이 없어요. 위의 버튼으로 이번 주 기사를 남겨 보세요.</div>';
+  return `<p class="meta area-line" id="enWeek">${esc(englishWeekLabel())}</p>${arts.length ? arts.map(englishCard).join('') : `<div class="empty">${esc(EMPTY_TEXT.english)}</div>`}`;
 }
 
 function renderEnglish() {
   view.innerHTML = `
-    <div class="row between" style="align-items:flex-start">
-      <div><h2 class="page-title">영어</h2><p class="page-sub">일주일에 기사 하나, 세 줄로 정리해요.</p></div>
-      <span class="week-mark" id="enWeek">${esc(englishWeekLabel())}</span>
-    </div>
-    <div class="row actions-row" style="margin:6px 0 14px">
+    <h2 class="page-title">영어</h2>
+    <p class="page-sub">일주일에 기사 하나, 세 줄로 정리해요.</p>
+    <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="englishArticle">＋ 이번 주 기사 추가</button>
     </div>
-    <div class="chips">${viewChips('enView', ui.enView, [['list', '📰 기사 목록'], ['phrases', '💬 표현 모음'], ['speak', '🗣 말해 볼 주제'], ['feedback', '💬 피드백']])}</div>
+    <div class="chips">${viewChips('enView', ui.enView, [['list', '📖 기사'], ['phrases', '💬 표현 모음'], ['speak', '🗣 말해 볼 주제'], ['feedback', '💬 피드백']])}</div>
     ${englishBodyHTML()}`;
 }
 
@@ -1742,7 +1708,7 @@ function renderCalendar() {
   if (!ui.calMonth) ui.calMonth = today.slice(0, 7);
   if (ui.calMonth < CALENDAR_START) ui.calMonth = CALENDAR_START;
   const [y, m] = ui.calMonth.split('-').map(Number);
-  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 월요일 시작 (주간 요약과 같아요)
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 월요일 시작
   const dayCount = new Date(y, m, 0).getDate();
 
   // 이 달의 기록을 날짜별·종류별로 모아요
@@ -2919,17 +2885,11 @@ function fbItemHTML(f, { full = false, compact = false } = {}) {
   </div>`;
 }
 
-// 💬 피드백 모음 (영역마다): [전체] [해볼 것만]
+// 💬 피드백 모음 (영역마다): 받은 피드백을 최신순으로. 각 피드백의 "해볼 것" 옆 체크(해봤음)로 표시해요.
 function feedbackViewHTML(scope) {
   const all = ofType('claudeFeedback').filter((f) => f.scope === scope).sort(byCreatedDesc);
-  const mode = ui.fbMode;
-  const chips = `<div class="chips" style="margin:12px 0"><button type="button" class="chip small ${mode === 'all' ? 'active' : ''}" data-act="fbMode" data-id="all" aria-pressed="${mode === 'all'}">전체</button><button type="button" class="chip small ${mode === 'todo' ? 'active' : ''}" data-act="fbMode" data-id="todo" aria-pressed="${mode === 'todo'}">해볼 것만</button></div>`;
-  if (!all.length) return `${chips}<div class="empty">아직 받은 피드백이 없어요. 🤖 로 글을 복사해 클로드에게 물어보고, 받은 답변을 저장해 보세요.</div>`;
-  if (mode === 'todo') {
-    const todos = all.filter((f) => hasValue(f.todo));
-    return `${chips}${todos.length ? todos.map((f) => `<div class="card fb-todo-card"><label class="fb-todo"><input type="checkbox" data-fb-done="${esc(f.id)}" ${f.todoDone ? 'checked' : ''}> <span class="${f.todoDone ? 'done' : ''}">${esc(f.todo)}</span></label><div class="meta" style="margin-left:30px">${esc(dayLabel(f.date))}</div></div>`).join('') : '<div class="empty">적어 둔 해볼 것이 없어요.</div>'}`;
-  }
-  return chips + all.map((f) => fbItemHTML(f)).join('');
+  if (!all.length) return `<div class="empty">${esc(EMPTY_TEXT.feedback)}</div>`;
+  return all.map((f) => fbItemHTML(f)).join('');
 }
 
 function openFeedbackEdit(id) {
@@ -3846,9 +3806,9 @@ document.addEventListener('click', async (e) => {
   switch (act) {
     case 'tab':
       if (ui.tab !== id && !(await confirmLeaveNote())) break; // 저장하지 않은 한 줄이 있으면 물어봐요
+      if (ui.tab !== id) { ui.exView = 'records'; ui.vnView = 'records'; ui.econView = 'routine'; ui.enView = 'list'; } // 다른 메뉴에서 들어오면 늘 첫 칩(기록)부터
       ui.tab = id; ui.query = '';
       render(); window.scrollTo(0, 0); break;
-    case 'week': ui.weekOffset = el.dataset.d === '0' ? 0 : ui.weekOffset + Number(el.dataset.d); render(); break;
     case 'setView': ui[el.dataset.key] = id; render(); break;
     case 'playground': openPlayground(); break;
     case 'artFeedback': ui.artView = 'feedback'; render(); break;
@@ -3925,7 +3885,6 @@ document.addEventListener('click', async (e) => {
     case 'fbClose': ui.cardFbOpen.delete(id); refreshFeedbackViews(); break;
     case 'fbToggle': if (ui.cardFbShown.has(id)) ui.cardFbShown.delete(id); else ui.cardFbShown.add(id); refreshFeedbackViews(); break;
     case 'fbMore': if (ui.fbOpenText.has(id)) ui.fbOpenText.delete(id); else ui.fbOpenText.add(id); render(); break;
-    case 'fbMode': ui.fbMode = id; render(); break;
     case 'fbEdit': openFeedbackEdit(id); break;
     case 'fbDelete': if (confirm('이 피드백을 지울까요?\n지운 피드백은 되돌릴 수 없어요.')) { await deleteRecord(id); refreshFeedbackViews(); } break;
     case 'fbHide': {
@@ -4049,7 +4008,6 @@ document.addEventListener('change', async (e) => {
   else if (t.dataset.enSpeak) { const r = records.find((x) => x.id === t.dataset.enSpeak); if (r) { await saveRecord({ ...r, speak: t.checked, updatedAt: Date.now() }); render(); } }
   else if (t.dataset.routine && t.type === 'checkbox') { await setRoutineCheck(t.dataset.date, t.dataset.routine, t.checked); }
   else if (t.id === 'f_kind' && t.form && t.form.id === 'recForm') { syncKindFields(t.form); }
-  else if (t.dataset.act === 'bodyRange') { ui.bodyAllRange = !t.checked; render(); }
   else if (t.id === 'f_date') { // 날짜를 바꾸면 "새벽 4시 전이라 어제 기록" 안내는 사라져요
     const n = t.parentElement.querySelector('.dawn-note');
     if (n) n.hidden = t.value !== n.dataset.date;
