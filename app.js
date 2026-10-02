@@ -673,8 +673,8 @@ function buildSamples() {
     // 🎨 그림 (원본 없이, 단계와 가져갈 것을 채운 예시)
     artA,
     mk('art', d(1), { stamp: '🖌️', artKind: '크로키', images: [SAMPLE_IMAGES.color, SAMPLE_IMAGES.shaded, SAMPLE_IMAGES.color], amount: 3, topic: '손 크로키 1분씩 (예시)', liked: '따뜻한 색이 자연스럽게 섞였다', next: '머리색만 차가운 색으로 바꿔 보기' }),
-    // 💬 클로드 피드백 (바이올린 이번 주 1개 - 해볼 것 아직, 그림 카드 1개 - 해봤음)
-    mk('claudeFeedback', d(1), { scope: 'violin', period: 'week', rangeStart: mondayOf(t), rangeEnd: addDays(mondayOf(t), 6), targetId: '', question: '3포지션에서 음정이 자꾸 높아지는 이유', text: '1. 잘한 점\n- 이번 주는 활을 줄에 수직으로 두는 연습이 하루도 빠짐없이 이어졌어요.\n- 3포지션에서 손이 앞으로 쏠리는 일이 줄어든 게 기록에서 보여요.\n2. 달라진 점·패턴\n- 비발디 곡의 템포가 54에서 60으로 올랐어요. (예시)', strengths: ['이번 주는 활을 줄에 수직으로 두는 연습이 하루도 빠짐없이 이어졌어요.', '3포지션에서 손이 앞으로 쏠리는 일이 줄어든 게 기록에서 보여요.'] }),
+    // 💬 클로드 피드백 (바이올린 이번 주 1개, 그림 카드 1개 - 잘한 점 포함)
+    mk('claudeFeedback', d(1), { scope: 'violin', period: 'week', rangeStart: mondayOf(t), rangeEnd: addDays(mondayOf(t), 6), targetId: '', question: '3포지션에서 음정이 자꾸 높아지는 이유', text: '1. 잘한 점\n- 이번 주는 활을 줄에 수직으로 두는 연습이 꾸준히 이어졌어요.\n- 3포지션에서 손이 앞으로 쏠리는 일이 줄어든 게 기록에서 보여요.\n2. 달라진 점·패턴\n- 비발디 곡의 템포가 54에서 60으로 올랐어요. (예시)', strengths: ['이번 주는 활을 줄에 수직으로 두는 연습이 꾸준히 이어졌어요.', '3포지션에서 손이 앞으로 쏠리는 일이 줄어든 게 기록에서 보여요.'] }),
     mk('claudeFeedback', d(7), { scope: 'drawing', period: 'card', rangeStart: d(8), rangeEnd: d(8), targetId: artA.id, question: '', text: '1. 잘한 점\n- 그림자 경계가 부드러워서 입체감이 잘 살았어요.\n2. 달라진 점·패턴\n- 지난번보다 명암의 단계가 한 층 더 분명해졌어요. (예시)', strengths: ['그림자 경계가 부드러워서 입체감이 잘 살았어요.'] }),
   ];
 }
@@ -2918,7 +2918,7 @@ dlg2.addEventListener('cancel', (e) => { e.preventDefault(); dlg2.close(); });
 
 /* ---------------------------------------------------------------------
    10-6. 🤖 클로드에게 보내기 + 💬 받은 피드백
-   기록 → 글로 복사 → 클로드에게 붙여 넣기 → 받은 답변 저장 → 해볼 것 하나 → 다음 기록 창에서 "해봤음" 체크.
+   기록 → 글로 복사 → 클로드에게 붙여 넣기 → 받은 답변 저장(잘한 점이 쌓여요). 해야 할 일은 만들지 않아요.
    (밖으로 나가는 요청은 없어요. 복사하고 붙여 넣는 방식이에요.)
    --------------------------------------------------------------------- */
 const SCOPE_OF_TYPE = { violin: 'violin', workout: 'exercise', art: 'drawing', englishArticle: 'english' };
