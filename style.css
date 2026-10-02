@@ -49,6 +49,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .tab:hover { background: var(--accent-soft); }
 .tab.active { background: var(--accent); color: var(--card); }
+/* 접어 둔 탭 (‹ 를 눌러 펼친 것·보고 있어서 잠깐 나온 것): 옅은 색으로 구분해요 */
+.tab.folded { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+.tab.folded.active { box-shadow: none; font-weight: 600; }
+.tab.fold-toggle { padding: 4px 12px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); background: var(--card); }
 
 main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
 
@@ -253,6 +257,10 @@ label.btn { display: inline-flex; align-items: center; justify-content: center; 
 }
 .drop-overlay[hidden], .toast[hidden] { display: none; }
 .toast:not([hidden]) { display: flex; align-items: center; gap: 10px; }
+.toast-act {
+  flex-shrink: 0; border: 0; border-radius: 999px; padding: 4px 12px; cursor: pointer; font-weight: 700;
+  background: var(--card); color: var(--ink);
+}
 .toast {
   position: fixed; inset: auto auto 24px 50%; margin: 0; border: 0; transform: translateX(-50%); z-index: 30;
   width: max-content; height: auto; max-width: min(92vw, 560px); padding: 12px 18px; border-radius: 12px; overflow: visible;
@@ -557,10 +565,6 @@ dialog.roomy { width: min(900px, 92vw); }
 
 /* ---------- 🎨 그림 갤러리 (주별 묶음 · 큰 썸네일 격자) / 상세 창 ---------- */
 .tag.art-kind.small { font-size: .72rem; padding: 0 8px; }
-.art-fb-link { font-size: .9rem; color: var(--purple); white-space: nowrap; }
-/* 🎈 놀이터 머리: 제목 옆에 작은 "← 캘린더로" */
-.playground-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
-.playground-head .page-title { margin-bottom: 0; }
 /* 한 줄에 아이맥 6개(좁아지면 5개) · 폴드 펼침 4개 · 커버 2개 */
 .art-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 12px; }
 .art-tile { display: flex; flex-direction: column; gap: 4px; padding: 0; text-align: left; cursor: pointer; border: 0; background: transparent; color: inherit; font: inherit; }
@@ -643,11 +647,19 @@ dialog.roomy { width: min(900px, 92vw); }
 .fb-fold { margin-top: 14px; padding: 10px 14px; border-radius: 14px; background: var(--bg); }
 .fb-fold > summary { color: var(--purple); font-weight: 700; }
 .fb-input { margin-top: 10px; }
+.fb-input .cl-row { margin-bottom: 4px; }
+.fb-ctx { margin: 4px 0 8px; }
+.fb-auto-note { margin: 4px 2px 0; font-size: .85rem; color: var(--muted); }
+/* ③ 받은 피드백 */
+.fb-list { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.fb-list-title { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
+.fb-scopes { margin-bottom: 10px; }
+.fb-scopes .chip { min-width: 3em; text-align: center; }
+.fb-scope { font-size: 1rem; }
+.fb-list .empty { padding: 20px 10px; }
+.fb-list > .row { margin-top: 8px; }
 .fb-text-in { width: 100%; min-height: 150px; padding: 10px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); resize: vertical; line-height: 1.55; }
 .fb-todo-in { width: 100%; padding: 9px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); }
-.fb-box { margin-top: 12px; padding: 12px 16px; border-radius: 14px; background: var(--purple-soft); }
-.fb-attached { margin-top: 10px; display: grid; gap: 8px; }
-.fb-item.compact { margin: 0; box-shadow: none; background: var(--bg); }
 .fb-item .fb-q { margin: 4px 0; }
 .fb-todo { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; cursor: pointer; }
 .fb-todo input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
@@ -655,6 +667,7 @@ dialog.roomy { width: min(900px, 92vw); }
 .fb-answer.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .fb-badge { color: var(--purple); }
 .fb-done { margin: 6px 0 0; padding: 4px 12px; border-radius: 10px; background: var(--purple-soft); color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-size: .9rem; }
+.fb-copied { margin: 8px 0 0; padding: 6px 12px; border-radius: 10px; background: var(--purple-soft); font-size: .9rem; }
 .fb-done-mark { color: var(--purple); font-weight: 700; font-size: .85rem; }
 .fb-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 14px; padding: 8px 14px; border-radius: 12px; background: var(--purple-soft); font-size: .92rem; }
 .fb-hint-t { flex: 1 1 260px; min-width: 0; color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-weight: 600; }
@@ -726,6 +739,7 @@ dialog.roomy { width: min(900px, 92vw); }
   .btn, .btn.small { min-width: 44px; }
   summary { padding: 11px 0; }
   .piece-link { display: inline-flex; align-items: center; min-height: 44px; }
+  .toast-act { min-height: 44px; min-width: 44px; padding: 6px 14px; } /* 토스트의 [바로 가기] */
   .rec-play, .line-aux .link-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; } /* 곡 줄의 🎙 · ▶ · 빼기도 손가락 크기로 */
   .wk-dot { height: 44px; }
   .links a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -741,6 +755,7 @@ dialog.roomy { width: min(900px, 92vw); }
   .tabs { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; margin: 0 -12px; padding: 0 12px 2px; }
   .tabs::-webkit-scrollbar { display: none; }
   .tab { flex: 0 0 auto; scroll-snap-align: center; font-size: .92rem; word-break: keep-all; }
+  .tab.fold-toggle { position: sticky; right: 0; margin-left: auto; min-width: 44px; background: var(--card); box-shadow: -8px 0 8px -2px var(--card); scroll-snap-align: none; } /* ‹ 는 옆으로 밀어도 항상 끝에 보여요 */
   dialog, dialog.wide, dialog.roomy { width: calc(100vw - 12px); }
   .art-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } /* 커버 화면: 2개 */
   .cf-cols, .cf-row { grid-template-columns: 1fr 1fr; }
@@ -755,6 +770,15 @@ dialog.roomy { width: min(900px, 92vw); }
   .board-nav strong { order: 5; flex: 1 1 100%; }
 }
 
+/* ---------- ⚙ 메뉴 보이기 ---------- */
+.menu-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.menu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 10px; border-radius: 12px; background: var(--bg); }
+.menu-row.fixed { background: transparent; border: 1px dashed var(--line); padding: 8px 10px; }
+.menu-name { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; flex: 1 1 auto; min-width: 0; }
+.menu-row.fixed .menu-name { cursor: default; }
+.menu-name input { width: 20px; height: 20px; accent-color: var(--accent); flex-shrink: 0; }
+.menu-moves { display: flex; gap: 6px; flex-shrink: 0; }
+
 /* ---------- 🎙 녹음 ☁ 표시 · 받기 버튼 ---------- */
 .rec-cloud { font-size: .8rem; color: var(--muted); white-space: nowrap; }
 .rec-cloud:empty { display: none; }
@@ -763,4 +787,3 @@ dialog.roomy { width: min(900px, 92vw); }
 .sync-audio h3 { font-size: .95rem; color: var(--accent); margin-bottom: 6px; }
 
 @media (min-width: 901px) and (max-width: 1150px) { .art-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-.playground-head + .page-sub { word-break: keep-all; }
