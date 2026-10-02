@@ -30,7 +30,7 @@ const AMOUNTS = [
 // 화면에서는 뺐지만, 저장된 값은 지우지 않고 보관하는 칸 (종류별: 저장 이름 → 예전 화면 이름)
 //   예전 기록과 백업에는 그대로 남아 있고, 그 기록을 수정해서 저장해도 지워지지 않아요. 카드·복사 글·돌아보기에는 나오지 않아요.
 const RETIRED = {
-  violin: { whatDid: '오늘 한 것', part: '연습한 부분', ask: '레슨 때 물어볼 것', mood: '하고 나서 기분' },
+  violin: { whatDid: '오늘 한 것', part: '연습한 부분', ask: '레슨 때 물어볼 것', mood: '하고 나서 기분', good: '오늘 잘 된 것', next: '다음에 해볼 것', tempo: '템포 (기록 전체)' },
   workout: { mood: '하고 나서 기분' },
   englishArticle: { title: '기사 제목', phrases: '가져갈 표현', speak: '말해 볼 주제로 표시' },
 };
@@ -50,7 +50,7 @@ const TEXTBOOKS_DEFAULT = ['스즈키 4권'];
    - more: true 인 칸은 "✍ 더 적기" 접힘 영역 안에 들어가요. (새 기록에서는 접혀 있고, 수정할 때 내용이 있으면 펼쳐져요)
    - legacy: true 는 예전 칸이에요. 새 기록에서는 안 보이고, 값이 들어 있는 예전 기록을 고칠 때만 보여요. (카드에는 값이 있으면 계속 보여요)
    - only: 해당 종류일 때만 보이는 칸   placeholder: 회색 예시 문장   suggest: true 는 전에 쓴 값을 최근 순으로 제안
-   - type: text / textarea / number / date / select / choice(버튼 하나) / tasks(체크 목록) / multi(칸 여러 개) / bookLines(교재별 한 줄) / image / images / audio
+   - type: text / textarea / number / date / select / choice(버튼 하나) / tasks(체크 목록) / multi(칸 여러 개) / bookLines(교재별 한 줄) / image / images
    - keep: 이 창에서 고치지 않아도 그대로 보관할 칸 (복기 창에서 적는 값 등)
    --------------------------------------------------------------------- */
 // 🧘 운동 "한 줄" 칸의 회색 예시 문장 (종류별)
@@ -77,25 +77,21 @@ const SCHEMAS = {
   violin: {
     label: '바이올린 기록',
     kindKey: 'kind',
-    keep: ['stage', ...Object.keys(RETIRED.violin)], // 예전에 고른 "이 곡 지금 어디쯤?"(곡 노트에서 보여요)과, 화면에서 뺀 칸(오늘 한 것·연습한 부분·물어볼 것·기분)의 예전 값은 이 창에서 고치지 않아도 그대로 보관
+    keep: ['stage', ...Object.keys(RETIRED.violin)], // 예전에 고른 "이 곡 지금 어디쯤?"(곡 노트에서 보여요)과, 화면에서 뺀 칸(오늘 한 것·연습한 부분·물어볼 것·기분·잘 된 것·다음에 해볼 것·기록 전체 템포)의 예전 값은 이 창에서 고치지 않아도 그대로 보관
     fields: [
       { key: 'date', label: '날짜', type: 'date', required: true },
       { key: 'kind', label: '종류', type: 'select', options: ['연습', '레슨'], required: true },
-      // 교재 칩을 켜면 그 교재의 "곡 이름이나 번호" 한 줄 칸이 생겨요. 저장은 books: [{ name, piece }] (칩 순서). 하루에 기록 하나는 그대로예요.
+      // 교재 칩을 켜면 그 교재의 "곡 이름이나 번호" 한 줄 칸이 생겨요. 저장은 books: [{ name, piece, tempo }] (칩 순서). 하루에 기록 하나는 그대로예요.
+      //   곡 줄(교재마다 한 줄 + 그 밖에 연습한 곡) 아래에는 템포와 "🎙 녹음 붙이기"가 있어요. 그 밖에 곡의 템포는 otherTempo 에 저장돼요.
       { key: 'books', label: '교재 - 선택', type: 'bookLines', manage: 'books', only: '연습' },
-      { key: 'piece', label: '그 밖에 연습한 곡 - 선택', type: 'text', only: '연습', suggest: true, placeholder: '예: 비발디 a단조 1악장, 자이츠 협주곡 5번' },
+      { key: 'piece', label: '그 밖에 연습한 곡 - 선택', type: 'text', only: '연습', suggest: true, aux: 'other', placeholder: '예: 비발디 a단조 1악장, 자이츠 협주곡 5번' },
+      { key: 'otherTempo', label: '그 밖에 연습한 곡의 템포', type: 'number', hidden: true }, // 입력은 "그 밖에 연습한 곡" 줄 아래의 템포 칸에서 해요
       { ...AMOUNT_FIELD, only: '연습' },
       { key: 'feedback', label: '선생님 피드백', type: 'textarea', only: '레슨', placeholder: '예: 활을 줄에 수직으로 두는 연습을 더 하면 좋겠다고 하셨다' },
       { key: 'homework', label: '다음 레슨까지 과제', type: 'tasks', only: '레슨', hint: '한 줄에 과제 하나씩 적어 주세요. 체크는 목록에서 바로 할 수 있어요.', placeholder: '예: G장조 스케일 두 옥타브, 매일' },
-      // ✍ 더 적기 (연습) - 잘 된 것을 가장 먼저
-      { key: 'good', label: '오늘 잘 된 것 하나', type: 'text', only: '연습', more: true, placeholder: '예: 비브라토가 두 박 정도 고르게 됐다' },
-      { key: 'next', label: '다음에 해볼 것 하나', type: 'textarea', rows: 2, only: '연습', more: true, placeholder: '예: 메트로놈 60에 비브라토 4박 느리게 두 번' },
-      { key: 'tempo', label: '템포 (BPM) - 선택', type: 'number', min: 1, step: 1, only: '연습', more: true, placeholder: '예: 60', hint: '메트로놈 숫자예요. 곡 이름을 누르면 템포 변화를 그래프로 볼 수 있어요. (적은 곡 모두에 기록돼요)' },
-      { key: 'audio', label: '🎙 녹음', type: 'audio', only: '연습', more: true }, // 녹음 파일은 기록이 아니라 곡에 붙어서 따로 저장돼요
-      { key: 'hard', label: '어려웠던 점 (예전 칸)', type: 'textarea', only: '연습', legacy: true, more: true },
-      // ✍ 더 적기 (레슨)
-      { key: 'praise', label: '선생님이 좋다고 한 것', type: 'text', only: '레슨', more: true, placeholder: '예: 활 쓰는 자세가 안정적이라고 하셨다' },
-      { key: 'newLearn', label: '새로 배운 것 한 줄', type: 'text', only: '레슨', more: true, placeholder: '예: 자리를 옮길 때 팔꿈치를 먼저 움직인다' },
+      { key: 'praise', label: '선생님이 좋다고 한 것', type: 'text', only: '레슨', placeholder: '예: 활 쓰는 자세가 안정적이라고 하셨다' },
+      { key: 'newLearn', label: '새로 배운 것 한 줄', type: 'text', only: '레슨', placeholder: '예: 자리를 옮길 때 팔꿈치를 먼저 움직인다' },
+      { key: 'hard', label: '어려웠던 점 (예전 칸)', type: 'textarea', only: '연습', legacy: true }, // 예전 값이 있는 기록을 고칠 때만 보여요
     ],
   },
   // ✅ 오늘의 경제 루틴: 하루에 기록 하나. 입력 창 없이 경제 화면에서 바로 체크해요.
@@ -490,7 +486,7 @@ let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기�
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
 // 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1 · quickFlagV1),
 // 캘린더 아래 '🤖 클로드에게 보내기'를 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, quickFlagV1: false, booksV1: false, claudeBoxOpen: false };
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, quickFlagV1: false, booksV1: false, tempoV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -616,12 +612,12 @@ function buildSamples() {
     mk('workout', d(3), { kind: '요가', amount: 1, memo: '퇴근 후 짧게 (예시 기록)' }),
     mk('rest', d(7), { stamp: '😴', memo: '야근한 날. 푹 잤다. (예시 기록)' }),
     // 🎻 바이올린
-    mk('violin', d(1), { stamp: '🎶', kind: '연습', amount: 3, tempo: 60, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '비브라토가 두 박 정도 고르게 됐다', stage: '천천히 치는 중', next: '메트로놈 60에 비브라토 4박 느리게 두 번 (예시 기록)' }),
-    mk('violin', d(3), { stamp: '🎼', kind: '연습', amount: 2, tempo: 52, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], good: '활이 줄에 수직으로 유지되는 순간이 늘었다', stage: '악보 익히는 중', next: '활을 줄에 수직으로 유지하기' }),
-    mk('violin', d(9), { kind: '연습', tempo: 76, books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], stage: '원래 템포 가까이', next: '천천히 박자 세며 치기' }),
-    mk('violin', d(6), { kind: '연습', amount: 2, tempo: 48, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장' }], stage: '천천히 치는 중', hard: '느린 템포에서도 손가락이 꼬였다.', next: '천천히 정확하게' }),
+    mk('violin', d(1), { stamp: '🎶', kind: '연습', amount: 3, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장', tempo: 60 }], stage: '천천히 치는 중' }),
+    mk('violin', d(3), { stamp: '🎼', kind: '연습', amount: 2, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장', tempo: 52 }], stage: '악보 익히는 중' }),
+    mk('violin', d(9), { kind: '연습', books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번', tempo: 76 }], stage: '원래 템포 가까이' }),
+    mk('violin', d(6), { kind: '연습', amount: 2, books: [{ name: '스즈키 4권', piece: '비발디 a단조 1악장', tempo: 48 }], stage: '천천히 치는 중', hard: '느린 템포에서도 손가락이 꼬였다.' }),
     mk('violin', d(5), { stamp: '🎓', kind: '레슨', feedback: '활을 줄에 수직으로 두는 연습을 더 하면 좋겠어요. 음정은 지난주보다 안정적이에요. (예시 기록)', praise: '음정이 지난주보다 안정적이라고 하셨다', newLearn: '자리를 옮길 때 팔꿈치를 먼저 움직인다', homework: [{ text: '스케일 G장조 두 옥타브, 매일', done: true }, { text: '비발디 1~16마디 메트로놈 60', done: false }, { text: '빈 줄 연습', done: false }] }),
-    mk('violin', monthsAgo(t, 1), { kind: '연습', amount: 2, books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], good: '처음으로 1악장을 끝까지 이어서 켜 봤다. (한 달 전 예시 기록)' }),
+    mk('violin', monthsAgo(t, 1), { kind: '연습', amount: 2, books: [{ name: '스즈키 4권', piece: '자이츠 협주곡 5번' }], stage: '악보 익히는 중' }),
     mk('piecenote', d(1), { piece: '비발디 a단조 1악장', memo: '5마디부터 멜로디가 올라가는 부분이 제일 좋다 (예시)' }),
     // 📚 레퍼토리 책장 예시: 비발디는 책상 위(연습 중), 자이츠 5번은 책장(마무리)
     mk('piecenote', d(2), { piece: '자이츠 협주곡 5번', memo: '', status: 'done', doneAt: d(2) }),
@@ -739,7 +735,7 @@ function memoryPick(today) {
 }
 
 function memoryText(r) {
-  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.good || r.next || r.hard), econRoutine: r.note, englishArticle: r.thought || r.sum1, art: r.liked || r.next || r.topic }[r.type] || '';
+  const raw = { workout: r.memo, violin: r.kind === '레슨' ? r.feedback : (r.good || r.hard), econRoutine: r.note, englishArticle: r.thought || r.sum1, art: r.liked || r.next || r.topic }[r.type] || '';
   const t = String(raw).replace(/\s+/g, ' ').trim();
   return t.length > 120 ? `${t.slice(0, 120)}…` : t;
 }
@@ -804,7 +800,7 @@ function guideHTML(type, r, skip = [], opts = {}) {
   const blocks = [];
   SCHEMAS[type].fields.forEach((f) => {
     const value = r[f.key];
-    if (['date', 'image', 'images', 'audio', 'number', 'select', 'multi', 'bookLines'].includes(f.type) || f.key === 'amount' || skip.includes(f.key) || !hasValue(value)) return;
+    if (['date', 'image', 'images', 'number', 'select', 'multi', 'bookLines'].includes(f.type) || f.key === 'amount' || skip.includes(f.key) || !hasValue(value)) return;
     const label = cleanLabel(f.label);
     if (f.type === 'choice' || f.type === 'chips') {
       const list = Array.isArray(value) ? value : [value];
@@ -878,10 +874,17 @@ function lessonPanel() {
 
 const pieceButton = (p) => `<button type="button" class="piece-link" data-act="piece" data-piece="${esc(p)}">${esc(p)}</button>`;
 
-// 🎻 카드의 곡 줄: 교재마다 "스즈키 5권 · 비발디 사단조 1악장" 한 줄씩 (곡이 없는 교재는 이름만), "그 밖에 연습한 곡"은 마지막 줄. 곡 이름을 누르면 곡 노트예요.
+// 🎻 카드의 곡 줄: 교재마다 "스즈키 5권 · 비발디 사단조 1악장 · ♩60 · 🎙1" 한 줄씩 (없는 값은 생략 · 곡이 없는 교재는 이름만), "그 밖에 연습한 곡"은 마지막 줄. 곡 이름을 누르면 곡 노트예요.
+//   🎙 은 그 곡 줄에 붙인 녹음이에요: 하나면 누르는 대로 재생·멈춤, 여럿이면 곡 노트(녹음 목록)가 열려요.
 function bookLinesHTML(r) {
-  const lines = bookRows(r).map((b) => `<div class="book-line"><span class="book-nm">${esc(b.name)}</span>${b.piece ? ` · <b>${pieceButton(b.piece)}</b>` : ''}</div>`);
-  if (pieceKey(r.piece)) lines.push(`<div class="book-line"><b>${pieceButton(pieceKey(r.piece))}</b></div>`);
+  const lines = lineRows(r).filter((l) => l.book || l.piece).map((l) => {
+    const t = l.piece ? tempoOfPiece(r, l.piece) : 0;
+    const recs = lineAudios(r, l);
+    const mic = recs.length === 1
+      ? `<button type="button" class="rec-play" data-act="playRec" data-aid="${esc(recs[0].id)}" title="녹음 듣기${recs[0].memo ? ` · ${esc(recs[0].memo)}` : ''}" aria-label="${esc(l.piece)} 녹음 재생" aria-pressed="false">🎙1</button>`
+      : recs.length ? `<button type="button" class="rec-play" data-act="piece" data-piece="${esc(l.piece)}" title="곡 노트에서 녹음 듣기" aria-label="${esc(l.piece)} 녹음 ${recs.length}개">🎙${recs.length}</button>` : '';
+    return `<div class="book-line">${[l.book ? `<span class="book-nm">${esc(l.book)}</span>` : '', l.piece ? `<b>${pieceButton(l.piece)}</b>` : '', t ? `<span class="line-tempo" title="템포 ${t} BPM">♩${t}</span>` : '', mic].filter(Boolean).join(' · ')}</div>`;
+  });
   return `<div class="book-lines">${lines.length ? lines.join('') : '<span class="meta">(곡 이름 미입력)</span>'}</div>`;
 }
 
@@ -900,11 +903,11 @@ function violinCard(r) {
   }
   return `<div class="card" data-rid="${esc(r.id)}">
     <div class="item-head">
-      <div><span class="tag violin">바이올린</span>${r.tempo ? ` · 템포 ${esc(r.tempo)} BPM` : ''} ${marksHTML(r)} ${recMarksHTML(r)}</div>
+      <div><span class="tag violin">바이올린</span> ${marksHTML(r)} ${recMarksHTML(r)}</div>
       ${actionButtons('violin', r.id, claudeBtns(r))}
     </div>
     ${bookLinesHTML(r)}
-    ${guideHTML('violin', r, ['kind', 'piece', 'books', 'tempo', 'feedback', 'homework'])}
+    ${guideHTML('violin', r, ['kind', 'piece', 'books', 'feedback', 'homework'])}
     ${feedbackDoneNote(r)}
     ${cardFeedbackHTML(r)}
   </div>`;
@@ -929,11 +932,28 @@ function textbookList() {
 const textbookChoices = () => textbookList().filter((b) => !b.hidden).map((b) => b.name);
 const MANAGE_BOOKS_BTN = '<button type="button" class="btn ghost small manage-btn" data-act="manageBooks">⚙︎ 교재 관리</button>';
 
-// 🎻 교재별 한 줄: books = [{ name, piece }] (교재 칩 순서). 예전 기록의 books(교재 이름만 있는 목록)도 읽어요 (그때는 곡이 빈칸).
-//   piece(예전 "곡 이름" 칸)는 이제 "그 밖에 연습한 곡"이에요. 예전 기록은 한 번만 새 모양으로 옮겨요 (booksCopy)
+// 🎻 교재별 한 줄: books = [{ name, piece, tempo }] (교재 칩 순서, tempo 는 적었을 때만). 예전 기록의 books(교재 이름만 있는 목록)도 읽어요 (그때는 곡이 빈칸).
+//   piece(예전 "곡 이름" 칸)는 이제 "그 밖에 연습한 곡"이고, 그 템포는 otherTempo 예요. 예전 기록은 한 번만 새 모양으로 옮겨요 (booksCopy · tempoCopy)
+const tempoNum = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
 const bookRows = (r) => (r && Array.isArray(r.books) ? r.books : [])
-  .map((b) => (b !== null && typeof b === 'object' ? { name: String(b.name || '').trim(), piece: String(b.piece || '').trim() } : { name: String(b === undefined || b === null ? '' : b).trim(), piece: '' }))
+  .map((b) => (b !== null && typeof b === 'object'
+    ? { name: String(b.name || '').trim(), piece: String(b.piece || '').trim(), ...(tempoNum(b.tempo) ? { tempo: tempoNum(b.tempo) } : {}) }
+    : { name: String(b === undefined || b === null ? '' : b).trim(), piece: '' }))
   .filter((b) => b.name);
+
+// 곡 줄: 교재마다 한 줄(칩 순서) + 맨 끝에 "그 밖에 연습한 곡". line 은 줄의 이름표예요 ('b:교재 이름' · 'o')
+function lineRows(r) {
+  const out = bookRows(r).map((b) => ({ line: `b:${b.name}`, book: b.name, piece: b.piece, tempo: b.tempo || 0 }));
+  out.push({ line: 'o', book: '', piece: pieceKey(r && r.piece), tempo: tempoNum(r && r.otherTempo) });
+  return out;
+}
+// 한 기록에서 그 곡의 템포: 곡 줄에 적은 템포 → 없으면 아직 줄로 옮기지 않은 예전 기록의 기록 단위 템포(그 기록에 적은 모든 곡에 적용돼요)
+function tempoOfPiece(r, name) {
+  const hit = lineRows(r).find((l) => l.piece === name && l.tempo);
+  return hit ? hit.tempo : tempoNum(r && r.tempo);
+}
+// 그 곡 줄에 붙인 녹음 (녹음은 곡 이름 + 그 기록 id 로 이어져요)
+const lineAudios = (r, l) => (l.piece ? audios.filter((a) => a.recId === r.id && a.piece === l.piece).sort(byOldest) : []);
 
 // 한 기록에 적힌 곡들: 교재별 한 줄(칩 순서) → 그 밖에 연습한 곡. 같은 곡은 하나로 (어느 교재에서 나왔는지는 books 에 모아요)
 function piecesOf(r) {
@@ -1013,15 +1033,14 @@ function openPiece(piece) {
   const note = pieceNoteOf(piece);
   const days = new Set(prac.map((r) => r.date)).size;
   const goods = prac.filter((r) => hasValue(r.good)).sort(byNewest);
-  const lastNext = prac.filter((r) => hasValue(r.next)).sort(byNewest)[0];
   const lastStage = prac.filter((r) => hasValue(r.stage)).sort(byNewest)[0];
   const hards = prac.filter((r) => hasValue(r.hard)).sort(byNewest);
   const byDay = new Map(); // 같은 날 여러 번 연습했으면 마지막 기록을 써요
-  prac.filter((r) => Number(r.tempo) > 0).forEach((r) => byDay.set(r.date, { date: r.date, tempo: Number(r.tempo) }));
+  prac.forEach((r) => { const t = tempoOfPiece(r, piece); if (t) byDay.set(r.date, { date: r.date, tempo: t }); }); // 그 곡 줄의 템포 (줄로 옮기지 않은 예전 기록은 기록 단위 템포)
   const pts = [...byDay.values()];
   const withAmount = prac.filter(amountOf);
   const tempo = !pts.length
-    ? '<p class="meta">템포(BPM)가 적힌 연습 기록이 없어요. 연습 기록의 "✍ 더 적기"에 템포를 적으면 여기에 그래프가 그려져요.</p>'
+    ? '<p class="meta">템포(BPM)가 적힌 연습 기록이 없어요. 연습 기록의 곡 줄 아래 "템포"에 숫자를 적으면 여기에 그래프가 그려져요.</p>'
     : `${tempoChartSVG(pts)}
       ${pts.length === 1 ? '<p class="meta">템포가 적힌 기록이 하나뿐이에요. 두 번 이상 적으면 선으로 이어져요.</p>' : ''}
       <table class="tempo-table"><thead><tr><th>날짜</th><th>템포 (BPM)</th></tr></thead>
@@ -1045,7 +1064,6 @@ function openPiece(piece) {
     ${withAmount.length ? `<div class="label">연습량</div><p class="pre piece-amounts">${AMOUNTS.map((a) => `<span class="amt">${a.icon}</span> ${esc(a.label)} ${withAmount.filter((r) => amountOf(r).v === a.v).length}`).join(' · ')}</p>` : ''}
     ${goods.length ? `<div class="label">잘 된 것 모아보기</div>
       <ul class="note-list">${goods.map((r) => `<li><span class="meta">${esc(shortDay(r.date))}</span><span class="pre">${esc(r.good)}</span></li>`).join('')}</ul>` : ''}
-    ${lastNext ? `<div class="label">가장 최근 다음에 해볼 것 <span class="meta">(${esc(shortDay(lastNext.date))})</span></div><p class="pre">${esc(lastNext.next)}</p>` : ''}
     <div class="label">템포 변화</div>
     ${tempo}
     ${hards.length ? `<div class="label">어려웠던 점 모아보기 <span class="meta">(예전 칸)</span></div>
@@ -1090,7 +1108,7 @@ async function togglePieceDone(piece) {
 }
 
 // 목록 맨 위 요약 한 줄 (이번 주, 작게). 값이 없는 부분은 빼고, 아무것도 없으면 줄 자체를 그리지 않아요. 숫자 합계는 없어요.
-//   바이올린: "이 주에 연습한 곡: … · 다음에 해볼 것: …"   운동: "이 주: 요가 2 · 슬로조깅 1" (한 것만)
+//   바이올린: "이 주에 연습한 곡: …"   운동: "이 주: 요가 2 · 슬로조깅 1" (한 것만)
 function areaLineHTML(area) {
   const start = mondayOf(todayStr());
   const end = addDays(start, 6);
@@ -1104,9 +1122,7 @@ function areaLineHTML(area) {
   } else {
     const prac = ofType('violin').filter(inWeek).filter((r) => r.kind !== '레슨'); // 연습 기록만
     const pieces = [...new Set(prac.flatMap(pieceNamesOf))];
-    const lastNext = prac.filter((r) => hasValue(r.next)).sort(byNewest)[0];
     if (pieces.length) parts.push(`이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}`);
-    if (lastNext) parts.push(`다음에 해볼 것: ${esc(oneLine(lastNext.next))}`);
   }
   return parts.length ? `<p class="meta area-line">${parts.join(' · ')}</p>` : '';
 }
@@ -2129,7 +2145,7 @@ function endDrag() {
   clearTimeout(dragTimer);
   $('#dropOverlay').hidden = true;
   document.querySelectorAll('.dropzone.over').forEach((z) => z.classList.remove('over'));
-  document.querySelectorAll('.audio-drop.over').forEach((a) => a.classList.remove('over'));
+  document.querySelectorAll('.audio-drop.over, [data-line-zone].over').forEach((a) => a.classList.remove('over'));
 }
 
 document.addEventListener('dragover', (e) => {
@@ -2137,6 +2153,8 @@ document.addEventListener('dragover', (e) => {
   e.preventDefault(); // 이렇게 해야 브라우저가 사진을 열어 버리면서 기록장이 사라지지 않아요
   document.querySelectorAll('.dropzone').forEach((z) => z.classList.toggle('over', !!(e.target.closest && e.target.closest('.dropzone') === z)));
   document.querySelectorAll('.audio-drop').forEach((a) => a.classList.toggle('over', !!(e.target.closest && e.target.closest('.audio-drop'))));
+  const zoneNow = e.target.closest && e.target.closest('[data-line-zone]'); // 곡 줄에 끌어다 놓기: 그 줄이 연하게 표시돼요
+  document.querySelectorAll('[data-line-zone]').forEach((z) => z.classList.toggle('over', z === zoneNow));
   const target = dropTarget();
   if (target) {
     const box = $('#dropOverlay');
@@ -2153,8 +2171,15 @@ document.addEventListener('drop', async (e) => {
   endDrag();
   const files = [...e.dataTransfer.files];
   const target = dropTarget();
-  if (dlg.open && dlg.querySelector('.audio-drop') && files.some(isAudioFile)) { await stageAudioFiles(files); return; } // 🎙 녹음
-  if (!dlg.open && files.some(isAudioFile) && !files.some(isImage)) { toast('녹음 파일은 곡 노트나 바이올린 기록 창의 🎙 칸에 놓아 주세요.'); return; }
+  const lineZone = e.target.closest && e.target.closest('[data-line-zone]'); // 바이올린 기록 창의 곡 줄
+  if (dlg.open && lineZone && dlg.querySelector('#recForm[data-type=violin]') && files.some(isAudioFile)) { // 🎙 그 줄의 곡에 붙일 녹음
+    const line = lineZone.dataset.lineZone;
+    if (!needPieceFirst(line)) await stageLineFiles(line, files);
+    return;
+  }
+  if (dlg.open && dlg.querySelector('#recForm[data-type=violin]') && files.some(isAudioFile)) { toast('녹음은 붙일 곡 줄에 놓아 주세요.'); return; }
+  if (dlg.open && dlg.querySelector('.audio-drop') && files.some(isAudioFile)) { await stageAudioFiles(files); return; } // 🎙 곡 노트의 녹음
+  if (!dlg.open && files.some(isAudioFile) && !files.some(isImage)) { toast('녹음 파일은 곡 노트나 바이올린 기록 창의 곡 줄에 놓아 주세요.'); return; }
   if (imgFormOpen()) {
     const imgs = files.filter(isImage);
     if (!imgs.length) { $('#formError').textContent = '이미지 파일(사진)만 넣을 수 있어요.'; return; }
@@ -2247,7 +2272,7 @@ async function stageAudioFiles(files) {
   const notAudio = files.length - good.length;
   if (!good.length) { say('녹음 파일(m4a, mp3, wav, aac 등)만 올릴 수 있어요.'); return; }
   let tooBig = 0;
-  let room = AUDIO_MAX_PER_PIECE - staged.length;
+  let room = AUDIO_MAX_PER_PIECE - staged.filter((s) => !s.line).length;
   let over = 0;
   for (const f of good) {
     if (f.size > AUDIO_MAX_BYTES) { tooBig += 1; continue; }
@@ -2258,25 +2283,24 @@ async function stageAudioFiles(files) {
     room -= 1;
   }
   say([tooBig ? TOO_LONG_MSG : '', notAudio ? `녹음 파일이 아닌 ${notAudio}개는 뺐어요.` : '', over ? `한 번에 ${AUDIO_MAX_PER_PIECE}개까지 고를 수 있어서 ${over}개는 뺐어요.` : ''].filter(Boolean).join(' '));
-  const moreBox = $('#moreBox');
-  if (moreBox && staged.length) moreBox.open = true;
   renderStaged();
 }
 
-function stagedHTML(withUpload) {
-  if (!staged.length) return '';
-  return `<div class="stage-list">${staged.map((s) => `<div class="stage-row">
+function stagedHTML() { // 곡 노트에서 올리려고 고른 녹음 (날짜·메모를 고칠 수 있어요)
+  const plain = staged.filter((s) => !s.line); // 곡 줄에 고른 녹음(line 이 있는 것)은 바이올린 기록 창의 그 줄에서 보여요
+  if (!plain.length) return '';
+  return `<div class="stage-list">${plain.map((s) => `<div class="stage-row">
       <div class="stage-name">🎙 <b>${esc(s.name)}</b> <span class="meta">${esc(fmtMB(s.file.size))}</span></div>
       <label class="stage-f"><span class="meta">녹음한 날</span><input type="date" data-stage="date" data-sid="${esc(s.sid)}" value="${esc(s.date)}" max="${todayStr()}"></label>
       <label class="stage-f grow"><span class="meta">메모 - 선택</span><input type="text" maxlength="120" data-stage="memo" data-sid="${esc(s.sid)}" value="${esc(s.memo)}" placeholder="예: 2마디 음정 신경 씀"></label>
       <button type="button" class="btn ghost small" data-act="unstage" data-sid="${esc(s.sid)}">빼기</button>
     </div>`).join('')}
-    ${withUpload ? '<div class="row"><button type="button" class="btn purple small" data-act="uploadStaged">올리기</button></div>' : '<p class="hint" style="margin:4px 0 0">기록을 저장하면 곡에 붙어요.</p>'}
+    <div class="row"><button type="button" class="btn purple small" data-act="uploadStaged">올리기</button></div>
   </div>`;
 }
 function renderStaged() {
   const box = $('#audioStage');
-  if (box) box.innerHTML = stagedHTML(!!$('#pieceAudio'));
+  if (box) box.innerHTML = stagedHTML();
 }
 
 // 곡에 녹음 하나 저장. 곡에 이미 5개가 있으면 (첫 녹음을 뺀) 가장 오래된 것을 지울지 물어봐요. 저장하면 true
@@ -2339,8 +2363,8 @@ async function applyAudioChanges({ put = [], tombs = [], drop = [] }) {
 
 // 고른 녹음들을 곡에 붙여요 (날짜가 이른 것부터. 곡의 첫 녹음이 되는 건 가장 먼저 저장된 것이에요)
 async function commitStaged(piece, recId) {
-  const list = [...staged].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  staged = [];
+  const list = staged.filter((s) => !s.line).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  staged = staged.filter((s) => s.line);
   let added = 0;
   for (const s of list) {
     if (await addRecording(piece, { file: s.file, date: s.date, memo: s.memo.trim(), name: s.name, recId })) added += 1;
@@ -2419,7 +2443,9 @@ function revokeAudioUrls(root) {
 const cardPlayer = { el: null, aid: null, url: '' };
 function syncPlayButtons() {
   document.querySelectorAll('.rec-play').forEach((b) => {
-    const on = !!cardPlayer.el && !cardPlayer.el.paused && cardPlayer.aid === b.dataset.aid;
+    const on = b.dataset.sid
+      ? !!stagedPlayer.el && !stagedPlayer.el.paused && stagedPlayer.sid === b.dataset.sid // 저장 전에 고른 녹음
+      : !!cardPlayer.el && !cardPlayer.el.paused && cardPlayer.aid === b.dataset.aid;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   });
@@ -2445,7 +2471,8 @@ async function toggleCardPlay(aid) {
   try { await el.play(); } catch (e) { toast('재생하지 못했어요. 이 브라우저에서 열 수 없는 형식일 수 있어요.'); }
   syncPlayButtons();
 }
-const recMarksHTML = (r) => audios.filter((a) => a.recId === r.id).sort(byOldest).map((a) => `<button type="button" class="rec-play" data-act="playRec" data-aid="${esc(a.id)}" title="녹음 듣기${a.memo ? ` · ${esc(a.memo)}` : ''}" aria-label="녹음 재생" aria-pressed="false">🎙</button>`).join('');
+// 곡 줄에 붙지 않은 녹음만 머리 줄에 작게 (곡 줄에 붙은 것은 그 줄의 🎙 이에요. 예: 곡 이름을 나중에 바꿔서 줄과 이어지지 않는 녹음)
+const recMarksHTML = (r) => audios.filter((a) => a.recId === r.id && !lineRows(r).some((l) => l.piece && l.piece === a.piece)).sort(byOldest).map((a) => `<button type="button" class="rec-play" data-act="playRec" data-aid="${esc(a.id)}" title="녹음 듣기${a.memo ? ` · ${esc(a.memo)}` : ''}" aria-label="녹음 재생" aria-pressed="false">🎙</button>`).join('');
 
 /* ---- 녹음 목록 (곡 노트와 입력 창에서 같이 써요) ---- */
 // 재생 칸. 다른 기기에서 올려서 아직 이 기기에 파일이 없는 녹음은 "☁ 눌러서 받기" 버튼이에요 (받고 나면 재생 칸으로 바뀌어요)
@@ -2536,8 +2563,7 @@ function refreshAudioUI() {
   if (!dlg.open) return;
   const pb = dlg.querySelector('#pieceAudio');
   if (pb) swap(pb, pieceAudioInner(pb.dataset.piece));
-  const fb = dlg.querySelector('#formAudioList');
-  if (fb) swap(fb, audios.filter((a) => a.recId === fb.dataset.rec).sort(byOldest).map(audioRowHTML).join(''));
+  renderAllLineRecs(); // 바이올린 기록 창의 곡 줄에 붙은 녹음 (지우면 바로 반영)
 }
 
 /* ---- 백업에 넣기: 곡마다 첫 녹음만 (⚙ 에서 "녹음은 백업에서 빼기"를 켜면 하나도 넣지 않아요) ---- */
@@ -2713,12 +2739,15 @@ function claudeLine(r) {
     if (Array.isArray(r.homework) && r.homework.length) bits.push(`과제: ${r.homework.map((t) => `[${t.done ? '완료' : '미완료'}] ${t.text}`).join(' / ')}`);
     feel();
   } else if (r.type === 'violin') {
-    const bks = bookRows(r);
-    add(bks.length ? '그 밖에 연습한 곡' : '곡', r.piece);
-    if (bks.length) bits.push(`교재: ${bks.map((b) => (b.piece ? `${b.name} · ${oneLine(b.piece)}` : b.name)).join(' / ')}`);
+    // 곡 줄마다 "곡 (템포 60 · 녹음 1개 있음)" — 템포·녹음은 있을 때만이고, 녹음은 "있음"만 알려요
+    const lines = lineRows(r);
+    const note = (l) => { const t = l.piece ? tempoOfPiece(r, l.piece) : 0; const n = lineAudios(r, l).length; const a = [t ? `템포 ${t}` : '', n ? `녹음 ${n}개 있음` : ''].filter(Boolean); return a.length ? ` (${a.join(' · ')})` : ''; };
+    const other = lines[lines.length - 1];
+    const books = lines.filter((l) => l.book);
+    if (other.piece) bits.push(`${books.length ? '그 밖에 연습한 곡' : '곡'}: ${oneLine(other.piece)}${note(other)}`);
+    if (books.length) bits.push(`교재: ${books.map((l) => (l.piece ? `${l.book} · ${oneLine(l.piece)}${note(l)}` : l.book)).join(' / ')}`);
     add('교재 위치', r.bookPart); // 아직 옮기지 않은 예전 기록에만 있어요
-    if (r.tempo) bits.push(`템포: ${r.tempo}`);
-    feel(); add('잘 된 것', r.good); add('다음에', r.next); add('단계', r.stage);
+    feel(); add('단계', r.stage);
     done();
   } else if (r.type === 'workout') {
     bits.push(r.kind || '운동');
@@ -3063,29 +3092,125 @@ function formSnapshot() {
 const isFormDirty = () => { const now = formSnapshot(); return now !== '' && now !== formBase; };
 
 // 🎻 교재 칸: 교재 칩(여러 개, ⚙︎ 교재 관리) + 켠 교재마다 "교재 이름 + 한 줄 칸" (끄면 칸이 사라져요. 쓰던 글은 이 창 안에서는 기억해 둬요)
+//   곡 줄(교재마다 한 줄 + 그 밖에 연습한 곡) 아래에는 템포(숫자, 선택)와 "🎙 녹음 붙이기"가 있어요. 곡 이름을 적기 전에는 흐리게 보여요.
+//   줄 이름표(line): 교재 줄은 'b:교재 이름', "그 밖에 연습한 곡"은 'o'
 let bookDraft = {};
+let tempoDraft = {}; // 줄 이름표 → 쓰던 템포 (이 창 안에서만)
+function lineAuxHTML(line, piece) {
+  return `<div class="line-aux${pieceKey(piece) ? '' : ' dim'}" data-line="${esc(line)}">
+      <label class="tempo-lab"><span>템포</span><input type="number" class="tempo-in" name="lineTempo" data-tempo="${esc(line)}" min="1" step="1" inputmode="numeric" placeholder="60" value="${esc(tempoDraft[line] || '')}"></label>
+      <button type="button" class="btn ghost small rec-attach" data-act="lineAttach" data-line="${esc(line)}">🎙 녹음 붙이기</button>
+      <input type="file" class="sr-only" accept="${AUDIO_ACCEPT}" multiple data-line-input="${esc(line)}" tabindex="-1" aria-label="녹음 파일 고르기">
+      <span class="line-recs" data-line-recs="${esc(line)}">${lineRecsHTML(line)}</span>
+      <div class="hint line-note" data-line-note="${esc(line)}" role="status"></div>
+    </div>`;
+}
 function bookRowsHTML(names, pieces) {
-  return names.map((n, i) => `<div class="book-row" data-book="${esc(n)}"><label class="book-name" for="bp_${i}">${esc(n)}</label>
+  return names.map((n, i) => `<div class="book-row" data-book="${esc(n)}" data-line-zone="b:${esc(n)}"><label class="book-name" for="bp_${i}">${esc(n)}</label>
     <input id="bp_${i}" name="bookPiece" type="text" class="book-piece" data-book-piece="${esc(n)}" list="dl_book_${i}" autocomplete="off" maxlength="120" value="${esc(pieces[n] || '')}" placeholder="곡 이름이나 번호 (선택)">
-    <datalist id="dl_book_${i}">${bookPieceSuggestions(n).map((p) => `<option value="${esc(p)}">`).join('')}</datalist></div>`).join('');
+    <datalist id="dl_book_${i}">${bookPieceSuggestions(n).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>
+    ${lineAuxHTML(`b:${n}`, pieces[n])}</div>`).join('');
 }
 function bookFieldHTML(f, value) {
   const rows = bookRows({ books: value });
   const order = [...textbookChoices(), ...rows.map((b) => b.name)];
   const names = [...new Set(order)].filter((n) => rows.some((b) => b.name === n)); // 칩 순서대로
   bookDraft = Object.fromEntries(rows.map((b) => [b.name, b.piece]));
+  rows.forEach((b) => { if (b.tempo) tempoDraft[`b:${b.name}`] = String(b.tempo); });
   return `<div class="field" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label>${esc(f.label)}</label>
     ${choiceHTML('books', textbookChoices(), names, true, MANAGE_BOOKS_BTN)}
     <div class="book-rows" id="bookRows">${bookRowsHTML(names, bookDraft)}</div></div>`;
 }
 const selectedBookNames = () => { const i = dlg.querySelector('input[name=books]'); try { const a = JSON.parse(i ? i.value || '[]' : '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
-const readBookDraft = () => dlg.querySelectorAll('#bookRows [data-book-piece]').forEach((i) => { bookDraft[i.dataset.bookPiece] = i.value; });
+const readBookDraft = () => dlg.querySelectorAll('#bookRows [data-book-piece]').forEach((i) => { bookDraft[i.dataset.bookPiece] = i.value; tempoDraft[`b:${i.dataset.bookPiece}`] = (i.closest('.book-row').querySelector('[data-tempo]') || { value: '' }).value; });
 // 교재 칩을 켜고 끌 때: 켠 교재의 칸만 칩 순서대로 다시 그려요
 function syncBookRows() {
   const box = dlg.querySelector('#bookRows');
   if (!box) return;
   readBookDraft();
   box.innerHTML = bookRowsHTML(selectedBookNames(), bookDraft);
+  renderAllLineRecs();
+}
+
+/* ---- 곡 줄의 🎙 녹음 붙이기 (입력 창 안) ---- */
+// 지금 고치는 기록의 그 줄에 이미 붙어 있는 녹음 (새 기록이면 없어요)
+function savedLineAudios(line) {
+  const form = dlg.querySelector('#recForm');
+  const old = form && form.dataset.id ? records.find((r) => r.id === form.dataset.id) : null;
+  if (!old) return [];
+  const conv = violinCopy(old);
+  const l = lineRows(conv).find((x) => x.line === line);
+  return l ? lineAudios(conv, l) : [];
+}
+// "🎙 1개 · ▶ · 빼기": 저장 전에 고른 녹음은 [▶ 빼기], 이미 붙은 녹음은 [▶ 삭제]
+function lineRecsHTML(line) {
+  const saved = savedLineAudios(line);
+  const mine = staged.filter((s) => s.line === line);
+  const n = saved.length + mine.length;
+  if (!n) return '';
+  const play = (attrs, label) => `<button type="button" class="rec-play" ${attrs} aria-label="${label} 듣기" aria-pressed="false">▶</button>`;
+  const items = [
+    ...saved.map((a) => `<span class="line-rec">${play(`data-act="playRec" data-aid="${esc(a.id)}"`, '붙인 녹음')} <button type="button" class="link-btn" data-act="delAudio" data-aid="${esc(a.id)}">삭제</button></span>`),
+    ...mine.map((s) => `<span class="line-rec">${play(`data-act="playStaged" data-sid="${esc(s.sid)}"`, esc(s.name))} <button type="button" class="link-btn" data-act="unstage" data-sid="${esc(s.sid)}">빼기</button></span>`),
+  ];
+  return `🎙 ${n}개 · ${items.join(' · ')}`;
+}
+function renderLineRecs(line) {
+  const box = [...dlg.querySelectorAll('[data-line-recs]')].find((e) => e.dataset.lineRecs === line);
+  if (box) { box.innerHTML = lineRecsHTML(line); syncPlayButtons(); }
+}
+function renderAllLineRecs() { dlg.querySelectorAll('[data-line-recs]').forEach((e) => renderLineRecs(e.dataset.lineRecs)); }
+// 줄의 곡 칸 (교재 줄은 교재 이름 칸, 그 밖에 줄은 "그 밖에 연습한 곡" 칸)
+const linePieceInput = (line) => (line === 'o' ? dlg.querySelector('#f_piece') : [...dlg.querySelectorAll('#bookRows [data-book-piece]')].find((i) => `b:${i.dataset.bookPiece}` === line));
+function syncLineDim() {
+  dlg.querySelectorAll('.line-aux[data-line]').forEach((a) => { const i = linePieceInput(a.dataset.line); a.classList.toggle('dim', !(i && i.value.trim())); });
+}
+const sayLine = (line, text) => { const n = [...dlg.querySelectorAll('[data-line-note]')].find((e) => e.dataset.lineNote === line); if (n) n.textContent = text; };
+// 줄의 🎙 버튼·끌어다 놓기: 곡 이름이 비어 있으면 곡 이름부터 적게 해요
+function needPieceFirst(line) {
+  const i = linePieceInput(line);
+  if (i && i.value.trim()) return false;
+  sayLine(line, '곡 이름부터 적어 주세요. 그러면 녹음을 붙일 수 있어요.');
+  if (i) i.focus();
+  return true;
+}
+async function stageLineFiles(line, files) {
+  const good = files.filter(isAudioFile);
+  const notAudio = files.length - good.length;
+  if (!good.length) { sayLine(line, '녹음 파일(m4a, mp3, wav, aac 등)만 올릴 수 있어요.'); return; }
+  let tooBig = 0;
+  let over = 0;
+  let room = AUDIO_MAX_PER_PIECE - staged.filter((s) => s.line === line).length;
+  for (const f of good) {
+    if (f.size > AUDIO_MAX_BYTES) { tooBig += 1; continue; }
+    const dur = await probeDuration(f);
+    if (dur > AUDIO_MAX_SECONDS + 0.5) { tooBig += 1; continue; }
+    if (room <= 0) { over += 1; continue; }
+    staged.push({ sid: newId(), file: f, name: f.name || '녹음', date: '', memo: '', line }); // 날짜는 저장할 때 그 기록의 날짜로, 곡 이름은 그 줄의 곡으로 붙어요
+    room -= 1;
+  }
+  sayLine(line, [tooBig ? TOO_LONG_MSG : '', notAudio ? `녹음 파일이 아닌 ${notAudio}개는 뺐어요.` : '', over ? `한 번에 ${AUDIO_MAX_PER_PIECE}개까지 고를 수 있어서 ${over}개는 뺐어요.` : ''].filter(Boolean).join(' '));
+  renderLineRecs(line);
+}
+// 저장 전에 고른 녹음 듣기 (한 번에 하나만)
+const stagedPlayer = { el: null, sid: null, url: '' };
+function stopStagedPlayer() {
+  if (stagedPlayer.el) { try { stagedPlayer.el.pause(); } catch (e) { /* 괜찮아요 */ } }
+  if (stagedPlayer.url) URL.revokeObjectURL(stagedPlayer.url);
+  stagedPlayer.el = null; stagedPlayer.sid = null; stagedPlayer.url = '';
+}
+async function toggleStagedPlay(sid) {
+  const s = staged.find((x) => x.sid === sid);
+  if (!s) return;
+  if (stagedPlayer.sid === sid && stagedPlayer.el && !stagedPlayer.el.paused) { stagedPlayer.el.pause(); syncPlayButtons(); return; }
+  stopStagedPlayer();
+  const el = new Audio();
+  stagedPlayer.el = el; stagedPlayer.sid = sid; stagedPlayer.url = URL.createObjectURL(s.file);
+  ['play', 'pause', 'ended'].forEach((ev) => el.addEventListener(ev, syncPlayButtons));
+  el.addEventListener('play', () => playExclusive(el));
+  el.src = stagedPlayer.url;
+  try { await el.play(); } catch (e) { toast('재생하지 못했어요. 이 브라우저에서 열 수 없는 형식일 수 있어요.'); }
+  syncPlayButtons();
 }
 
 function fieldHTML(f, value, type) {
@@ -3116,14 +3241,6 @@ function fieldHTML(f, value, type) {
         <small>컴퓨터에서는 Ctrl+V(붙여넣기)도 돼요 · 최대 ${f.max || ART_MAX_PHOTOS}장 · 휴대폰은 앨범에서 고를 수 있어요</small></label>
       <div class="hint" id="imgNote"></div>
       <div id="imgPreviewBox"></div>`;
-  } else if (f.type === 'audio') { // 🎙 녹음 (value 는 이 기록의 id예요. 이미 붙어 있는 녹음을 보여주려고요)
-    input = AudioStore.ok()
-      ? `<input id="${id}" type="file" accept="${AUDIO_ACCEPT}" multiple class="sr-only" data-audio-input>
-        <label class="audio-drop" for="${id}"><span>🎙 녹음 파일을 끌어다 놓거나, 눌러서 고르세요</span><small>${esc(AUDIO_HINT)} · 위에 적은 첫 번째 곡의 곡 노트에 함께 모여요</small></label>
-        <div class="hint" id="audioNote"></div>
-        <div class="audio-stage" id="audioStage"></div>
-        <div class="rec-list" id="formAudioList" data-rec="${esc(v)}">${v ? audios.filter((a) => a.recId === v).sort(byOldest).map(audioRowHTML).join('') : ''}</div>`
-      : '<div class="hint">이 브라우저에서는 녹음을 저장할 수 없어요. 크롬에서 열어 주세요.</div>';
   } else if (f.type === 'image') {
     input = `<input id="${id}" type="file" accept="image/*" class="sr-only" data-image-input="${esc(f.key)}">
       <label class="dropzone" data-key="${esc(f.key)}" for="${id}"><span>🖼 여기에 ${esc(f.noun || '그림')}을 끌어다 놓거나, 눌러서 고르세요</span>
@@ -3134,9 +3251,10 @@ function fieldHTML(f, value, type) {
     const extra = f.type === 'number' ? ` min="${f.min ?? ''}" step="${f.step ?? 1}" inputmode="decimal"` : '';
     const sugg = f.suggest ? ` list="dl_${type}_${f.key}" autocomplete="off"` : '';
     input = `<input id="${id}" name="${f.key}" type="${f.type}" value="${esc(v)}"${extra}${sugg}${ph}>`;
+    if (f.aux === 'other') input += lineAuxHTML('o', value); // "그 밖에 연습한 곡" 줄 아래의 템포 · 🎙 녹음 붙이기
   }
-  const labelFor = f.type === 'choice' || f.type === 'chips' || f.type === 'audio' ? '' : ` for="${id}"`;
-  return `<div class="field${f.small ? ' field-small' : ''}" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"><label${labelFor}>${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
+  const labelFor = f.type === 'choice' || f.type === 'chips' ? '' : ` for="${id}"`;
+  return `<div class="field${f.small ? ' field-small' : ''}" data-only="${esc(f.only || '')}" data-key="${esc(f.key)}"${f.aux === 'other' ? ' data-line-zone="o"' : ''}><label${labelFor}>${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
 }
 
 // 새벽 DAY_STARTS_AT시 전에 입력 창을 열었을 때만, 날짜 칸 아래에 어느 날 기록으로 남는지 작게 알려줘요. (날짜를 바꾸면 사라져요)
@@ -3196,7 +3314,7 @@ function openForm(type, existing, presetDate, preset) {
   const schema = SCHEMAS[type];
   ui.backToDay = dlg.open && dlg.querySelector('.day-list') ? ui.dayOpen : null;
   ui.backToArt = dlg.open && dlg.querySelector('.art-detail') ? ui.artOpen : null; // 그림 상세 창에서 "수정"을 눌렀다면 저장·취소 뒤 그 창으로 돌아가요
-  const rec = existing ? { ...(type === 'workout' ? workoutLiteCopy(existing) : type === 'violin' ? booksCopy(existing) : existing) } : { date: presetDate || todayStr(), ...(preset || {}) }; // 아직 정리하지 않은 예전 운동 기록은 "한 줄"로 옮겨 담은 모습으로 열려요
+  const rec = existing ? { ...(type === 'workout' ? workoutLiteCopy(existing) : type === 'violin' ? violinCopy(existing) : existing) } : { date: presetDate || todayStr(), ...(preset || {}) }; // 아직 정리하지 않은 예전 운동 기록은 "한 줄"로 옮겨 담은 모습으로 열려요
   if (type === 'art') { rec.artKind = existing ? artKindOf(existing) : (rec.artKind || '크로키'); rec.images = existing ? artPhotos(existing) : []; }
   // 종류 칸이 없던 예전 바이올린 기록은 '연습'으로 봐요
   if (schema.kindKey && !rec[schema.kindKey]) rec[schema.kindKey] = schema.fields.find((f) => f.key === schema.kindKey).options[0];
@@ -3204,11 +3322,13 @@ function openForm(type, existing, presetDate, preset) {
   schema.fields.filter((f) => f.type === 'image' && !f.hidden).forEach((f) => { formImages[f.key] = rec[f.key] || null; });
   formShots = type === 'art' ? [...rec.images] : [];
   staged = [];
-  const valueFor = (f) => (f.type === 'audio' ? (existing ? existing.id : '') : f.type === 'multi' ? Object.fromEntries(f.keys.map((k) => [k, rec[k]])) : rec[f.key]);
-  const base = schema.fields.filter((f) => !f.more && !f.legacy && !f.hidden);
-  // 더 적기: 예전 칸(legacy)은 값이 들어 있을 때만 보여요
-  const more = schema.fields.filter((f) => !f.hidden && (f.more || f.legacy) && !(f.legacy && !hasValue(rec[f.key])));
-  const moreOpen = !!existing && (more.some((f) => hasValue(rec[f.key])) || audios.some((a) => a.recId === existing.id)); // 수정할 때 내용이 있으면 펼친 채로
+  stopStagedPlayer();
+  tempoDraft = type === 'violin' && tempoNum(rec.otherTempo) ? { o: String(tempoNum(rec.otherTempo)) } : {};
+  const valueFor = (f) => (f.type === 'multi' ? Object.fromEntries(f.keys.map((k) => [k, rec[k]])) : rec[f.key]);
+  const shown = (f) => !f.hidden && (!f.legacy || hasValue(rec[f.key])); // 예전 칸(legacy)은 값이 들어 있을 때만 보여요
+  const base = schema.fields.filter((f) => !f.more && shown(f));
+  const more = schema.fields.filter((f) => f.more && shown(f)); // ✍ 더 적기 (그림·영어에만 남았어요. 바이올린에는 없어요)
+  const moreOpen = !!existing && more.some((f) => hasValue(rec[f.key])); // 수정할 때 내용이 있으면 펼친 채로
   const datalists = schema.fields.filter((f) => f.suggest)
     .map((f) => `<datalist id="dl_${type}_${f.key}">${(type === 'violin' && f.key === 'piece' ? pieceSuggestions() : suggestions(type, f.key)).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>`).join('');
   openDlg(`
@@ -3231,6 +3351,7 @@ function openForm(type, existing, presetDate, preset) {
   form.dataset.type = type;
   form.dataset.id = existing ? existing.id : '';
   syncKindFields(form);
+  renderAllLineRecs(); syncLineDim();
   if (!existing) addDawnNote($('#f_date'));
   updateShotsPreview();
   Object.keys(formImages).forEach(updateImagePreview);
@@ -3315,6 +3436,14 @@ function readImage(file) {
   });
 }
 
+// 템포 칸 읽기: 비어 있으면 0(없음), 올바른 숫자면 그 수, 1보다 작거나 숫자가 아니면 null(오류)
+function tempoFromInput(input) {
+  const raw = input ? String(input.value || '').trim() : '';
+  if (raw === '') return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
 async function submitForm(form) {
   const type = form.dataset.type;
   const schema = SCHEMAS[type];
@@ -3326,10 +3455,16 @@ async function submitForm(form) {
     if (f.only && f.only !== kind) continue; // 다른 종류의 칸은 저장하지 않아요
     if (f.legacy && !form.elements[f.key]) continue; // 안 보였던 예전 칸은 손대지 않아요
     if (f.hidden) continue; // 화면에 없는 칸
-    if (f.type === 'audio') continue; // 녹음은 기록 안에 저장하지 않고, 저장한 뒤 곡에 붙여요
-    if (f.type === 'bookLines') { // 교재 칩 + 교재마다 한 줄 → books: [{ name, piece }] (칩 순서)
-      const lines = new Map([...form.querySelectorAll('#bookRows [data-book-piece]')].map((i) => [i.dataset.bookPiece, i.value.trim()]));
-      data.books = readChoice(form, { key: 'books', type: 'chips' }).map((name) => ({ name, piece: lines.get(name) || '' }));
+    if (f.type === 'bookLines') { // 교재 칩 + 교재마다 한 줄(+ 템포) → books: [{ name, piece, tempo }] (칩 순서, 템포는 적었을 때만)
+      const lines = new Map([...form.querySelectorAll('#bookRows .book-row')].map((row) => [row.dataset.book, { piece: row.querySelector('[data-book-piece]').value.trim(), tempo: row.querySelector('[data-tempo]'), }]));
+      const out = [];
+      for (const name of readChoice(form, { key: 'books', type: 'chips' })) {
+        const l = lines.get(name) || { piece: '', tempo: null };
+        const t = tempoFromInput(l.tempo);
+        if (t === null) { err.textContent = `'${name}'의 템포에는 1 이상의 숫자를 써 주세요.`; l.tempo.focus(); return; }
+        out.push({ name, piece: l.piece, ...(t ? { tempo: t } : {}) });
+      }
+      data.books = out;
       continue;
     }
     if (f.type === 'multi') { f.keys.forEach((k) => { data[k] = (form.elements[k].value || '').trim(); }); continue; }
@@ -3359,16 +3494,27 @@ async function submitForm(form) {
     if (!old && !formShots.length) { err.textContent = '사진을 한 장 이상 넣어 주세요.'; return; }
     if (!data.artKind) data.artKind = '크로키';
   }
-  const newAudio = type === 'violin' && kind === '연습' ? staged.length : 0;
-  const pieceList = type === 'violin' ? piecesOf(data) : [];
-  if (newAudio && !pieceList.length) { err.textContent = '녹음을 붙이려면 곡 이름을 먼저 적어 주세요.'; (form.querySelector('#bookRows [data-book-piece]') || form.elements.piece).focus(); return; }
+  if (type === 'violin' && kind === '연습') { // "그 밖에 연습한 곡" 줄의 템포
+    const ti = form.querySelector('[data-tempo="o"]');
+    const t = tempoFromInput(ti);
+    if (t === null) { err.textContent = `'그 밖에 연습한 곡'의 템포에는 1 이상의 숫자를 써 주세요.`; ti.focus(); return; }
+    data.otherTempo = t || '';
+  }
+  // 곡 줄마다 고른 녹음: 그 줄의 곡 이름 + 이 기록의 날짜로 붙어요 (곡 이름이 비어 있는 줄에는 붙일 수 없어요)
+  const lineStaged = type === 'violin' && kind === '연습' ? staged.filter((s) => s.line) : [];
+  const lineNow = type === 'violin' ? lineRows(data) : [];
+  for (const sg of lineStaged) {
+    const l = lineNow.find((x) => x.line === sg.line);
+    if (!l || !l.piece) { err.textContent = '녹음을 붙이려면 그 줄의 곡 이름을 먼저 적어 주세요.'; (linePieceInput(sg.line) || form.elements.piece).focus(); return; }
+  }
+  const src = type === 'violin' && old ? violinCopy(old) : old; // 아직 새 모양으로 옮기지 않은 예전 기록은 옮긴 모습을 바탕으로 해요
   const carry = [...HIDDEN_KEYS, 'stamp', 'feedbackId', ...(schema.keep || [])]; // 이 창에서 고치지 않는 칸(화면에서 뺀 칸의 예전 값 포함)은 그대로 보관
   const rec = {
     id: old ? old.id : newId(),
     type,
     createdAt: old ? old.createdAt : Date.now(),
     updatedAt: Date.now(),
-    ...Object.fromEntries(carry.filter((k) => old && old[k] !== undefined).map((k) => [k, old[k]])),
+    ...Object.fromEntries(carry.filter((k) => src && src[k] !== undefined).map((k) => [k, src[k]])),
     ...data,
   }; // 예시 표시(sample)는 직접 고치면 사라져요. 내 기록이 되었다는 뜻이에요.
   if (!old) assignStamp(rec); // 새 기록만 도장을 받아요 (고칠 때는 받은 도장이 그대로예요)
@@ -3377,7 +3523,11 @@ async function submitForm(form) {
   if (doneId) rec.feedbackId = doneId;
   if (!(await saveRecord(rec))) return;
   if (doneId) { const fb = records.find((x) => x.id === doneId); if (fb) await saveRecord({ ...fb, todoDone: true, updatedAt: Date.now() }); }
-  if (newAudio) await commitStaged(pieceList[0].name, rec.id); // 녹음은 적은 곡 중 첫 번째 곡에 붙어요
+  if (lineStaged.length) { // 줄마다 곡 이름 + 이 기록의 날짜로 저장돼요 (Drive에도 곡별 폴더로 올라가요)
+    for (const sg of lineStaged) await addRecording(lineNow.find((x) => x.line === sg.line).piece, { file: sg.file, date: rec.date, memo: '', name: sg.name, recId: rec.id });
+    staged = staged.filter((x) => !x.line);
+    stopStagedPlayer();
+  }
   afterSave();
   if (!old) afterNewRecord(rec);
 }
@@ -3400,7 +3550,7 @@ function validRecords(payload, bump = false) {
   if (!payload || payload.app !== 'my-journal' || !Array.isArray(payload.records)) return null;
   // 더 이상 쓰지 않는 종류(경제 공부 메모·투자 기록)와 칸 값은 불러올 때 조용히 버려요.
   // 🧘 운동의 없어진 칸도 같아요: 지우고, 예전 "몸이 어땠나 한 줄"·"달리며 든 생각 한 줄"은 "한 줄"로 옮겨요. (bump: 바뀐 기록은 바꾼 시각도 새로 적어요)
-  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string').map((r) => booksCopy(stripQuick(workoutLiteCopy(cleanedCopy(r), bump), bump), bump));
+  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string').map((r) => violinCopy(stripQuick(workoutLiteCopy(cleanedCopy(r), bump), bump), bump));
 }
 
 /* ---------------------------------------------------------------------
@@ -3616,6 +3766,58 @@ async function migrateBooks() {
   settings.booksV1 = true;
   await saveSettings();
   if (dirty.length) { render(); if (real.length) toast('바이올린 기록을 교재별 한 줄로 옮겼어요. 백업 파일은 다운로드 폴더에 있어요.', 5000); }
+}
+
+/* ---------------------------------------------------------------------
+   0-4. 🎻 템포를 곡 줄로 옮기기 (한 번만): 예전에는 기록 하나에 템포가 하나(tempo)였고 그 기록에 적은 모든 곡에 적용됐어요.
+        이제 템포는 곡 줄마다(books 의 각 항목 tempo · 그 밖에 연습한 곡은 otherTempo) 적어요.
+        · 기록 단위 템포가 있으면 그 기록의 **첫 곡 줄**(곡 이름이 있는 첫 줄)의 템포로 옮기고, 나머지 줄은 비워요. 옮긴 뒤 기록 단위 템포(tempo)는 없애요(값은 옮긴 거예요).
+        · 곡 줄이 하나도 없는 기록은 옮길 곳이 없어서 그대로 둬요 (값은 기록에 남아요).
+        아직 옮기지 않은 기록은 지금까지처럼 "그 기록의 모든 곡에 적용"으로 읽어요 (tempoOfPiece).
+        옮기기 직전에 백업 파일을 내려받고 확인을 물어봐요. 바뀐 기록은 바꾼 시각을 새로 적어서 ☁ 다른 기기에도 반영돼요. 한 번 하고 나면 flag(tempoV1)가 켜져요.
+        예전 백업 파일을 불러올 때, 그리고 ☁ 에서 받아 올 때도 같은 규칙을 써요(violinCopy).
+   --------------------------------------------------------------------- */
+const tempoTargetLine = (r) => lineRows(r).find((l) => l.piece); // 곡 이름이 있는 첫 줄 (교재 줄 순서대로, 그다음 그 밖에 연습한 곡)
+const tempoNeedConvert = (r) => { // 교재별 한 줄 옮기기가 끝난 기록만 (그 전에는 곡 줄이 아직 제자리에 있지 않아요)
+  if (!r || r.type !== 'violin' || r.kind === '레슨' || !(tempoNum(r.tempo) > 0) || booksNeedConvert(r)) return false;
+  const l = tempoTargetLine(r);
+  return !!l && !l.tempo;
+};
+function tempoCopy(r, bump = false) {
+  if (!tempoNeedConvert(r)) return r;
+  const t = tempoNum(r.tempo);
+  const l = tempoTargetLine(r);
+  const c = { ...r };
+  if (l.line === 'o') c.otherTempo = t;
+  else c.books = bookRows(r).map((b) => (`b:${b.name}` === l.line ? { ...b, tempo: t } : b));
+  delete c.tempo;
+  if (bump) c.updatedAt = Math.max(Date.now(), (r.updatedAt || 0) + 1);
+  return c;
+}
+// 바이올린 기록의 예전 모양을 새 모양으로 (교재별 한 줄 → 곡 줄별 템포)
+const violinCopy = (r, bump = false) => tempoCopy(booksCopy(r, bump), bump);
+function tempoMessage(n, name) {
+  return `🎻 템포가 곡 줄마다 적는 것으로 바뀌었어요. 기록 하나에 하나였던 템포 ${n}개를 그 기록의 첫 곡 줄로 옮깁니다. (나머지 곡 줄은 비어 있어요)\n값은 지우지 않고 옮겨요.\n\n옮기기 전에 백업을 저장했어요. (백업 파일은 다운로드 폴더에 있어요)`;
+}
+async function migrateTempo() {
+  if (settings.tempoV1 || !settings.booksV1) return; // 교재별 한 줄 옮기기를 먼저 마쳐야 해요 (취소했으면 다음에 열 때 다시)
+  const dirty = records.filter(tempoNeedConvert);
+  const real = dirty.filter((r) => !r.sample);
+  if (real.length) { // 진짜 기록이 있을 때만 백업·확인을 해요 (예시 기록뿐이면 조용히 옮겨요)
+    const name = `my-journal-backup-before-tempo-${todayStr().replace(/-/g, '')}.json`;
+    await downloadBackup(name); // 옮기기 직전에 전체 백업
+    if (!(await askCleanup(tempoMessage(real.length, name), name))) return; // 취소하면 아무것도 바꾸지 않고, 다음에 열 때 다시 물어봐요
+  }
+  if (dirty.length) {
+    const at = Date.now();
+    const next = dirty.map((r, i) => { const c = tempoCopy(r); c.updatedAt = Math.max(at + i, (r.updatedAt || 0) + 1); return c; }); // 바꾼 시각을 새로 적어서 ☁ 다른 기기에도 반영돼요
+    await Store.putMany(next);
+    const byId = new Map(next.map((r) => [r.id, r]));
+    records = records.map((r) => byId.get(r.id) || r);
+  }
+  settings.tempoV1 = true;
+  await saveSettings();
+  if (dirty.length) { render(); if (real.length) toast('템포를 곡 줄로 옮겼어요. 백업 파일은 다운로드 폴더에 있어요.', 5000); }
 }
 
 async function refreshAutosaveState() {
@@ -3925,6 +4127,12 @@ document.addEventListener('click', async (e) => {
       const box = el.closest('.choice');
       const input = box.querySelector('input[type=hidden]');
       if (box.dataset.multi === '1') {
+        if (input.name === 'books' && el.classList.contains('on')) { // 교재 칩을 끄면 그 줄(곡 · 템포 · 녹음)도 사라져요
+          const line = `b:${el.dataset.val}`;
+          const n = savedLineAudios(line).length;
+          if (n && !confirm(`붙인 녹음 ${n}개는 곡 노트에 그대로 남아요.\n이 교재 줄을 끌까요?`)) break;
+          if (staged.some((s) => s.line === line)) { staged = staged.filter((s) => s.line !== line); stopStagedPlayer(); } // 저장 전에 고른 녹음은 붙지 않아요
+        }
         el.classList.toggle('on');
         el.setAttribute('aria-pressed', String(el.classList.contains('on')));
         input.value = JSON.stringify([...box.querySelectorAll('.choice-btn.on')].map((b) => b.dataset.val));
@@ -3965,10 +4173,23 @@ document.addEventListener('click', async (e) => {
     case 'delAudio': await deleteRecording(el.dataset.aid); break;
     case 'saveAudio': await saveAudioFile(el.dataset.aid); break;
     case 'fetchAudio': await fetchAudioFile(el.dataset.aid); break;
-    case 'unstage': staged = staged.filter((x) => x.sid !== el.dataset.sid); renderStaged(); break;
+    case 'unstage': { // 저장 전에 고른 녹음 빼기 (곡 줄에서 뺀 것은 붙지 않아요)
+      const sg = staged.find((x) => x.sid === el.dataset.sid);
+      if (stagedPlayer.sid === el.dataset.sid) stopStagedPlayer();
+      staged = staged.filter((x) => x.sid !== el.dataset.sid);
+      if (sg && sg.line) renderLineRecs(sg.line); else renderStaged();
+      break;
+    }
+    case 'lineAttach': { // 🎙 녹음 붙이기: 곡 이름이 있어야 해요
+      if (needPieceFirst(el.dataset.line)) break;
+      const inp = [...dlg.querySelectorAll('[data-line-input]')].find((i) => i.dataset.lineInput === el.dataset.line);
+      if (inp) inp.click();
+      break;
+    }
+    case 'playStaged': await toggleStagedPlay(el.dataset.sid); break;
     case 'uploadStaged': {
       const box = dlg.querySelector('#pieceAudio');
-      if (!box || !staged.length) break;
+      if (!box || !staged.some((x) => !x.line)) break;
       const n = await commitStaged(box.dataset.piece, '');
       refreshAudioUI();
       if (n) toast(`녹음 ${n}개를 올렸어요.`, 2500);
@@ -4087,6 +4308,7 @@ document.addEventListener('change', async (e) => {
   else if (t.dataset.imageInput && t.files[0]) { await attachImage(t.files[0], t.dataset.imageInput); t.value = ''; }
   else if ('shots' in t.dataset && t.files.length) { const files = [...t.files]; t.value = ''; await attachShots(files); }
   else if (t.dataset.act === 'celebrate') { settings.celebrateOff = !t.checked; await saveSettings(); }
+  else if (t.dataset.lineInput && t.files.length) { const files = [...t.files]; t.value = ''; await stageLineFiles(t.dataset.lineInput, files); } // 🎙 곡 줄의 녹음 고르기
   else if (t.matches('[data-audio-input]') && t.files.length) { const files = [...t.files]; t.value = ''; await stageAudioFiles(files); }
   else if (t.dataset.audioMemo) { await saveAudioMemo(t.dataset.audioMemo, t.value.trim()); }
   else if (t.dataset.act === 'audioSkip') { settings.audioSkip = t.checked; await saveSettings(); scheduleAutosave(); }
@@ -4101,13 +4323,14 @@ document.addEventListener('input', (e) => {
     if (s) s[e.target.dataset.stage] = e.target.value;
     return;
   }
+  if (e.target.matches && e.target.matches('#recForm [data-book-piece], #recForm #f_piece')) { syncLineDim(); return; } // 곡 이름을 적으면 그 줄의 템포·녹음 줄이 또렷해져요
   if (e.target.id === 'search') { ui.query = e.target.value; $('#listBox').innerHTML = econBodyHTML(); }
 });
 
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // 창이 닫히면(취소·Esc 포함) 안에 있던 입력 내용도 비워요
-dlg.addEventListener('close', () => { if (cleanupAsk) { const a = cleanupAsk; cleanupAsk = null; a.resolve(false); } revokeAudioUrls(dlg); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; ui.backToArt = null; ui.artOpen = null; });
+dlg.addEventListener('close', () => { if (cleanupAsk) { const a = cleanupAsk; cleanupAsk = null; a.resolve(false); } revokeAudioUrls(dlg); stopStagedPlayer(); dlg.innerHTML = ''; formImages = {}; formShots = []; staged = []; formBase = ''; ui.dayOpen = null; ui.backToDay = null; ui.backToArt = null; ui.artOpen = null; });
 
 /* ---------------------------------------------------------------------
    데스크톱 단축키: 입력 창에서 Cmd+Enter(Ctrl+Enter)로 저장, Esc로 닫기
@@ -4141,7 +4364,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, quickFlagV1: !!st.quickFlagV1, booksV1: !!st.booksV1, claudeBoxOpen: !!st.claudeBoxOpen };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, quickFlagV1: !!st.quickFlagV1, booksV1: !!st.booksV1, tempoV1: !!st.tempoV1, claudeBoxOpen: !!st.claudeBoxOpen };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -4200,6 +4423,7 @@ async function start() {
     runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
       .then(() => migrateWorkoutLite()).catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
       .then(() => migrateBooks()).catch(() => { /* 옮기지 못하면 다음에 열 때 다시 해요 */ })
+      .then(() => migrateTempo()).catch(() => { /* 옮기지 못하면 다음에 열 때 다시 해요 */ })
       .finally(() => {
         window.__cleanupDone = true;
         document.dispatchEvent(new Event('journal:cleanup-done')); // 정리 확인이 끝난 뒤에 첫 동기화를 해요

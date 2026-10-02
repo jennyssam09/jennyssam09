@@ -528,11 +528,27 @@ dialog.roomy { width: min(900px, 92vw); }
 .bk-btns { display: flex; gap: 6px; flex-shrink: 0; }
 
 /* ---------- 🎻 교재별 한 줄 (입력 창: 교재 칩 아래 "교재 이름 + 한 줄 칸" / 카드: 교재마다 한 줄 / 책장: 교재 꼬리표) ---------- */
-.book-rows { display: grid; gap: 8px; margin-top: 10px; }
+.book-rows { display: grid; gap: 12px; margin-top: 10px; }
 .book-rows:empty { display: none; }
-.book-row { display: flex; align-items: center; gap: 10px; }
-.field .book-row .book-name { flex: 0 0 8.5em; max-width: 40%; margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
-.field .book-row input.book-piece { flex: 1 1 auto; min-width: 0; width: auto; }
+.book-row { display: grid; grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr); align-items: center; gap: 6px 10px; border-radius: 12px; }
+.field .book-row .book-name { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+.field .book-row input.book-piece { min-width: 0; width: 100%; }
+.book-row .line-aux { grid-column: 2; }
+/* 곡 줄 아래: 템포 · 🎙 녹음 붙이기 · 붙인 녹음. 곡 이름을 적기 전에는 흐리게 보여요 */
+.line-aux { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+.book-row .line-aux { margin-top: 0; }
+.line-aux.dim { opacity: .5; }
+.field .tempo-lab { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: .88rem; font-weight: 600; color: var(--muted); }
+.field input.tempo-in { width: 5.5em; padding: 6px 10px; text-align: center; }
+.field .line-aux .rec-attach { white-space: nowrap; }
+.line-recs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: .88rem; color: var(--muted); }
+.line-recs:empty { display: none; }
+.line-rec { display: inline-flex; align-items: center; gap: 2px; }
+.line-aux .link-btn { font-size: .88rem; }
+.line-note { flex: 1 1 100%; margin: 0; }
+.line-note:empty { display: none; }
+[data-line-zone].over { background: color-mix(in srgb, var(--purple) 10%, var(--purple-soft)); outline: 2px dashed var(--purple); outline-offset: 4px; }
+.line-tempo { color: var(--purple); font-weight: 600; white-space: nowrap; }
 .book-lines { display: grid; gap: 2px; margin: 4px 0 8px; }
 .book-line { line-height: 1.5; overflow-wrap: anywhere; }
 .book-nm { color: var(--muted); font-weight: 600; }
@@ -710,14 +726,15 @@ dialog.roomy { width: min(900px, 92vw); }
   .btn, .btn.small { min-width: 44px; }
   summary { padding: 11px 0; }
   .piece-link { display: inline-flex; align-items: center; min-height: 44px; }
+  .rec-play, .line-aux .link-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; } /* 곡 줄의 🎙 · ▶ · 빼기도 손가락 크기로 */
   .wk-dot { height: 44px; }
   .links a { display: inline-flex; align-items: center; min-height: 44px; }
   .art-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } /* 폴드 펼침: 4개 */
 }
 @media (max-width: 560px) {
   .top h1 { flex: 1 1 100%; }
-  .book-row { flex-direction: column; align-items: stretch; gap: 3px; } /* 폴드 커버: 교재 이름 위, 칸 아래 */
-  .field .book-row .book-name { flex: 0 0 auto; max-width: none; }
+  .book-row { grid-template-columns: minmax(0, 1fr); gap: 3px; } /* 폴드 커버: 교재 이름 위, 칸 아래, 템포·녹음 줄은 그 아래 */
+  .book-row .line-aux { grid-column: 1; }
   .sync-chip { flex: 1 1 60%; }
   #settingsBtn { flex: 0 0 auto; }
   /* 위쪽 메뉴: 글자가 뭉개지지 않게 옆으로 밀어서 봐요 */

@@ -370,7 +370,7 @@
     let clean = out;
     if (typeof workoutLiteCopy === 'function') clean = workoutLiteCopy(clean, true);
     if (typeof stripQuick === 'function') clean = stripQuick(clean, true);
-    if (typeof booksCopy === 'function') clean = booksCopy(clean, true); // 예전 모양의 교재·곡 이름·교재 위치는 교재별 한 줄로 옮겨요
+    if (typeof violinCopy === 'function') clean = violinCopy(clean, true); // 예전 모양의 교재·곡 이름·교재 위치는 교재별 한 줄로, 기록 단위 템포는 첫 곡 줄로 옮겨요
     return clean;
   }
 
@@ -1402,7 +1402,7 @@
   function fmtVal(v) {
     if (v == null || v === '') return '(비어 있음)';
     if (isRef(v) || isB64(v)) return '🖼 그림';
-    if (Array.isArray(v)) return v.length ? v.map((x) => (x && typeof x === 'object' && typeof x.name === 'string' && 'piece' in x ? (x.piece ? `${x.name} · ${x.piece}` : x.name) : fmtVal(x))).join(', ') : '(비어 있음)'; // 교재별 한 줄은 "교재 · 곡"으로
+    if (Array.isArray(v)) return v.length ? v.map((x) => (x && typeof x === 'object' && typeof x.name === 'string' && 'piece' in x ? (x.piece ? `${x.name} · ${x.piece}${x.tempo ? ` ♩${x.tempo}` : ''}` : x.name) : fmtVal(x))).join(', ') : '(비어 있음)'; // 교재별 한 줄은 "교재 · 곡"으로
     if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k}: ${fmtVal(x)}`).join(' · ');
     return String(v);
   }
@@ -1688,7 +1688,7 @@
     audioBadge, fetchLabel, fetchAudio,
     // 자동 시험용 (화면에서는 쓰지 않아요)
     __t: {
-      S, T, CFG, maybeAskAudio, maybeAskOrganize, safeName, audioFolderName, audioBaseName, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote, fmtVal, resolveConflict,
+      S, T, CFG, maybeAskAudio, maybeAskOrganize, safeName, audioFolderName, audioBaseName, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote, fmtVal, labelOf, resolveConflict,
       setNow: (fn) => { nowFn = fn; }, resetNow: () => { nowFn = () => Date.now(); }, gisReady, requestToken,
     },
   };
