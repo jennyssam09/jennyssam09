@@ -649,31 +649,29 @@ dialog.roomy { width: min(900px, 92vw); }
 .fb-input { margin-top: 10px; }
 .fb-input .cl-row { margin-bottom: 4px; }
 .fb-ctx { margin: 4px 0 8px; }
-.fb-auto-note { margin: 4px 2px 0; font-size: .85rem; color: var(--muted); }
 /* ③ 받은 피드백 */
 .fb-list { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .fb-list-title { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
 .fb-scopes { margin-bottom: 10px; }
 .fb-scopes .chip { min-width: 3em; text-align: center; }
 .fb-scope { font-size: 1rem; }
+/* ② 잘한 점 체크 목록 · ③ 카드의 💬 잘한 점 */
+.cl-count { margin: 8px 0 -2px; font-weight: 600; color: var(--purple); }
+.fb-strengths { margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--card); }
+.fb-str-h { font-weight: 700; font-size: .92rem; margin-bottom: 4px; }
+.fb-str { display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; cursor: pointer; line-height: 1.5; }
+.fb-str input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
+.fb-strengths-view { margin: 6px 0 4px; padding: 8px 14px; border-radius: 12px; background: var(--purple-soft); }
+.fb-str-title { font-weight: 700; font-size: .9rem; color: var(--purple); }
+.fb-str-list { margin: 4px 0 0; padding-left: 1.2em; line-height: 1.55; }
+.claude-common { white-space: pre-line; }
 .fb-list .empty { padding: 20px 10px; }
 .fb-list > .row { margin-top: 8px; }
 .fb-text-in { width: 100%; min-height: 150px; padding: 10px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); resize: vertical; line-height: 1.55; }
-.fb-todo-in { width: 100%; padding: 9px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--card); }
 .fb-item .fb-q { margin: 4px 0; }
-.fb-todo { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; cursor: pointer; }
-.fb-todo input { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: var(--purple); }
-.fb-todo .done { color: var(--muted); }
 .fb-answer.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .fb-badge { color: var(--purple); }
-.fb-done { margin: 6px 0 0; padding: 4px 12px; border-radius: 10px; background: var(--purple-soft); color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-size: .9rem; }
 .fb-copied { margin: 8px 0 0; padding: 6px 12px; border-radius: 10px; background: var(--purple-soft); font-size: .9rem; }
-.fb-done-mark { color: var(--purple); font-weight: 700; font-size: .85rem; }
-.fb-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 14px; padding: 8px 14px; border-radius: 12px; background: var(--purple-soft); font-size: .92rem; }
-.fb-hint-t { flex: 1 1 260px; min-width: 0; color: color-mix(in srgb, var(--purple) 65%, var(--ink)); font-weight: 600; }
-.fb-hint-c { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; white-space: nowrap; }
-.fb-hint-c input { width: 18px; height: 18px; margin: 0; accent-color: var(--purple); }
-.routine-hint { margin: 14px 0 0; }
 .card-btns { align-items: center; }
 
 /* ---------- ☁ 구글 드라이브 동기화 (색은 위쪽 :root 의 변수만 써요) ---------- */
@@ -788,3 +786,20 @@ dialog.roomy { width: min(900px, 92vw); }
 .sync-audio h3 { font-size: .95rem; color: var(--accent); margin-bottom: 6px; }
 
 @media (min-width: 901px) and (max-width: 1150px) { .art-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* ---------- 📒 경제 용어 노트 ---------- */
+.term-bar { align-items: center; gap: 10px; }
+.term-bar .search { flex: 1 1 180px; min-width: 0; }
+.term-form { margin: 0 0 12px; }
+.term-form .row { gap: 8px; flex-wrap: wrap; }
+.term-group { margin: 0 0 14px; }
+.term-h { margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: 1rem; color: var(--accent); }
+.term-row { margin: 0 0 6px; }
+.term-row.editing { margin-bottom: 10px; }
+.term-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; cursor: pointer; color: inherit; }
+.term-main:hover, .term-main:focus-visible { border-color: var(--accent); }
+.term-name { font-size: 1.02rem; }
+.term-meaning { color: var(--ink); line-height: 1.5; word-break: break-word; }
+.term-meaning.faint { color: var(--muted); }
+.term-link { margin-right: 6px; }
+.recap-toggle { display: block; margin-top: 6px; }

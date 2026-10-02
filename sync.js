@@ -1410,7 +1410,7 @@
     if (!rec) return '';
     if (rec.type === 'violin' && typeof pieceNamesOf === 'function') return pieceNamesOf(rec)[0] || '';
     if (rec.type === 'englishArticle' && !rec.title && typeof domainOf === 'function') return domainOf(rec.link) || '';
-    const k = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'kind', rest: 'memo', econRoutine: 'note', claudeFeedback: 'todo', piecenote: 'piece' }[rec.type];
+    const k = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'kind', rest: 'memo', econRoutine: 'note', econTerm: 'term', claudeFeedback: 'text', piecenote: 'piece' }[rec.type];
     return (k && rec[k]) || '';
   }
   async function valSigLocal(rec, k, v) {
@@ -1503,7 +1503,7 @@
         }
         if (choice === 'cf-both' && R && !isTombLike(R)) {
           const copy = await fromRemoteRecord(R);
-          const tk = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'memo', rest: 'memo', econRoutine: 'note', claudeFeedback: 'text', piecenote: 'memo' }[copy.type] || 'memo';
+          const tk = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'memo', rest: 'memo', econRoutine: 'note', econTerm: 'term', claudeFeedback: 'text', piecenote: 'memo' }[copy.type] || 'memo';
           copy.id = newId(); copy.createdAt = Date.now(); copy[tk] = `${copy[tk] || ''} (Drive에서 온 사본)`.trim();
           delete copy.stamp;
           await saveRecord(copy);
