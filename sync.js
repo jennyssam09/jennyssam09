@@ -360,10 +360,11 @@
       else if (isRef(v)) jobs.push(imgLimit(() => downloadImage(v.$img)).then((u) => { out[f.key] = u; }));
     });
     await Promise.all(jobs);
-    // 아직 업데이트하지 않은 기기가 올린 기록의 없어진 칸(운동의 옛 칸, 빠른 기록의 "간단 기록" 표시)은 받을 때 정리해요 (바뀐 기록은 바꾼 시각이 새로워져서 정리된 모습이 Drive에도 올라가요)
+    // 아직 업데이트하지 않은 기기가 올린 기록의 없어진 칸(운동의 옛 칸, 빠른 기록의 "간단 기록" 표시, 예전 교재·곡 이름 모양)은 받을 때 정리해요 (바뀐 기록은 바꾼 시각이 새로워져서 정리된 모습이 Drive에도 올라가요)
     let clean = out;
     if (typeof workoutLiteCopy === 'function') clean = workoutLiteCopy(clean, true);
     if (typeof stripQuick === 'function') clean = stripQuick(clean, true);
+    if (typeof booksCopy === 'function') clean = booksCopy(clean, true); // 예전 모양의 교재·곡 이름·교재 위치는 교재별 한 줄로 옮겨요
     return clean;
   }
 
@@ -1234,12 +1235,13 @@
   function fmtVal(v) {
     if (v == null || v === '') return '(비어 있음)';
     if (isRef(v) || isB64(v)) return '🖼 그림';
-    if (Array.isArray(v)) return v.length ? v.map(fmtVal).join(', ') : '(비어 있음)';
+    if (Array.isArray(v)) return v.length ? v.map((x) => (x && typeof x === 'object' && typeof x.name === 'string' && 'piece' in x ? (x.piece ? `${x.name} · ${x.piece}` : x.name) : fmtVal(x))).join(', ') : '(비어 있음)'; // 교재별 한 줄은 "교재 · 곡"으로
     if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k}: ${fmtVal(x)}`).join(' · ');
     return String(v);
   }
   function titleOf(rec) {
     if (!rec) return '';
+    if (rec.type === 'violin' && typeof pieceNamesOf === 'function') return pieceNamesOf(rec)[0] || '';
     const k = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'kind', rest: 'memo', econRoutine: 'note', claudeFeedback: 'todo', piecenote: 'piece' }[rec.type];
     return (k && rec[k]) || '';
   }
@@ -1499,7 +1501,7 @@
     audioBadge, fetchLabel, fetchAudio,
     // 자동 시험용 (화면에서는 쓰지 않아요)
     __t: {
-      S, T, CFG, maybeAskAudio, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote,
+      S, T, CFG, maybeAskAudio, audioHeld, runSync, envMode, chipModel, pendingCount, conflictCount, loadMeta, saveMeta, firstLogin, decide, sigLocal, sigRemote, fmtVal, resolveConflict,
       setNow: (fn) => { nowFn = fn; }, resetNow: () => { nowFn = () => Date.now(); }, gisReady, requestToken,
     },
   };

@@ -516,6 +516,18 @@ dialog.roomy { width: min(900px, 92vw); }
 .bk-list.dim .bk-name { color: var(--muted); }
 .bk-btns { display: flex; gap: 6px; flex-shrink: 0; }
 
+/* ---------- 🎻 교재별 한 줄 (입력 창: 교재 칩 아래 "교재 이름 + 한 줄 칸" / 카드: 교재마다 한 줄 / 책장: 교재 꼬리표) ---------- */
+.book-rows { display: grid; gap: 8px; margin-top: 10px; }
+.book-rows:empty { display: none; }
+.book-row { display: flex; align-items: center; gap: 10px; }
+.field .book-row .book-name { flex: 0 0 8.5em; max-width: 40%; margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+.field .book-row input.book-piece { flex: 1 1 auto; min-width: 0; width: auto; }
+.book-lines { display: grid; gap: 2px; margin: 4px 0 8px; }
+.book-line { line-height: 1.5; overflow-wrap: anywhere; }
+.book-nm { color: var(--muted); font-weight: 600; }
+.book-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.book-tags .tag.small { font-size: .72rem; padding: 0 8px; }
+
 /* ---------- 🎨 그림 갤러리 (주별 묶음 · 큰 썸네일 격자) / 상세 창 ---------- */
 .tag.art-kind.small { font-size: .72rem; padding: 0 8px; }
 .art-fb-link { font-size: .9rem; color: var(--purple); white-space: nowrap; }
@@ -698,6 +710,8 @@ dialog.roomy { width: min(900px, 92vw); }
 }
 @media (max-width: 560px) {
   .top h1 { flex: 1 1 100%; }
+  .book-row { flex-direction: column; align-items: stretch; gap: 3px; } /* 폴드 커버: 교재 이름 위, 칸 아래 */
+  .field .book-row .book-name { flex: 0 0 auto; max-width: none; }
   .sync-chip { flex: 1 1 60%; }
   #settingsBtn { flex: 0 0 auto; }
   /* 위쪽 메뉴: 글자가 뭉개지지 않게 옆으로 밀어서 봐요 */
