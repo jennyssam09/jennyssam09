@@ -168,22 +168,22 @@ const SCHEMAS = {
   },
 };
 
-// 메뉴 이름 (위쪽 탭)
-const TABS = [
-  { id: 'cal', label: '📅 캘린더' },
+// 메뉴 이름 (위쪽 탭): 📅 캘린더는 항상 맨 앞에 보여요. 아래 탭들은 ⚙ 백업·설정 › "메뉴 보이기"에서 보이기 · 접어 두기 · 순서를 정해요.
+//   접어 둔 탭은 메뉴 끝의 ‹ 버튼 안에 있어요. (기록은 숨기지 않아요: 캘린더 · 돌아보기 · 🤖 범위에는 그대로 나와요)
+const CAL_TAB = { id: 'cal', label: '📅 캘린더' };
+const MENU_TABS = [
   { id: 'violin', label: '🎻 바이올린' },
   { id: 'exercise', label: '🧘 운동' },
   { id: 'econ', label: '📚 경제 루틴' },
   { id: 'english', label: '📰 영어' },
+  { id: 'art', label: '🎨 그림' },
 ];
-// 🎈 놀이터: 그림이 사는 곳이에요. 메인 메뉴에는 없고, ⚙ 백업·설정 안의 "놀이터" 칸으로 들어가요. (그리고 싶은 날 놀러 가는 곳이라, 안 그리는 날엔 눈에 안 띄어요)
-//   이름은 여기서 바꿀 수 있어요. (예: '가끔', '낙서장')
-const PLAYGROUND = { id: 'art', icon: '🎈', name: '놀이터' };
-const HIDDEN_TABS = [PLAYGROUND.id]; // 메뉴에는 없지만 열 수 있는 화면
+const MENU_FOLDED_DEFAULT = ['art']; // 처음에는 🎨 그림만 접어 둬요
+const TABS = [CAL_TAB, ...MENU_TABS];
 
 // 빈 화면 문구: "다음에 뭘 하면 되는지"만 알려 줘요. (평가나 재촉하는 말은 넣지 않아요. 여기서 고치면 모든 화면에 반영돼요)
 const EMPTY_TEXT = {
-  feedback: '아직 받은 피드백이 없어요. 캘린더의 🤖 클로드에게 보내기로 시작해 보세요.', // 💬 피드백 모음 (모든 영역)
+  feedback: '아직 받은 피드백이 없어요. 위에서 복사해서 클로드에게 물어보세요.', // 📅 캘린더 › 🤖 클로드 피드백 › 받은 피드백
   violin: '아직 기록이 없어요. 위의 + 바이올린 기록으로 오늘 연습을 남겨 보세요. 10분도 괜찮아요.',
   shelf: '곡 이름을 적은 기록이 생기면 여기에 책처럼 꽂혀요.',
   workout: '아직 기록이 없어요. 위의 + 운동 기록으로 남겨 보세요.',
@@ -485,7 +485,7 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
 // 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1 · quickFlagV1),
-// 캘린더 아래 '🤖 클로드에게 보내기'를 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
+// 캘린더 아래 '🤖 클로드 피드백'을 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
 let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, quickFlagV1: false, booksV1: false, tempoV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
@@ -494,22 +494,20 @@ let autosaveTimer = null;
 
 const ui = {
   tab: 'cal',         // 처음 열면 캘린더 (이번 달)
-  // 영역 화면의 칩 (다른 메뉴에서 들어올 때마다 첫 칩으로 돌아가요: 📖 기록 · ✅ 오늘 루틴 · 📖 기사)
-  exView: 'records',  // 운동: records | feedback
-  vnView: 'records',  // 바이올린: records | shelf | feedback
-  econView: 'routine', // 경제 루틴: routine | feedback
-  enView: 'list',     // 영어: list | feedback
+  // 영역 화면의 칩 (다른 메뉴에서 들어올 때마다 첫 칩으로 돌아가요: 📖 기록)
+  vnView: 'records',  // 바이올린: records | shelf
   noteDraft: null,    // 경제 루틴 "오늘 한 줄"에 쓰는 중이지만 아직 저장하지 않은 글 { date, text }
   noteSavedUntil: 0,  // 한 줄을 저장한 직후 "저장됨 ✓"를 보여 주는 시각
-  claudePeriod: 'day', // 🤖 클로드에게 보내기: 기간 day | week | month
-  claudeScope: 'violin', // 범위 violin | exercise | econ | english
+  claudePeriod: 'day', // 🤖 클로드 피드백 ① 보내기: 기간 day | week | month
+  claudeScope: 'violin', // 범위 violin | exercise | econ | english | drawing
   claudeQuestion: {}, // 범위마다 "이번에 특히 물어볼 것" (피드백을 저장하면 비워져요)
-  claudePending: null, // 복사한 뒤 피드백을 붙여 넣을 때 쓰는 기간·범위
-  cardFbOpen: new Set(), // 🤖 를 눌러 피드백 입력 칸을 펼쳐 둔 카드
-  cardFbShown: new Set(), // 💬 N 을 눌러 피드백을 펼쳐 둔 카드
+  claudePending: null, // 복사한 뒤 받은 답변을 저장할 때 쓰는 범위·기간 (카드에서 보냈으면 targetId 도 있어요)
+  fbOpen: false,      // ② 받은 답변 저장 칸이 펼쳐져 있는지 (복사하면 저절로 펼쳐지고, 저장하면 접혀요)
+  fbSaveScope: null,  // ② 에서 작은 칩으로 바꾼 범위 (없으면 복사한 범위)
+  fbScope: 'all',     // ③ 받은 피드백 모아보기의 범위 칩: all | violin | exercise | econ | english | drawing
+  fbCount: 5,         // ③ 에 보이는 개수 (처음 5개, "더 보기"로 5개씩)
   fbOpenText: new Set(), // 답변 "더 보기"를 펼쳐 둔 피드백
   query: '',
-  artView: 'gallery', // gallery | feedback
   artOpen: null,      // 상세 창으로 열어 둔 그림 기록
   artPhoto: 0,        // 상세 창에서 보고 있는 사진 번호
   calMonth: null,       // 캘린더에서 보고 있는 달 (예: '2026-09')
@@ -645,13 +643,38 @@ const $ = (sel) => document.querySelector(sel);
 const view = $('#view');
 const dlg = $('#dlg');
 
+/* ---------------------------------------------------------------------
+   메뉴 보이기 · 접기 (맥 메뉴 막대처럼). 설정 값 'menu' = { order: [탭 id…], folded: [접어 둔 탭 id…], open: ‹ › 펼침 }
+   교재 목록·클로드 요청 문구처럼 일반 설정 값이라서 ☁ 동기화와 백업 파일에 같이 들어가요. (값이 없으면 기본값)
+   --------------------------------------------------------------------- */
+function menuState() {
+  const v = getConfig('menu', null) || {};
+  const ids = MENU_TABS.map((t) => t.id);
+  const saved = Array.isArray(v.order) ? v.order.filter((id, i, a) => ids.includes(id) && a.indexOf(id) === i) : [];
+  const order = [...saved, ...ids.filter((id) => !saved.includes(id))]; // 저장 뒤에 새로 생긴 탭은 맨 뒤에
+  const folded = Array.isArray(v.folded) ? v.folded.filter((id) => ids.includes(id)) : MENU_FOLDED_DEFAULT;
+  return { order, folded: new Set(folded), open: !!v.open };
+}
+const menuTab = (id) => MENU_TABS.find((t) => t.id === id);
+async function saveMenu(patch) {
+  const m = menuState();
+  await setConfig('menu', { order: m.order, folded: [...m.folded], open: m.open, ...patch });
+  renderTabs();
+}
+
 function renderTabs() {
-  $('#tabs').innerHTML = TABS.map((t) =>
-    `<button type="button" class="tab ${t.id === ui.tab ? 'active' : ''}" data-act="tab" data-id="${t.id}">${esc(t.label)}</button>`).join('');
+  const m = menuState();
+  const tab = (t, cls = '') => `<button type="button" class="tab${cls ? ` ${cls}` : ''}${t.id === ui.tab ? ' active' : ''}" data-act="tab" data-id="${t.id}">${esc(t.label)}</button>`;
+  const shown = m.order.filter((id) => !m.folded.has(id)).map(menuTab);
+  const folded = m.order.filter((id) => m.folded.has(id)).map(menuTab);
+  const peek = !m.open && folded.find((t) => t.id === ui.tab); // 접어 둔 탭의 화면을 보는 동안에는 그 탭만 메뉴에 임시로 보여요
+  $('#tabs').innerHTML = [CAL_TAB, ...shown].map((t) => tab(t)).join('')
+    + (m.open ? folded.map((t) => tab(t, 'folded')).join('') : peek ? tab(peek, 'folded') : '')
+    + (folded.length ? `<button type="button" class="tab fold-toggle" data-act="menuFold" aria-expanded="${m.open}" aria-label="${m.open ? '접어 둔 메뉴 접기' : '접어 둔 메뉴 펼치기'}" title="${m.open ? '접어 둔 메뉴 접기' : '접어 둔 메뉴 펼치기'}">${m.open ? '›' : '‹'}</button>` : '');
 }
 
 function render() {
-  if (!TABS.some((t) => t.id === ui.tab) && !HIDDEN_TABS.includes(ui.tab)) ui.tab = 'cal'; // 없어진 메뉴(예전 '오늘')는 캘린더로
+  if (!TABS.some((t) => t.id === ui.tab)) ui.tab = 'cal'; // 없어진 메뉴(예전 '오늘')는 캘린더로
   renderTabs();
   renderBackupBar();
   if (ui.tab === 'exercise') renderExercise();
@@ -826,7 +849,6 @@ function workoutCard(r) {
     </div>
     ${r.memo ? `<p class="pre">${esc(r.memo)}</p>` : ''}
     ${feedbackDoneNote(r)}
-    ${cardFeedbackHTML(r)}
   </div>`;
 }
 
@@ -898,7 +920,6 @@ function violinCard(r) {
       ${textBlock('선생님 피드백', r.feedback)}
       ${Array.isArray(r.homework) && r.homework.length ? `<div class="label">다음 레슨까지 과제</div>${tasksList(r, 'homework')}` : ''}
       ${guideHTML('violin', r, ['feedback', 'homework'])}
-      ${cardFeedbackHTML(r)}
     </div>`;
   }
   return `<div class="card" data-rid="${esc(r.id)}">
@@ -909,7 +930,6 @@ function violinCard(r) {
     ${bookLinesHTML(r)}
     ${guideHTML('violin', r, ['kind', 'piece', 'books', 'feedback', 'homework'])}
     ${feedbackDoneNote(r)}
-    ${cardFeedbackHTML(r)}
   </div>`;
 }
 
@@ -1132,7 +1152,7 @@ const oneLine = (s) => String(s || '').trim().replace(/\s*\n\s*/g, ' / ');
 const mdLabel = (s) => { const d = parseDate(s); return `${d.getMonth() + 1}/${d.getDate()} (${'일월화수목금토'[d.getDay()]})`; };
 
 // 글을 복사하고 알려줘요. 자동 복사가 안 되면 글을 창에 보여 줘서 직접 복사할 수 있게 해요.
-async function copyText(text, okMsg, title = '복사할 글') {
+async function copyText(text, okMsg, title = '복사할 글', action = null) {
   let ok = false;
   try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) { /* 아래의 예전 방식으로 다시 해 봐요 */ }
   if (!ok) {
@@ -1142,7 +1162,7 @@ async function copyText(text, okMsg, title = '복사할 글') {
     try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
     ta.remove();
   }
-  if (ok) toast(okMsg, 4000);
+  if (ok) toast(okMsg, action ? 8000 : 4000, action);
   else openDlg(`<h2>${esc(title)}</h2><p class="meta" style="margin-top:0">자동으로 복사하지 못했어요. 아래 글을 직접 선택해서 복사해 주세요. (Ctrl+C)</p><textarea class="copy-text" readonly>${esc(text)}</textarea><div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`, true);
   return ok;
 }
@@ -1236,7 +1256,6 @@ function dayGroupedHTML(list, cardFn, emptyText) {
 
 // 영역 화면의 공통 틀 (위에서 아래로): 제목·설명 한 줄 → ＋ 기록 버튼 → 칩 줄(첫 칩이 기본) → [기록 보기] 요약 한 줄 → 목록
 function renderExercise() {
-  const feedback = ui.exView === 'feedback';
   const list = ofType('workout').sort(byNewest);
   view.innerHTML = `
     <h2 class="page-title">운동</h2>
@@ -1244,8 +1263,7 @@ function renderExercise() {
     <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="workout">＋ 운동 기록</button>
     </div>
-    <div class="chips">${viewChips('exView', ui.exView, [['records', '📖 기록'], ['feedback', '💬 피드백']])}</div>
-    ${feedback ? feedbackViewHTML('exercise') : `${areaLineHTML('exercise')}${dayGroupedHTML(list, workoutCard, EMPTY_TEXT.workout)}${totalsCardHTML('exercise')}`}`;
+    ${areaLineHTML('exercise')}${dayGroupedHTML(list, workoutCard, EMPTY_TEXT.workout)}${totalsCardHTML('exercise')}`;
 }
 
 function renderViolin() {
@@ -1257,8 +1275,8 @@ function renderViolin() {
     <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="violin">＋ 바이올린 기록</button>
     </div>
-    <div class="chips">${viewChips('vnView', mode, [['records', '📖 기록'], ['shelf', '📚 레퍼토리 책장'], ['feedback', '💬 피드백']])}</div>
-    ${mode === 'shelf' ? shelfHTML() : mode === 'feedback' ? feedbackViewHTML('violin') : `${lessonPanel()}${areaLineHTML('violin')}${dayGroupedHTML(list, violinCard, EMPTY_TEXT.violin)}${totalsCardHTML('violin')}`}`;
+    <div class="chips">${viewChips('vnView', mode, [['records', '📖 기록'], ['shelf', '📚 레퍼토리 책장']])}</div>
+    ${mode === 'shelf' ? shelfHTML() : `${lessonPanel()}${areaLineHTML('violin')}${dayGroupedHTML(list, violinCard, EMPTY_TEXT.violin)}${totalsCardHTML('violin')}`}`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1442,8 +1460,7 @@ function renderEcon() {
   view.innerHTML = `
     <h2 class="page-title">경제 루틴</h2>
     <p class="page-sub">매일 조금씩, 가볍게 점검해요.</p>
-    <div class="chips">${viewChips('econView', ui.econView, [['routine', '✅ 오늘 루틴'], ['feedback', '💬 피드백']])}</div>
-    ${ui.econView === 'feedback' ? feedbackViewHTML('econ') : routineScreenHTML()}`;
+    ${routineScreenHTML()}`;
 }
 
 // 다른 화면의 기록으로 이동해서 잠깐 표시해 줘요 (도장 모음판 등에서)
@@ -1452,10 +1469,10 @@ function goToRecord(id) {
   if (!r) return;
   closeDlg();
   if (r.type === 'econRoutine') { ui.tab = 'econ'; }
-  else if (r.type === 'art') { ui.tab = 'art'; ui.artView = 'gallery'; }
-  else if (r.type === 'englishArticle') { ui.tab = 'english'; ui.enView = 'list'; }
+  else if (r.type === 'art') { ui.tab = 'art'; }
+  else if (r.type === 'englishArticle') { ui.tab = 'english'; }
   else if (r.type === 'violin') { ui.tab = 'violin'; ui.vnView = 'records'; }
-  else { ui.tab = 'exercise'; ui.exView = 'records'; }
+  else { ui.tab = 'exercise'; }
   ui.query = '';
   render();
   setTimeout(() => {
@@ -1468,7 +1485,7 @@ function goToRecord(id) {
 }
 
 /* ---------------------------------------------------------------------
-   10. 🎈 놀이터 = 🎨 그림 (갤러리 하나. 지금까지 그린 것을 큰 썸네일 격자로만 보여요. 날짜별 묶음·빈 칸·숫자는 없어요)
+   10. 🎨 그림 (갤러리 하나. 지금까지 그린 것을 큰 썸네일 격자로만 보여요. 날짜별 묶음·빈 칸·숫자는 없어요)
    --------------------------------------------------------------------- */
 // 종류: 새 기록은 artKind 에, 예전 기록은 "단계"로 읽어요 (그대로 모작·조금 바꿔 그리기 → 모작, 창작 → 창작, 없으면 모작)
 const artKindOf = (r) => (ART_KINDS.includes(r.artKind) ? r.artKind : (ART_STAGE_TO_KIND[r.stage] || '모작'));
@@ -1490,29 +1507,17 @@ function artTileHTML(r) {
 function artGalleryHTML() {
   const list = ofType('art').sort(byNewest);
   if (!list.length) return '<div class="empty">그리고 싶은 날, 그린 그림을 올려 보세요. 사진을 끌어다 놓거나 붙여넣어도 돼요.</div>';
-  return `<div class="art-grid art-playground">${list.map(artTileHTML).join('')}</div>`;
+  return `<div class="art-grid">${list.map(artTileHTML).join('')}</div>`;
 }
 
 function renderArt() {
-  const feedback = ui.artView === 'feedback';
   view.innerHTML = `
-    <div class="playground-head">
-      <h2 class="page-title">${PLAYGROUND.icon} ${esc(PLAYGROUND.name)}</h2>
-      <button type="button" class="link-btn" data-act="tab" data-id="cal">← 캘린더로</button>
-    </div>
+    <h2 class="page-title">🎨 그림</h2>
     <p class="page-sub">그리고 싶은 날 놀러 오는 곳이에요. 안 그려도 괜찮아요.</p>
-    <div class="row between actions-row" style="margin:6px 0 14px">
-      ${feedback ? '<button type="button" class="link-btn" data-act="artGallery">← 그림 보기</button>' : '<button type="button" class="btn" data-act="add" data-type="art">＋ 그림 올리기</button>'}
-      ${feedback ? '' : '<button type="button" class="link-btn art-fb-link" data-act="artFeedback">💬 피드백</button>'}
+    <div class="row actions-row add-row">
+      <button type="button" class="btn" data-act="add" data-type="art">＋ 그림 올리기</button>
     </div>
-    ${feedback ? feedbackViewHTML('drawing') : artGalleryHTML()}`;
-}
-
-// 놀이터로 들어가요 (⚙ 백업·설정의 "놀이터" 칸에서)
-function openPlayground() {
-  closeDlg();
-  ui.tab = PLAYGROUND.id; ui.artView = 'gallery'; ui.query = '';
-  render(); window.scrollTo(0, 0);
+    ${artGalleryHTML()}`;
 }
 
 // 예전에 적어 둔 값 (원작자·원본과 다른 점·가져갈 것·참고 강의 등). 지우지 않고 읽기만 해요.
@@ -1556,7 +1561,6 @@ function openArt(id, i = 0) {
       <button type="button" class="btn ghost small" data-act="edit" data-type="art" data-id="${esc(r.id)}">수정</button>
       <button type="button" class="btn danger small" data-act="del" data-type="art" data-id="${esc(r.id)}">삭제</button>
     </div>
-    ${cardFeedbackHTML(r)}
     ${legacyArtMemoHTML(r)}
     <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>
   </div>`, 'roomy');
@@ -1587,7 +1591,6 @@ function artDayCard(r) {
       ${actionButtons('art', r.id, claudeBtns(r))}
     </div>
     ${feedbackDoneNote(r)}
-    ${cardFeedbackHTML(r)}
   </div>`;
 }
 
@@ -1620,7 +1623,6 @@ function englishCard(r) {
       <button type="button" class="btn ghost small" data-act="edit" data-type="englishArticle" data-id="${esc(r.id)}">✍ 수정</button>
       <button type="button" class="btn danger small" data-act="del" data-type="englishArticle" data-id="${esc(r.id)}">삭제</button>
     </div>
-    ${cardFeedbackHTML(r)}
   </article>`;
 }
 
@@ -1634,7 +1636,6 @@ function englishWeekLabel() {
 }
 
 function englishBodyHTML() {
-  if (ui.enView === 'feedback') return feedbackViewHTML('english');
   const arts = ofType('englishArticle').sort(byNewest);
   return `<p class="meta area-line" id="enWeek">${esc(englishWeekLabel())}</p>${arts.length ? arts.map(englishCard).join('') : `<div class="empty">${esc(EMPTY_TEXT.english)}</div>`}`;
 }
@@ -1646,7 +1647,6 @@ function renderEnglish() {
     <div class="row actions-row add-row">
       <button type="button" class="btn" data-act="add" data-type="englishArticle">＋ 이번 주 기사 추가</button>
     </div>
-    <div class="chips">${viewChips('enView', ui.enView, [['list', '📖 기사'], ['feedback', '💬 피드백']])}</div>
     ${englishBodyHTML()}`;
 }
 
@@ -2012,13 +2012,23 @@ function showToastEl(el, ms) {
 }
 
 // 일반 알림 (동기화 오류·"저장했어요" 같은 짧은 안내): 어두운 한 줄이에요
-function toast(msg, ms = 6000) {
+//   action = { label, act, id } 를 주면 오른쪽에 작은 버튼이 붙어요. (누르면 data-act 처리로 이어지고 알림은 닫혀요)
+function toast(msg, ms = 6000, action = null) {
   const el = $('#toast');
   el.className = 'toast';
   el.replaceChildren();
   const text = document.createElement('span');
   text.textContent = msg;
   el.append(text);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-act';
+    b.textContent = action.label;
+    b.dataset.act = action.act;
+    if (action.id) b.dataset.id = action.id;
+    el.append(b);
+  }
   showToastEl(el, ms);
 }
 
@@ -2136,7 +2146,7 @@ const hasFiles = (e) => !!(e.dataTransfer && [...e.dataTransfer.types].includes(
 const imgFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone, .dropzone[data-key]');
 const firstImageKey = () => { const z = dlg.querySelector('.dropzone[data-key]'); return z ? z.dataset.key : 'image'; };
 const multiFormOpen = () => dlg.open && !!dlg.querySelector('#dropZone[data-multi]');
-// 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 🎈 놀이터(그림 기록)
+// 사진을 화면에 바로 놓았을 때 새 기록이 만들어지는 화면: 🎨 그림(그림 기록)
 const dropTarget = () => (dlg.open ? null : ui.tab === 'art' ? 'art' : null);
 const DROP_HINT = { art: '🖼 여기에 놓으면 그림 올리기 창이 열려요' };
 let dragTimer = null;
@@ -2190,13 +2200,13 @@ document.addEventListener('drop', async (e) => {
       const key = zone ? zone.dataset.key : firstImageKey();
       if (await attachImage(imgs[0], key) && imgs.length > 1) {
         const note = $(`#imgNote_${key}`);
-        if (note) note.textContent = '한 칸에는 그림을 한 장만 넣을 수 있어서 첫 번째만 넣었어요. 여러 장은 놀이터에 한꺼번에 놓아 보세요.';
+        if (note) note.textContent = '한 칸에는 그림을 한 장만 넣을 수 있어서 첫 번째만 넣었어요. 여러 장은 🎨 그림 화면에 한꺼번에 놓아 보세요.';
       }
     }
   } else if (target === 'art') {
     await addArtFromFiles(files);
   } else if (!dlg.open) {
-    toast(`사진은 ${PLAYGROUND.icon} ${PLAYGROUND.name}에 끌어다 놓아 주세요.`);
+    toast('사진은 🎨 그림 화면에 끌어다 놓아 주세요.');
   }
 });
 
@@ -2703,7 +2713,7 @@ dlg2.addEventListener('cancel', (e) => { e.preventDefault(); dlg2.close(); });
    (밖으로 나가는 요청은 없어요. 복사하고 붙여 넣는 방식이에요.)
    --------------------------------------------------------------------- */
 const SCOPE_OF_TYPE = { violin: 'violin', workout: 'exercise', art: 'drawing', englishArticle: 'english' };
-const COPY_SCOPES = ['violin', 'exercise', 'econ', 'english']; // 메인 복사칸의 범위 (그림은 카드마다 버튼으로 보내요)
+const COPY_SCOPES = ['violin', 'exercise', 'econ', 'english', 'drawing']; // 🤖 클로드 피드백의 범위 칩 (① 보내기 · ② 받은 답변 저장 · ③ 받은 피드백)
 const PERIODS = [{ id: 'day', label: '오늘' }, { id: 'week', label: '이번 주' }, { id: 'month', label: '이번 달' }];
 const scopeMeta = (id) => CLAUDE_SCOPES.find((x) => x.id === id) || CLAUDE_SCOPES[0];
 const byCreatedDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0);
@@ -2825,10 +2835,16 @@ async function setTodoDone(id, done) {
   const f = records.find((x) => x.id === id);
   if (!f) return;
   await saveRecord({ ...f, todoDone: done, updatedAt: Date.now() });
-  refreshFeedbackViews();
+  afterFeedbackChange();
 }
 
+// 모아보기(③)만 새로 그려요. 위에서 쓰던 답변 칸(②)은 그대로 남아요. (캘린더가 아니면 화면 전체를 새로 그려요)
+function refreshFbList() { const el = $('#fbList'); if (el) el.innerHTML = fbListInner(); }
 const refreshFeedbackViews = () => { render(); refreshDay(); refreshArtDetail(); };
+function afterFeedbackChange() {
+  if ($('#fbList')) { refreshFbList(); syncClaudeBox(); } // 복사할 글의 "지난번 받은 제안 (해봤음)"도 같이 바뀌어요
+  else refreshFeedbackViews();
+}
 
 /* ---- 지난 피드백에서 "해볼 것" ---- */
 // 이 범위에서 아직 해봤음 체크가 안 됐고 가장 최근인 해볼 것 하나 (예전에 "숨기기"를 눌러 둔 것(todoHidden)은 계속 안 보여요)
@@ -2851,27 +2867,16 @@ function routineHintHTML() {
     <label class="fb-hint-c"><input type="checkbox" data-fb-done="${esc(f.id)}"> 오늘 해봤음</label></div>`;
 }
 
-/* ---- 기록 카드 안의 🤖 · 💬 ---- */
+/* ---- 기록 카드 안의 🤖 · 💬 (🤖 = 그 기록 하나를 글로 복사 · 💬 N = 캘린더의 받은 피드백으로 이동) ---- */
 const feedbacksOf = (id) => ofType('claudeFeedback').filter((f) => f.targetId === id).sort(byCreatedDesc);
 const claudeBtns = (r) => `<button type="button" class="btn ghost purple small" data-act="claudeCard" data-id="${esc(r.id)}" title="이 기록을 클로드에게 보낼 글로 복사해요" aria-label="클로드에게 보내기">🤖</button>${feedbackBadge(r)}`;
 function feedbackBadge(r) {
   const n = feedbacksOf(r.id).length;
-  return n ? `<button type="button" class="btn ghost small fb-badge" data-act="fbToggle" data-id="${esc(r.id)}" aria-pressed="${ui.cardFbShown.has(r.id)}" title="받은 피드백 보기">💬 ${n}</button>` : '';
+  return n ? `<button type="button" class="btn ghost small fb-badge" data-act="fbGo" data-id="${esc(r.id)}" title="받은 피드백을 캘린더에서 보기">💬 ${n}</button>` : '';
 }
 function feedbackDoneNote(r) {
   const f = r.feedbackId && records.find((x) => x.id === r.feedbackId);
   return f && hasValue(f.todo) ? `<p class="fb-done">💡 오늘 해본 것: ${esc(f.todo)}</p>` : '';
-}
-
-// 답변 + 해볼 것 입력 칸 (메인 복사칸과 카드가 함께 써요)
-function fbInputHTML(targetId) {
-  return `<div class="fb-input" data-target="${esc(targetId)}">
-    <div class="label" style="margin-top:0">💬 받은 피드백 붙여넣기</div>
-    <textarea class="fb-text-in" data-fb="text" rows="6" placeholder="클로드의 답변을 여기에 붙여 넣어요"></textarea>
-    <label class="rt-h" style="margin:10px 0 4px">이번에 해볼 것 하나 <span class="meta">(한 줄)</span></label>
-    <input class="fb-todo-in" data-fb="todo" type="text" maxlength="200" autocomplete="off" placeholder="예: 비브라토는 개방현 옆 줄에서 4번 손가락으로 먼저">
-    <div class="row" style="margin-top:10px"><button type="button" class="btn purple" data-act="fbSave" data-target="${esc(targetId)}">저장</button>${targetId ? `<button type="button" class="btn ghost" data-act="fbClose" data-id="${esc(targetId)}">닫기</button>` : ''}</div>
-  </div>`;
 }
 
 const periodLabel = (f) => ({ day: '오늘', week: '이번 주', month: '이번 달', card: '카드' }[f.period] || '');
@@ -2880,40 +2885,41 @@ function fbRangeText(f) {
   return ` (${shortDay(f.rangeStart)} ~ ${shortDay(f.rangeEnd || f.rangeStart)})`;
 }
 
-// 카드 아래: 입력 칸(열려 있을 때)과 이 카드에 연결된 피드백 전문(💬 N을 눌렀을 때)
-function cardFeedbackHTML(r) {
-  const attached = feedbacksOf(r.id);
-  return `${ui.cardFbOpen.has(r.id) ? `<div class="fb-box">${fbInputHTML(r.id)}</div>` : ''}${ui.cardFbShown.has(r.id) && attached.length ? `<div class="fb-attached">${attached.map((f) => fbItemHTML(f, { full: true, compact: true })).join('')}</div>` : ''}`;
-}
-
-/* ---- 피드백 한 건 (모음 화면과 카드 아래가 함께 써요) ---- */
-function fbAnswerHTML(f, full) {
+/* ---- 피드백 한 건 (③ 받은 피드백) ---- */
+function fbAnswerHTML(f) {
   const text = String(f.text || '').trim();
   if (!text) return '';
   const long = text.split('\n').length > 3 || text.length > 200;
-  const open = full || ui.fbOpenText.has(f.id);
-  return `<p class="pre fb-answer${long && !open ? ' clamp' : ''}">${esc(text)}</p>${long && !full ? `<button type="button" class="link-btn" data-act="fbMore" data-id="${esc(f.id)}">${open ? '접기' : '더 보기'}</button>` : ''}`;
+  const open = ui.fbOpenText.has(f.id);
+  return `<p class="pre fb-answer${long && !open ? ' clamp' : ''}">${esc(text)}</p>${long ? `<button type="button" class="link-btn" data-act="fbMore" data-id="${esc(f.id)}">${open ? '접기' : '더 보기'}</button>` : ''}`;
 }
-function fbItemHTML(f, { full = false, compact = false } = {}) {
+function fbItemHTML(f) {
   const target = f.targetId && records.find((x) => x.id === f.targetId);
-  return `<div class="card fb-item${compact ? ' compact' : ''}" data-rid="${esc(f.id)}">
-    <div class="meta">${esc(dayLabel(f.date))} · ${esc(periodLabel(f))}${esc(fbRangeText(f))}</div>
+  const sc = scopeMeta(f.scope);
+  return `<div class="card fb-item" data-rid="${esc(f.id)}">
+    <div class="meta">${esc(dayLabel(f.date))} · <span class="fb-scope" title="${esc(sc.label)}" aria-label="${esc(sc.label)}">${sc.icon}</span> · ${esc(periodLabel(f))}${esc(fbRangeText(f))}</div>
     ${hasValue(f.question) ? `<p class="fb-q"><span class="meta">물어본 것</span> ${esc(f.question)}</p>` : ''}
     ${hasValue(f.todo) ? `<label class="fb-todo"><input type="checkbox" data-fb-done="${esc(f.id)}" ${f.todoDone ? 'checked' : ''}> <span class="${f.todoDone ? 'done' : ''}"><b>해볼 것</b> ${esc(f.todo)}</span></label>` : ''}
-    ${fbAnswerHTML(f, full)}
+    ${fbAnswerHTML(f)}
     <div class="row" style="margin-top:8px">
       <button type="button" class="btn ghost small" data-act="fbEdit" data-id="${esc(f.id)}">수정</button>
       <button type="button" class="btn danger small" data-act="fbDelete" data-id="${esc(f.id)}">삭제</button>
-      ${target && !compact ? `<button type="button" class="btn ghost small" data-act="goto" data-id="${esc(f.targetId)}">기록 보기</button>` : ''}
+      ${target ? `<button type="button" class="btn ghost small" data-act="goto" data-id="${esc(f.targetId)}">기록 보기</button>` : ''}
     </div>
   </div>`;
 }
 
-// 💬 피드백 모음 (영역마다): 받은 피드백을 최신순으로. 각 피드백의 "해볼 것" 옆 체크(해봤음)로 표시해요.
-function feedbackViewHTML(scope) {
-  const all = ofType('claudeFeedback').filter((f) => f.scope === scope).sort(byCreatedDesc);
-  if (!all.length) return `<div class="empty">${esc(EMPTY_TEXT.feedback)}</div>`;
-  return all.map((f) => fbItemHTML(f)).join('');
+// ③ 받은 피드백 (모아보기): 범위 칩 · 최신순 카드 · 처음엔 최근 5개, "더 보기"로 5개씩
+const fbFiltered = () => ofType('claudeFeedback').filter((f) => ui.fbScope === 'all' || f.scope === ui.fbScope).sort(byCreatedDesc);
+function fbListInner() {
+  const all = fbFiltered();
+  const shown = all.slice(0, ui.fbCount);
+  const rest = all.length - shown.length;
+  const chip = (id, label, say) => `<button type="button" class="chip ${ui.fbScope === id ? 'active' : ''}" data-act="fbScope" data-id="${id}" aria-pressed="${ui.fbScope === id}" title="${esc(say)}" aria-label="${esc(say)}">${label}</button>`;
+  return `<div class="label fb-list-title">💬 받은 피드백</div>
+    <div class="chips fb-scopes">${chip('all', '전체', '전체')}${COPY_SCOPES.map((id) => chip(id, scopeMeta(id).icon, scopeMeta(id).label)).join('')}</div>
+    ${shown.length ? shown.map(fbItemHTML).join('') : `<div class="empty">${esc(EMPTY_TEXT.feedback)}</div>`}
+    ${rest > 0 ? `<div class="row"><button type="button" class="btn ghost small" data-act="fbListMore">더 보기 (${rest}개 남음)</button></div>` : ''}`;
 }
 
 function openFeedbackEdit(id) {
@@ -2933,11 +2939,56 @@ async function saveFeedbackEdit(form) {
   const { sample, ...keep } = f; // 예시를 고치면 내 기록이 돼요
   await saveRecord({ ...keep, question: form.elements.question.value.trim(), text: form.elements.text.value.trim(), todo: form.elements.todo.value.trim(), updatedAt: Date.now() });
   closeDlg();
-  refreshFeedbackViews();
+  afterFeedbackChange();
   toast('피드백을 고쳤어요.', 2500);
 }
 
-/* ---- 메인 복사칸 (캘린더 아래, 접어 둘 수 있어요) ---- */
+/* ---- 받은 답변에서 "이번에 해볼 것 하나" 자동으로 뽑기 ----
+   번호(1. 1) ①)나 글머리표(- • ·)로 시작하는 첫 줄, 없으면 첫 문장. 마크다운 기호(**, #, >, 번호·글머리표)는 떼고,
+   60자가 넘으면 문장이 끝나는 곳 → 쉼표 → 띄어쓰기 순서로 자연스러운 곳에서 줄여요. (뽑을 게 없으면 빈 글자) */
+const TODO_MAX = 60;
+const TODO_NUM = /^(?:\d{1,2}\s?[.)](?=\s|\D|$)|[①-⑳]|\d️?⃣)\s*/; // 1.  1)  ①  1️⃣
+const TODO_BULLET = /^(?:[-*+–—]\s+|[•·‣◦▪●○■□▶▷→]\s*)/;                    // -  *  +  •  ·  …
+function stripMd(s) {
+  return String(s)
+    .replace(/^(?:>\s*)+/, '').replace(/^#{1,6}\s*/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')       // [글자](주소) → 글자
+    .replace(/(\*\*|__|~~|`)/g, '')                    // 굵게·취소선·코드
+    .replace(/\*([^*\s][^*]*?)\*/g, '$1')              // *기울임*
+    .replace(/\s+/g, ' ').trim();
+}
+function shortenTodo(s) {
+  s = s.replace(/\s+/g, ' ').trim();
+  if (s.length <= TODO_MAX) return s;
+  const MIN = 12;
+  const head = s.slice(0, TODO_MAX);
+  for (let i = head.length - 1; i >= MIN; i -= 1) if (/[.!?。！？]/.test(head[i]) && !/\d/.test(head[i + 1] || '')) return head.slice(0, i + 1).trim(); // 문장이 끝나는 곳
+  const room = s.slice(0, TODO_MAX - 1); // 줄임표(…) 자리 한 글자
+  for (const re of [/[,;:，、]/, /\s/]) {
+    for (let i = room.length - 1; i >= MIN; i -= 1) if (re.test(room[i])) return `${room.slice(0, i).replace(/[\s,;:，、]+$/, '')}…`;
+  }
+  return `${room}…`;
+}
+function extractTodo(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return '';
+  const lead = (l) => l.replace(/^(?:>\s*)+/, '').replace(/^#{1,6}\s*/, '').replace(/^(?:\*\*|__)\s*/, ''); // 줄 앞의 >, #, 굵게 표시는 먼저 떼고 번호·글머리표를 봐요
+  let pick = '';
+  for (const l of lines) {
+    const d = lead(l);
+    const m = TODO_NUM.exec(d) || TODO_BULLET.exec(d);
+    if (m) { pick = stripMd(d.slice(m[0].length)); if (pick) break; }
+  }
+  if (!pick) { // 번호·글머리표가 없으면 첫 문장 (제목 줄·가로줄은 건너뛰어요)
+    const body = lines.filter((l) => !/^#{1,6}\s/.test(l) && !/^[-*_=]{3,}$/.test(l));
+    const first = stripMd((body[0] || lines[0]));
+    const m = /^(.+?[.!?。！？])(?=\s|$)/.exec(first);
+    pick = m ? m[1] : first;
+  }
+  return shortenTodo(pick);
+}
+
+/* ---- 📅 캘린더 › 🤖 클로드 피드백 (① 보내기 · ② 받은 답변 저장 · ③ 받은 피드백) ---- */
 function claudeCurrent() {
   const [start, end] = claudeRange(ui.claudePeriod);
   const list = scopeRecords(ui.claudeScope, start, end);
@@ -2945,10 +2996,52 @@ function claudeCurrent() {
   return { scope: ui.claudeScope, period: ui.claudePeriod, start, end, list, question, text: list.length ? claudeText({ scope: ui.claudeScope, period: ui.claudePeriod, list, question }) : '' };
 }
 
+// ② 에서 저장할 범위·기간: 카드에서 보낸 것이면 그 기록, 방금 복사한 것이 있으면 그 범위·기간, 없으면 ① 에서 고른 것 (범위만 작은 칩으로 바꿀 수 있어요)
+function fbSaveTarget() {
+  const p = ui.claudePending;
+  if (p && p.targetId) return { ...p };
+  const scope = ui.fbSaveScope || (p && p.scope) || ui.claudeScope;
+  if (p) return { ...p, scope, question: scope === p.scope ? p.question : '' };
+  const [rangeStart, rangeEnd] = claudeRange(ui.claudePeriod);
+  return { scope, period: ui.claudePeriod, rangeStart, rangeEnd, question: ui.claudeQuestion[scope] || '', targetId: '' };
+}
+function fbSaveNote(t) {
+  if (t.targetId) {
+    const r = records.find((x) => x.id === t.targetId);
+    return r ? `📎 이 기록에서 보낸 답변이에요: ${dayLabel(r.date)} · ${calTitle(r)}` : '';
+  }
+  return `기간: ${periodLabel(t)}${fbRangeText(t)}`;
+}
+function fbSaveChipsHTML(t) {
+  if (t.targetId) return `<span class="chip small active">${scopeMeta(t.scope).icon} ${esc(scopeMeta(t.scope).label)}</span>`; // 카드에서 보낸 것은 범위가 정해져 있어요
+  return COPY_SCOPES.map((id) => `<button type="button" class="chip small ${t.scope === id ? 'active' : ''}" data-act="fbSaveScope" data-id="${id}" aria-pressed="${t.scope === id}">${scopeMeta(id).icon} ${esc(scopeMeta(id).label)}</button>`).join('');
+}
+function syncFbSave() {
+  const t = fbSaveTarget();
+  const chips = $('#fbSaveScopes'); if (chips) chips.innerHTML = fbSaveChipsHTML(t);
+  const ctx = $('#fbCtx'); if (ctx) ctx.textContent = fbSaveNote(t);
+}
+
+function fbSaveHTML() {
+  const t = fbSaveTarget();
+  return `<details class="fb-fold" id="mainFb"${ui.fbOpen ? ' open' : ''}>
+    <summary>💬 받은 피드백 붙여넣기</summary>
+    <div class="fb-input" id="fbInput">
+      <div class="cl-row"><span class="chip-label">범위</span><div class="chips" id="fbSaveScopes" style="margin:0">${fbSaveChipsHTML(t)}</div></div>
+      <p class="meta fb-ctx" id="fbCtx">${esc(fbSaveNote(t))}</p>
+      <textarea class="fb-text-in" data-fb="text" rows="6" aria-label="클로드의 답변" placeholder="클로드의 답변을 여기에 붙여 넣어요"></textarea>
+      <label class="rt-h" for="fbTodo" style="margin:10px 0 4px">이번에 해볼 것 하나 <span class="meta">(한 줄)</span></label>
+      <input id="fbTodo" class="fb-todo-in" data-fb="todo" type="text" maxlength="200" autocomplete="off" placeholder="예: 비브라토는 개방현 옆 줄에서 4번 손가락으로 먼저">
+      <p class="meta fb-auto-note" id="fbAutoNote" hidden>답변 첫 제안을 넣어 뒀어요. 고쳐도 돼요.</p>
+      <div class="row" style="margin-top:10px"><button type="button" class="btn purple" data-act="fbSave">저장</button></div>
+    </div>
+  </details>`;
+}
+
 function claudeBoxHTML() {
   const cur = claudeCurrent();
   return `<details class="card claude-fold" id="claudeFold"${settings.claudeBoxOpen ? ' open' : ''}>
-    <summary>🤖 클로드에게 보내기</summary>
+    <summary>🤖 클로드 피드백</summary>
     <div class="claude-box" id="claudeBox">
     <div class="cl-row"><span class="chip-label">기간</span><div class="chips" style="margin:0">${PERIODS.map((p) => `<button type="button" class="chip ${ui.claudePeriod === p.id ? 'active' : ''}" data-act="claudePeriod" data-id="${p.id}" aria-pressed="${ui.claudePeriod === p.id}">${p.label}</button>`).join('')}</div></div>
     <div class="cl-row"><span class="chip-label">범위</span><div class="chips" style="margin:0">${COPY_SCOPES.map((id) => `<button type="button" class="chip ${ui.claudeScope === id ? 'active' : ''}" data-act="claudeScope" data-id="${id}" aria-pressed="${ui.claudeScope === id}">${scopeMeta(id).icon} ${esc(scopeMeta(id).label)}</button>`).join('')}</div></div>
@@ -2959,20 +3052,23 @@ function claudeBoxHTML() {
       <button type="button" class="btn purple" id="claudeCopyBtn" data-act="claudeCopy" ${cur.list.length ? '' : 'disabled'}>📋 복사하기</button>
       <button type="button" class="btn ghost" data-act="claudeSettings">✎ 내 정보·요청 문구</button>
     </div>
-    <details class="fb-fold" id="mainFb"${ui.claudePending ? ' open' : ''}><summary>💬 받은 피드백 붙여넣기</summary>${fbInputHTML('')}</details>
+    ${fbSaveHTML()}
+    <section class="fb-list" id="fbList">${fbListInner()}</section>
     </div>
   </details>`;
 }
 
-// 펼치거나 접으면 이 기기에 기억해요 (다른 기기와 맞추지 않아요)
+// 펼치거나 접으면 이 기기에 기억해요 (🤖 카드는 다른 기기와 맞추지 않아요)
 document.addEventListener('toggle', (e) => {
   const d = e.target;
-  if (!d || d.id !== 'claudeFold' || d.open === settings.claudeBoxOpen) return;
+  if (!d) return;
+  if (d.id === 'mainFb') { ui.fbOpen = d.open; return; }
+  if (d.id !== 'claudeFold' || d.open === settings.claudeBoxOpen) return;
   settings.claudeBoxOpen = d.open;
   saveSettings();
 }, true);
 
-// 기간·범위·물어볼 것이 바뀌면 미리보기만 새로 만들어요 (아래에 붙여 넣던 피드백은 그대로)
+// 기간·범위·물어볼 것이 바뀌면 미리보기만 새로 만들어요 (아래에 붙여 넣던 답변은 그대로)
 function syncClaudeBox() {
   const box = $('#claudeBox');
   if (!box) return;
@@ -2983,49 +3079,105 @@ function syncClaudeBox() {
   if (q && document.activeElement !== q) q.value = cur.question;
   $('#claudePreview').value = cur.list.length ? cur.text : '이 기간엔 기록이 없어요';
   $('#claudeCopyBtn').disabled = !cur.list.length;
+  syncFbSave();
 }
 
+// ① 복사하기: 글을 복사하고, 받은 답변을 저장하는 ② 가 이 범위·기간으로 저절로 펼쳐져요
 async function claudeCopy() {
   const cur = claudeCurrent();
   if (!cur.list.length) return;
   const text = $('#claudePreview').value;
-  const ok = await copyText(text, '복사했어요');
-  ui.claudePending = { scope: cur.scope, period: cur.period, rangeStart: cur.start, rangeEnd: cur.end, question: cur.question };
+  const ok = await copyText(text, cur.scope === 'drawing' ? '복사했어요. 그림 이미지는 직접 첨부해 주세요.' : '복사했어요');
+  ui.claudePending = { scope: cur.scope, period: cur.period, rangeStart: cur.start, rangeEnd: cur.end, question: cur.question, targetId: '' };
+  ui.fbSaveScope = null;
+  ui.fbOpen = true;
   const fold = $('#mainFb');
-  if (fold) { fold.open = true; if (ok) { const ta = fold.querySelector('[data-fb=text]'); if (ta) ta.focus(); } }
+  if (fold) { fold.open = true; syncFbSave(); if (ok) { const ta = fold.querySelector('[data-fb=text]'); if (ta) ta.focus(); } }
 }
 
-// 답변을 저장해요. targetId 가 있으면 그 카드에서 보낸 피드백이에요.
-async function fbSave(container, targetId) {
-  const text = container.querySelector('[data-fb=text]').value;
-  const todo = container.querySelector('[data-fb=todo]').value;
-  let payload;
-  if (targetId) {
-    const r = records.find((x) => x.id === targetId);
-    if (!r) return;
-    payload = { scope: SCOPE_OF_TYPE[r.type], period: 'card', rangeStart: r.date, rangeEnd: r.date, targetId, question: '' };
-  } else {
-    const p = ui.claudePending || (() => { const c = claudeCurrent(); return { scope: c.scope, period: c.period, rangeStart: c.start, rangeEnd: c.end, question: c.question }; })();
-    payload = { ...p, targetId: '' };
-  }
-  const rec = await saveFeedback({ ...payload, text, todo });
+// ② 저장: 카드에서 보낸 것이면 그 기록에 연결돼요 (기간 '카드')
+async function fbSave() {
+  const box = $('#fbInput');
+  if (!box) return;
+  const t = fbSaveTarget();
+  if (t.targetId && !records.some((x) => x.id === t.targetId)) { t.targetId = ''; t.period = 'day'; } // 그 사이 지운 기록이면 연결 없이
+  const rec = await saveFeedback({ scope: t.scope, period: t.period, rangeStart: t.rangeStart, rangeEnd: t.rangeEnd, targetId: t.targetId, question: t.question, text: box.querySelector('[data-fb=text]').value, todo: box.querySelector('[data-fb=todo]').value });
   if (!rec) return;
-  if (targetId) { ui.cardFbOpen.delete(targetId); ui.cardFbShown.add(targetId); }
-  else { ui.claudeQuestion[payload.scope] = ''; ui.claudePending = null; } // 물어볼 것은 저장하면 비워져요
+  ui.claudeQuestion[t.scope] = ''; // 물어볼 것은 저장하면 비워져요
+  ui.claudePending = null; ui.fbSaveScope = null; ui.fbOpen = false;
+  ui.fbScope = 'all'; ui.fbCount = Math.max(5, ui.fbCount); // 방금 저장한 것이 맨 위에 보이게
   refreshFeedbackViews();
 }
 
-// 카드의 🤖: 그 기록 하나만으로 글을 만들어 복사하고, 카드 안에 피드백 칸을 펼쳐요
+// 붙여 넣은 답변에서 "해볼 것" 칸 자동 채우기 (사용자가 고친 칸은 다시 붙여 넣어도 덮어쓰지 않아요)
+function autoFillTodo(box) {
+  const ta = box.querySelector('[data-fb=text]');
+  const todo = box.querySelector('[data-fb=todo]');
+  const note = box.querySelector('.fb-auto-note');
+  if (!ta || !todo || todo.dataset.user === '1') return;
+  const s = extractTodo(ta.value);
+  if (!s) return;
+  todo.value = s;
+  if (note) note.hidden = false;
+}
+
+// 카드의 🤖: 그 기록 하나만으로 글을 만들어 복사해요. 답변은 캘린더에서 저장해요 (토스트의 [바로 가기])
+const cardPending = (r) => ({ scope: SCOPE_OF_TYPE[r.type], period: 'card', rangeStart: r.date, rangeEnd: r.date, targetId: r.id, question: '' });
 async function claudeCard(id) {
   const r = records.find((x) => x.id === id);
   if (!r || !SCOPE_OF_TYPE[r.type]) return;
   const scope = SCOPE_OF_TYPE[r.type];
   const text = claudeText({ scope, period: 'card', list: [r] });
-  await copyText(text, scope === 'drawing' ? '복사했어요. 그림 이미지는 직접 첨부해 주세요.' : '복사했어요');
-  ui.cardFbOpen.add(id);
-  refreshFeedbackViews();
-  const ta = document.querySelector(`[data-target="${CSS.escape(id)}"] [data-fb=text]`);
-  if (ta) ta.focus();
+  const msg = `복사했어요.${scope === 'drawing' ? ' 그림 이미지는 직접 첨부해 주세요.' : ''} 답변은 📅 캘린더 › 🤖 클로드 피드백에서 저장해요`;
+  const inDlg = dlg.open; // 날짜 창·그림 상세 창 안의 카드: 창이 열려 있는 동안은 창 밖의 토스트 버튼을 누를 수 없어서, [바로 가기]를 카드 아래에 보여요
+  await copyText(text, msg, '복사할 글', inDlg ? null : { label: '바로 가기', act: 'fbGoSave', id });
+  if (inDlg) {
+    const btn = [...dlg.querySelectorAll('[data-act=claudeCard]')].find((b) => b.dataset.id === id);
+    const host = btn && btn.closest('.card, .art-detail');
+    if (host) {
+      host.querySelectorAll(':scope > .fb-copied').forEach((n) => n.remove());
+      host.insertAdjacentHTML('beforeend', `<p class="fb-copied" role="status">${esc(msg)} <button type="button" class="link-btn" data-act="fbGoSave" data-id="${esc(id)}">바로 가기</button></p>`);
+    }
+  }
+  ui.claudePending = cardPending(r); // 캘린더로 가면 ② 가 이 기록에 연결된 채 열려 있어요
+  ui.fbSaveScope = null;
+  ui.fbOpen = true;
+}
+
+// 캘린더의 🤖 클로드 피드백 카드를 펼치고 그 자리로 가요
+function openClaudeCard() {
+  closeDlg();
+  hideToast();
+  ui.tab = 'cal'; ui.query = '';
+  if (!settings.claudeBoxOpen) { settings.claudeBoxOpen = true; saveSettings(); }
+  render();
+}
+// 토스트의 [바로 가기]: 그 기록에 연결된 ② 를 열어요
+function goSaveFeedback(id) {
+  const r = records.find((x) => x.id === id);
+  if (r && SCOPE_OF_TYPE[r.type]) { ui.claudePending = cardPending(r); ui.fbSaveScope = null; }
+  ui.fbOpen = true;
+  openClaudeCard();
+  const fold = $('#mainFb');
+  if (fold) fold.scrollIntoView({ block: 'center' });
+  const ta = fold && fold.querySelector('[data-fb=text]');
+  if (ta) ta.focus({ preventScroll: true });
+}
+// 카드의 💬 N: 캘린더 ③ 에서 그 기록에 연결된 피드백으로 가요
+function goToFeedbackOf(id) {
+  const list = feedbacksOf(id);
+  if (!list.length) return;
+  ui.fbScope = 'all';
+  const order = ofType('claudeFeedback').sort(byCreatedDesc);
+  const last = Math.max(...list.map((f) => order.findIndex((x) => x.id === f.id)));
+  ui.fbCount = Math.max(5, Math.ceil((last + 1) / 5) * 5); // 맨 아래 연결된 피드백까지 보이게
+  openClaudeCard();
+  setTimeout(() => {
+    const els = list.map((f) => document.querySelector(`#fbList [data-rid="${CSS.escape(f.id)}"]`)).filter(Boolean);
+    if (!els.length) return;
+    els[0].scrollIntoView({ block: 'center' });
+    els.forEach((el) => { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2000); });
+  }, 60);
 }
 
 /* ---- ✎ 내 정보·요청 문구 창 ---- */
@@ -3968,6 +4120,22 @@ function renderBackupBar() {
 /* ---------------------------------------------------------------------
    12. 백업·설정 창
    --------------------------------------------------------------------- */
+// ⚙ 백업·설정의 "메뉴 보이기": 탭마다 ☑ 보이기 / ☐ 접어 두기 + ↑ ↓ (캘린더는 맨 앞에 고정)
+function menuListHTML() {
+  const m = menuState();
+  return `<ul class="menu-list">
+    <li class="menu-row fixed"><span class="menu-name">${esc(CAL_TAB.label)}</span><span class="meta">항상 맨 앞에 보여요</span></li>
+    ${m.order.map((id, i) => {
+      const t = menuTab(id);
+      const on = !m.folded.has(id);
+      return `<li class="menu-row" data-menu="${id}">
+        <label class="menu-name"><input type="checkbox" data-act="menuShow" data-id="${id}" ${on ? 'checked' : ''}> ${esc(t.label)} <span class="meta">${on ? '보이기' : '접어 둠'}</span></label>
+        <span class="menu-moves"><button type="button" class="btn ghost small" data-act="menuMove" data-id="${id}" data-d="-1" aria-label="${esc(t.label)} 위로" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost small" data-act="menuMove" data-id="${id}" data-d="1" aria-label="${esc(t.label)} 아래로" ${i === m.order.length - 1 ? 'disabled' : ''}>↓</button></span>
+      </li>`;
+    }).join('')}
+  </ul>`;
+}
+
 function openSettings() {
   const sampleCount = records.filter((r) => r.sample).length;
   const modeText = { indexeddb: '브라우저 저장소(IndexedDB)', localstorage: '브라우저 저장소(localStorage)', memory: '임시 저장(창을 닫으면 사라져요!)' }[Store.mode];
@@ -4005,9 +4173,9 @@ function openSettings() {
         <label class="meta"><input type="checkbox" data-act="season" ${settings.seasonOff ? '' : 'checked'}> 계절 장식 보기</label>
       </div>
       <div class="card" style="margin:0">
-        <h3>${PLAYGROUND.icon} ${esc(PLAYGROUND.name)}</h3>
-        <p class="meta">그림이 모여 있는 곳이에요. 그리고 싶은 날 들어가서 올리면 돼요. 안 그리는 날엔 여기 말고는 어디에도 나오지 않아요.</p>
-        <button type="button" class="btn" data-act="playground">${PLAYGROUND.icon} ${esc(PLAYGROUND.name)} 들어가기</button>
+        <h3>메뉴 보이기</h3>
+        <p class="meta">📅 캘린더는 항상 맨 앞에 보여요. 나머지는 <b>☐ 접어 두기</b>로 바꾸면 메뉴 끝의 ‹ 버튼 안으로 들어가요. ↑ ↓ 로 순서를 바꿔요. 접어 둔 탭의 기록도 캘린더·돌아보기·🤖 범위에는 그대로 나와요.</p>
+        <div id="menuList">${menuListHTML()}</div>
       </div>
       <div class="card" style="margin:0">
         <h3>예시 기록 지우기</h3>
@@ -4078,13 +4246,22 @@ document.addEventListener('click', async (e) => {
   switch (act) {
     case 'tab':
       if (ui.tab !== id && !(await confirmLeaveNote())) break; // 저장하지 않은 한 줄이 있으면 물어봐요
-      if (ui.tab !== id) { ui.exView = 'records'; ui.vnView = 'records'; ui.econView = 'routine'; ui.enView = 'list'; } // 다른 메뉴에서 들어오면 늘 첫 칩(기록)부터
+      if (ui.tab !== id) ui.vnView = 'records'; // 다른 메뉴에서 들어오면 늘 첫 칩(기록)부터
       ui.tab = id; ui.query = '';
       render(); window.scrollTo(0, 0); break;
     case 'setView': ui[el.dataset.key] = id; render(); break;
-    case 'playground': openPlayground(); break;
-    case 'artFeedback': ui.artView = 'feedback'; render(); break;
-    case 'artGallery': ui.artView = 'gallery'; render(); break;
+    case 'menuFold': await saveMenu({ open: !menuState().open }); break; // ‹ ›: 접어 둔 탭 펼치기·접기
+    case 'menuMove': { // ↑ ↓
+      const m = menuState();
+      const i = m.order.indexOf(id); const j = i + Number(el.dataset.d);
+      if (i >= 0 && j >= 0 && j < m.order.length) {
+        const order = [...m.order];
+        [order[i], order[j]] = [order[j], order[i]];
+        await saveMenu({ order });
+        const box = $('#menuList'); if (box) box.innerHTML = menuListHTML();
+      }
+      break;
+    }
     case 'artOpen': openArt(id); break;
     case 'artNav': artNav(Number(el.dataset.d)); break;
     case 'add': openForm(type); break;
@@ -4153,18 +4330,21 @@ document.addEventListener('click', async (e) => {
     case 'playRec': await toggleCardPlay(el.dataset.aid); break;
     case 'claudeCard': await claudeCard(id); break;
     case 'claudePeriod': ui.claudePeriod = id; syncClaudeBox(); break;
-    case 'claudeScope': ui.claudeScope = id; ui.claudePending = null; syncClaudeBox(); break;
+    case 'claudeScope': ui.claudeScope = id; if (!ui.claudePending) ui.fbSaveScope = null; syncClaudeBox(); break; // 방금 복사한 것이 없으면 ② 의 범위도 따라와요
     case 'claudeCopy': await claudeCopy(); break;
     case 'claudeSettings': clDraft = {}; openClaudeSettings(); break;
     case 'clScope': { const f = $('#clForm'); if (f) clDraft[f.dataset.scope] = { info: f.elements.info.value, request: f.elements.request.value }; openClaudeSettings(id); break; }
     case 'clReset': { const f = $('#clForm'); const m = scopeMeta(f.dataset.scope); f.elements[el.dataset.field].value = m[el.dataset.field]; break; }
     case 'clCancel': clDraft = {}; closeDlg(); break;
-    case 'fbSave': await fbSave(el.closest('.fb-input'), el.dataset.target); break;
-    case 'fbClose': ui.cardFbOpen.delete(id); refreshFeedbackViews(); break;
-    case 'fbToggle': if (ui.cardFbShown.has(id)) ui.cardFbShown.delete(id); else ui.cardFbShown.add(id); refreshFeedbackViews(); break;
-    case 'fbMore': if (ui.fbOpenText.has(id)) ui.fbOpenText.delete(id); else ui.fbOpenText.add(id); render(); break;
+    case 'fbSave': await fbSave(); break;
+    case 'fbSaveScope': ui.fbSaveScope = id; syncFbSave(); break;
+    case 'fbGo': goToFeedbackOf(id); break;
+    case 'fbGoSave': goSaveFeedback(id); break;
+    case 'fbScope': ui.fbScope = id; ui.fbCount = 5; refreshFbList(); break;
+    case 'fbListMore': ui.fbCount += 5; refreshFbList(); break;
+    case 'fbMore': if (ui.fbOpenText.has(id)) ui.fbOpenText.delete(id); else ui.fbOpenText.add(id); refreshFbList(); break;
     case 'fbEdit': openFeedbackEdit(id); break;
-    case 'fbDelete': if (confirm('이 피드백을 지울까요?\n지운 피드백은 되돌릴 수 없어요.')) { await deleteRecord(id); refreshFeedbackViews(); } break;
+    case 'fbDelete': if (confirm('이 피드백을 지울까요?\n지운 피드백은 되돌릴 수 없어요.')) { await deleteRecord(id); afterFeedbackChange(); } break;
     case 'manageBooks': openBooksManager(); break;
     case 'closeDlg2': dlg2.close(); break;
     case 'bookMove': await moveBook(Number(el.dataset.i), Number(el.dataset.d)); break;
@@ -4313,9 +4493,26 @@ document.addEventListener('change', async (e) => {
   else if (t.dataset.audioMemo) { await saveAudioMemo(t.dataset.audioMemo, t.value.trim()); }
   else if (t.dataset.act === 'audioSkip') { settings.audioSkip = t.checked; await saveSettings(); scheduleAutosave(); }
   else if (t.dataset.act === 'season') { settings.seasonOff = !t.checked; await saveSettings(); applySeason(); }
+  else if (t.dataset.act === 'menuShow') { // ☑ 보이기 / ☐ 접어 두기
+    const folded = new Set(menuState().folded);
+    if (t.checked) folded.delete(t.dataset.id); else folded.add(t.dataset.id);
+    await saveMenu({ folded: [...folded] });
+    const box = $('#menuList'); if (box) box.innerHTML = menuListHTML();
+  }
+});
+
+// 받은 답변을 붙여 넣는 순간 "이번에 해볼 것 하나" 칸을 채워요 (붙여 넣은 글이 칸에 들어간 뒤에 읽어요)
+document.addEventListener('paste', (e) => {
+  const ta = e.target && e.target.closest && e.target.closest('#fbInput [data-fb=text]');
+  if (ta) setTimeout(() => autoFillTodo(ta.closest('#fbInput')), 0);
 });
 
 document.addEventListener('input', (e) => {
+  if (e.target.matches && e.target.matches('#fbInput [data-fb=todo]')) { // 내가 고친 칸은 다시 붙여 넣어도 덮어쓰지 않아요
+    e.target.dataset.user = '1';
+    const n = $('#fbAutoNote'); if (n) n.hidden = true;
+    return;
+  }
   if (e.target.id === 'claudeQ') { ui.claudeQuestion[ui.claudeScope] = e.target.value; syncClaudeBox(); return; } // 복사할 글 미리보기
   if (e.target.dataset && 'routineNote' in e.target.dataset) { ui.noteDraft = { date: e.target.dataset.date, text: e.target.value }; ui.noteSavedUntil = 0; syncNoteBtn(e.target.dataset.date); return; } // 오늘 한 줄: 고치면 다시 [저장]
   if (e.target.dataset && e.target.dataset.stage) { // 올리려는 녹음의 날짜·메모
