@@ -803,3 +803,64 @@ dialog.roomy { width: min(900px, 92vw); }
 .term-meaning.faint { color: var(--muted); }
 .term-link { margin-right: 6px; }
 .recap-toggle { display: block; margin-top: 6px; }
+
+/* ---------- 🗓 이번 주 (주간 루틴표) ---------- */
+/* 한 주의 7개 행이 세로로 쌓여요. 과외 블록은 선 테두리만, 운동 블록은 종류별 옅은 채움이에요. 색은 위 :root 의 변수만 써요. */
+.wkp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 12px; }
+.wkp-label { flex: 1 1 auto; text-align: center; min-width: 11em; font-variant-numeric: tabular-nums; }
+.wkp-last { margin: 0 0 10px; }
+.wkp-days { display: flex; flex-direction: column; gap: 10px; }
+.wkp-day { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 12px; min-width: 0; }
+.wkp-day.today { outline: 2px solid var(--teal); outline-offset: -2px; } /* 캘린더 오늘 칸과 같은 틸 표시 */
+.wkp-dh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.wkp-dow { font-weight: 800; font-size: 1.1rem; }
+.wkp-date { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.wkp-today { font-size: .75rem; font-weight: 700; color: var(--card); background: var(--teal); padding: 1px 9px; border-radius: 999px; }
+.wkp-items { display: flex; flex-direction: column; gap: 8px; }
+.wkp-tutor {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 100%; min-height: 44px; padding: 8px 12px;
+  text-align: left; cursor: pointer; background: transparent; border: 1px solid var(--line); border-radius: 12px;
+}
+.wkp-tutor:hover, .wkp-tutor:focus-visible { border-color: var(--accent); }
+.wkp-name { overflow-wrap: anywhere; min-width: 0; }
+.wkp-time { font-variant-numeric: tabular-nums; color: var(--ink); }
+.wkp-mode { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; line-height: 1.6; } /* 대면/온라인: 작고 조용하게 */
+.wkp-once { font-size: .72rem; color: var(--muted); }
+.wkp-ex { border: 1px solid transparent; border-radius: 12px; padding: 4px 12px; background: var(--bg); min-width: 0; }
+.wkp-ex.ex-근력 { background: var(--purple-soft); }
+.wkp-ex.ex-유산소, .wkp-ex.ex-슬로조깅 { background: var(--warm-soft); }
+.wkp-ex.ex-요가 { background: var(--accent-soft); }
+.wkp-ex.rest { background: transparent; border-color: var(--line); border-style: dashed; color: var(--muted); padding: 10px 12px; }
+.wkp-ex.on { border-color: var(--purple); }
+.wkp-ex-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; cursor: pointer; }
+.wkp-ex-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.wkp-kind { font-weight: 600; }
+.wkp-opt { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; background: var(--card); margin-right: 2px; } /* "선택" 표시 */
+.wkp-check { width: 30px; height: 30px; margin: 0; flex-shrink: 0; cursor: pointer; accent-color: var(--purple); }
+.wkp-check:disabled { cursor: default; opacity: .45; }
+.wkp-weight { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; font-size: .95rem; color: var(--muted); }
+.wkp-weight input { width: 7.5em; min-height: 44px; padding: 8px 10px; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.wkp-add { margin-top: 8px; }
+.wkp-editing { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.wkp-form .field { margin-bottom: 10px; }
+.wkp-form input[type=time], .wkp-form input[type=text] { font-size: 16px; font-variant-numeric: tabular-nums; }
+.wkp-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wkp-how { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.wkp-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); cursor: pointer; font-size: .95rem; }
+.wkp-pill:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.wkp-pill input { margin: 0; accent-color: var(--accent); }
+.wkp-tools { margin-top: 14px; }
+.wkp-paste { margin: 0 0 14px; }
+.wkp-paste textarea { width: 100%; padding: 10px 12px; font-size: 16px; line-height: 1.5; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); resize: vertical; min-height: 120px; }
+.wkp-prevbox { margin: 8px 0; }
+.wkp-prev { list-style: none; margin: 0 0 6px; padding: 0; }
+.wkp-prev li { padding: 3px 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wkp-bad { margin: 4px 0; color: var(--red); font-size: .92rem; overflow-wrap: anywhere; }
+.wkp-bad span { color: var(--muted); }
+.wkr-day { margin: 0 0 12px; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.wkr-day legend { font-weight: 700; padding: 0 6px; }
+.wkr-chk { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.wkr-day.rest .wkr-more { display: none; }
+.wkr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wkr-day textarea { font-size: 16px; }
+@media (max-width: 420px) { .wkp-times, .wkr-row { grid-template-columns: 1fr; } }
