@@ -2470,10 +2470,10 @@ function weekTableHTML(model, opts = {}) {
       const on = x.kind === 'x' && checks[`${d}:${x.i}`];
       const label = `${DOW[d]}요일 ${x.b.name} ${time}${x.kind === 't' ? ` ${x.b.m}` : ` ${x.b.kind}${x.b.optional ? ' (선택)' : ''}`}${on ? ' (했어요)' : ''}`;
       const style = `top:${top}px;height:${hgt}px;left:calc(${x.lane} * 100% / ${x.n});width:calc(100% / ${x.n} - 2px)`;
-      const inner = `<span class="wkt-n">${esc(name)}</span>${hgt >= 36 ? `<span class="wkt-t">${esc(time)}</span>` : ''}${on ? '<span class="wkt-ck" aria-hidden="true">✓</span>' : ''}`;
+      const inner = `<span class="wkt-n">${esc(name)}</span>${hgt >= 36 ? `<span class="wkt-t">${esc(time).replace('~', '~<wbr>')}</span>` : ''}${on ? '<span class="wkt-ck" aria-hidden="true">✓</span>' : ''}`;
       return opts.preview
-        ? `<div class="wkt-b ${cls(x)}${hgt < 36 ? ' short' : ''}" style="${style}" title="${esc(label)}">${inner}</div>`
-        : `<button type="button" class="wkt-b ${cls(x)}${hgt < 36 ? ' short' : ''}" style="${style}" data-act="wkTableGo" data-d="${d}" title="${esc(label)}" aria-label="${esc(label)}">${inner}</button>`;
+        ? `<div class="wkt-b ${cls(x)}${hgt < 36 ? ' short' : hgt < 60 ? ' mid' : ''}" style="${style}" title="${esc(label)}">${inner}</div>`
+        : `<button type="button" class="wkt-b ${cls(x)}${hgt < 36 ? ' short' : hgt < 60 ? ' mid' : ''}" style="${style}" data-act="wkTableGo" data-d="${d}" title="${esc(label)}" aria-label="${esc(label)}">${inner}</button>`;
     }).join('');
     const empty = !day.tutors.length && !day.ex.length;
     return `<div class="wkt-col${date === today ? ' today' : ''}" data-d="${d}" style="height:${H}px">${blocks}${empty ? '<span class="wkt-rest">휴식</span>' : ''}</div>`;

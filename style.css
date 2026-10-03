@@ -893,8 +893,8 @@ dialog.roomy { width: min(900px, 92vw); }
 .wkt-rest { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: var(--muted); font-size: .85rem; }
 .wkt-b { position: absolute; display: flex; flex-direction: column; gap: 1px; margin: 0 1px; padding: 2px 4px; border: 0; border-radius: 6px; text-align: left; font-size: .72rem; line-height: 1.2; overflow: hidden; color: var(--ink); cursor: pointer; min-width: 0; }
 .wkt-n { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.wkt-b.short .wkt-n { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; }
-.wkt-t { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wkt-b.short .wkt-n, .wkt-b.mid .wkt-n { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; } /* 낮은 블록은 이름 한 줄 */
+.wkt-t { font-size: .66rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .wkt-ck { position: absolute; top: 1px; right: 3px; font-size: .72rem; font-weight: 800; color: var(--accent); line-height: 1; }
 .wkt-b.t-online, .wkt-sw.t-online, .wkt-chip.t-online { background: var(--purple-soft); }
 .wkt-b.t-face, .wkt-sw.t-face, .wkt-chip.t-face { background: var(--red-soft); }
