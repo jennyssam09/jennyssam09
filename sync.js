@@ -13,7 +13,7 @@
    - 합치는 규칙: 두 기기의 시계를 견주지 않고, 각 기기가 "마지막 동기화 때의 나"(base)와만 비교해서 바뀌었는지 알아봐요.
    - 녹음: 파일을 먼저 올리고(큰 파일은 이어 올리기) 녹음 정보는 그 뒤에 journal.json 으로 올려요. 다른 기기에서는 정보만 먼저 받고,
      ▶ 재생·⬇ 파일로 저장을 누를 때 파일을 내려받아요.
-   - file:// 로 열었거나 로그인하지 않았어도 기록·백업·자동 저장은 전부 그대로 써져요.
+   - file:// 로 열었거나 로그인하지 않았어도 기록·백업은 전부 그대로 써져요.
    ===================================================================== */
 (() => {
   const CFG = { clientId: '', deployUrl: '', folderName: '나의 기록장 (동기화)', tombstoneDays: 60, staleDays: 60, ...(window.SYNC_CONFIG || {}) };
@@ -372,6 +372,7 @@
     if (typeof stripQuick === 'function') clean = stripQuick(clean, true);
     if (typeof violinCopy === 'function') clean = violinCopy(clean, true); // 예전 모양의 교재·곡 이름·교재 위치는 교재별 한 줄로, 기록 단위 템포는 첫 곡 줄로 옮겨요
     if (typeof weekLegacyCopy === 'function') clean = weekLegacyCopy(clean, true); // 🗓 예전 값(운동 종류 · 몸무게 · 예전 체크 해제 표시)은 정리에 동의한 뒤에만 받을 때 정리해요
+    if (typeof simplifyCopy === 'function') clean = simplifyCopy(clean, true); // 클로드 요청 문구의 "할 일" 요청도 정리에 동의한 뒤에는 받아 올 때 같은 규칙이에요
     return clean;
   }
 
@@ -1187,7 +1188,7 @@
     if (env === 'file') {
       openDlg(`<h2>☁ 구글 드라이브 동기화</h2>
         <p>동기화는 <b>배포된 주소에서 사용할 수 있어요.</b></p>
-        <p class="meta">지금은 파일(file://)로 열어서 쓰고 있어요. 이대로도 기록·백업·자동 저장은 <b>전부 그대로</b> 써져요.${CFG.deployUrl ? `<br>배포 주소: ${esc(CFG.deployUrl)}` : ''}<br>배포하는 방법은 README의 「☁ 구글 드라이브 동기화」를 봐 주세요.</p>
+        <p class="meta">지금은 파일(file://)로 열어서 쓰고 있어요. 이대로도 기록·백업은 <b>전부 그대로</b> 써져요.${CFG.deployUrl ? `<br>배포 주소: ${esc(CFG.deployUrl)}` : ''}<br>배포하는 방법은 README의 「☁ 구글 드라이브 동기화」를 봐 주세요.</p>
         ${AUDIO_NOTE}
         <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button></div>`);
       return;
@@ -1392,7 +1393,7 @@
   }
 
   /* ---- 충돌 ---- */
-  const HIDE_KEYS = new Set(['id', 'type', 'createdAt', 'updatedAt', 'sample', 'stamp', 'quick', 'deletedAt']);
+  const HIDE_KEYS = new Set(['id', 'type', 'createdAt', 'updatedAt', 'sample', 'stamp', 'stampMsg', 'quick', 'deletedAt']);
   const typeLabel = (t) => (SCHEMAS[t] ? SCHEMAS[t].label : t);
   function labelOf(type, key) {
     const f = ((SCHEMAS[type] && SCHEMAS[type].fields) || []).find((x) => x.key === key || (x.keys && x.keys.includes(key)));
@@ -1506,7 +1507,7 @@
           const copy = await fromRemoteRecord(R);
           const tk = { violin: 'piece', art: 'topic', englishArticle: 'title', workout: 'memo', rest: 'memo', econRoutine: 'note', econTerm: 'term', claudeFeedback: 'text', piecenote: 'memo' }[copy.type] || 'memo';
           copy.id = newId(); copy.createdAt = Date.now(); copy[tk] = `${copy[tk] || ''} (Drive에서 온 사본)`.trim();
-          delete copy.stamp;
+          delete copy.stamp; delete copy.stampMsg;
           await saveRecord(copy);
         }
       } else if (choice === 'cf-remote') {
