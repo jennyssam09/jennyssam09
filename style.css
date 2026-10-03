@@ -842,6 +842,8 @@ dialog.roomy { width: min(900px, 92vw); }
 .wkt-corner { border-bottom: 1px solid var(--line); }
 .wkt-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 0 5px; font-weight: 700; line-height: 1.25; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 0; }
 .wkt-head small { font-weight: 400; font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+button.wkt-head { background: transparent; border-top: 0; border-right: 0; border-radius: 0; color: inherit; font: inherit; font-weight: 700; cursor: pointer; } /* 요일 머리는 눌러서 그날 기록 창 */
+button.wkt-head:hover span, button.wkt-head:focus-visible span { text-decoration: underline; }
 .wkt-head.d0 span { color: var(--red); }
 .wkt-head.d6 span { color: var(--purple); }
 .wkt-head.today span { background: var(--teal); color: var(--card); border-radius: 999px; padding: 0 8px; } /* 캘린더 오늘과 같은 틸 */
@@ -863,6 +865,7 @@ dialog.roomy { width: min(900px, 92vw); }
 .wkt-b.ex .wkt-t { color: var(--ex-ink); }
 .wkt-b.opt, .wkt-chip.opt { border-style: dashed; }
 button.wkt-b, button.wkt-chip { cursor: pointer; }
+button.wkt-chip { min-height: 28px; display: inline-flex; align-items: center; } /* 시간 미정 줄의 운동 이름표도 누르기 쉽게 */
 button.wkt-b:disabled, button.wkt-chip:disabled { cursor: default; opacity: 1; }
 button.wkt-b:focus-visible, button.wkt-chip:focus-visible { outline: 2px solid var(--ex); outline-offset: 1px; }
 .wkt-ck { position: absolute; top: 1px; right: 2px; font-size: .7rem; font-weight: 800; color: var(--ex-ink); line-height: 1; } /* 했어요 체크 */
@@ -870,7 +873,13 @@ button.wkt-b:focus-visible, button.wkt-chip:focus-visible { outline: 2px solid v
 .wkt-axis2 { padding: 6px 2px 4px; font-size: .6rem; line-height: 1.25; color: var(--muted); text-align: right; word-break: keep-all; border-top: 1px solid var(--line); }
 .wkt-un { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; padding: 4px 2px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); min-width: 0; }
 .wkt-chip { font: inherit; font-size: .62rem; line-height: 1.3; padding: 1px 4px; border-radius: 6px; border: 1.5px solid transparent; text-align: left; overflow-wrap: anywhere; max-width: 100%; color: var(--ink); }
-.wkt-memo { margin: 8px 2px 0; overflow-wrap: anywhere; }
+.wkt-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 2px 2px; font-size: .82rem; color: var(--muted); } /* 범례 3개: 온라인 과외 · 대면 과외 · 운동 */
+.wkt-lg { display: inline-flex; align-items: center; gap: 6px; }
+.wkt-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); }
+.wkt-sw.t-online { background: var(--purple-soft); }
+.wkt-sw.t-face { background: var(--red-soft); }
+.wkt-sw.ex { background: var(--ex-soft); border: 1.5px solid var(--ex); }
+.wkt-memo { margin: 4px 2px 0; overflow-wrap: anywhere; }
 .wkt-prevwrap { margin-top: 8px; }
 @media (min-width: 520px) {
   .wkt { grid-template-columns: 44px repeat(7, minmax(0, 1fr)); }

@@ -198,7 +198,6 @@ const CAL_TAB = { id: 'cal', label: '📅 캘린더' };
 const MENU_TABS = [
   { id: 'week', label: '🗓 이번 주', first: true }, // 캘린더 바로 뒤 (저장된 메뉴 순서에 아직 없으면 맨 앞에 끼워요)
   { id: 'violin', label: '🎻 바이올린' },
-  { id: 'exercise', label: '🧘 운동' },
   { id: 'econ', label: '📚 경제 루틴' },
   { id: 'english', label: '📰 영어' },
   { id: 'art', label: '🎨 그림' },
@@ -211,7 +210,6 @@ const EMPTY_TEXT = {
   feedback: '아직 받은 피드백이 없어요. 위에서 복사해서 클로드에게 물어보세요.', // 📅 캘린더 › 🤖 클로드 피드백 › 받은 피드백
   violin: '아직 기록이 없어요. 위의 + 바이올린 기록으로 오늘 연습을 남겨 보세요. 10분도 괜찮아요.',
   shelf: '곡 이름을 적은 기록이 생기면 여기에 책처럼 꽂혀요.',
-  workout: '아직 기록이 없어요. 위의 + 운동 기록으로 남겨 보세요.',
   english: '이번 주 기사 하나를 올려 보세요. 세 줄이면 돼요.',
   pastNotes: '저장한 한 줄이 여기에 쌓여요.', // 경제 루틴 "지난 한 줄 보기"
   terms: '새로 알게 된 용어를 내 말로 한 줄씩 적어 보세요. 클로드 피드백에서 알려 준 용어도 좋아요.', // 📒 용어 노트
@@ -562,9 +560,9 @@ let audios = [];    // 녹음 정보 (파일 자체는 빼고 이름·날짜·�
 //   local: 이 기기에 파일이 있나 (☁ 로 다른 기기에서 정보만 받은 녹음은 false 예요) · rf: Drive에 올라간 파일의 id · updatedAt: 바꾼 시각
 let audioTombs = []; // 지운 녹음의 "삭제 표시" (☁ 동기화용. 기록의 삭제 표시와 같은 방식으로 60일 남아요)
 let seeded = false; // 예시 기록을 이미 한 번 넣었는지
-// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1 · quickFlagV1),
+// 마지막 백업 날짜, 알림 미루기, 축하 한 줄 끄기, 녹음을 백업에서 빼기, 계절 장식 끄기, 업데이트 정리를 이미 했는지(cleanupV2 · cleanupV3 · artKindV1 · workoutLiteV1 · quickFlagV1 · weekLegacyV1),
 // 캘린더 아래 '🤖 클로드 피드백'을 펼쳐 두었는지(claudeBoxOpen, 이 기기에서만 기억해요)
-let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, quickFlagV1: false, booksV1: false, tempoV1: false, claudeBoxOpen: false };
+let settings = { lastBackupAt: null, snoozeUntil: null, celebrateOff: false, audioSkip: false, seasonOff: false, cleanupV2: false, cleanupV3: false, artKindV1: false, workoutLiteV1: false, quickFlagV1: false, booksV1: false, tempoV1: false, weekLegacyV1: false, claudeBoxOpen: false };
 // 자동 저장: 내 컴퓨터의 파일 하나에 기록이 바뀔 때마다 저장해요 (크롬·엣지 컴퓨터 버전)
 //   status: 'off' 꺼짐 / 'on' 켜짐 / 'paused' 브라우저를 다시 열어 한 번 연결이 필요함
 const autosave = { handle: null, name: '', status: 'off', lastSavedAt: null };
@@ -762,8 +760,7 @@ function render() {
   if (!TABS.some((t) => t.id === ui.tab)) ui.tab = 'cal'; // 없어진 메뉴(예전 '오늘')는 캘린더로
   renderTabs();
   renderBackupBar();
-  if (ui.tab === 'exercise') renderExercise();
-  else if (ui.tab === 'violin') renderViolin();
+  if (ui.tab === 'violin') renderViolin();
   else if (ui.tab === 'english') renderEnglish();
   else if (ui.tab === 'econ') renderEcon();
   else if (ui.tab === 'cal') renderCalendar();
@@ -931,7 +928,7 @@ function workoutCard(r) {
   return `<div class="card" data-rid="${esc(r.id)}">
     <div class="item-head">
       <div><span class="tag">운동</span> ${parts.join(' · ')} ${marksHTML(r)}</div>
-      ${actionButtons('workout', r.id, claudeBtns(r))}
+      ${actionButtons('workout', r.id)}
     </div>
     ${r.memo ? `<p class="pre">${esc(r.memo)}</p>` : ''}
   </div>`;
@@ -1212,20 +1209,15 @@ async function togglePieceDone(piece) {
 }
 
 // 목록 맨 위 요약 한 줄 (이번 주, 작게). 값이 없는 부분은 빼고, 아무것도 없으면 줄 자체를 그리지 않아요. 숫자 합계는 없어요.
-//   바이올린: "이 주에 연습한 곡: …"   운동: "이 주: 운동 3" (한 것만)
-function areaLineHTML(area) {
+//   바이올린: "이 주에 연습한 곡: …"  (운동은 🗓 이번 주 화면의 "지난주 운동 N번" 한 줄만 남겼어요)
+function areaLineHTML() {
   const start = weekStartOf(todayStr());
   const end = addDays(start, 6);
   const inWeek = (r) => r.date >= start && r.date <= end;
   const parts = [];
-  if (area === 'exercise') {
-    const ws = ofType('workout').filter(inWeek);
-    if (ws.length) parts.push(`이 주: 운동 ${ws.length}`);
-  } else {
-    const prac = ofType('violin').filter(inWeek).filter((r) => r.kind !== '레슨'); // 연습 기록만
-    const pieces = [...new Set(prac.flatMap(pieceNamesOf))];
-    if (pieces.length) parts.push(`이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}`);
-  }
+  const prac = ofType('violin').filter(inWeek).filter((r) => r.kind !== '레슨'); // 연습 기록만
+  const pieces = [...new Set(prac.flatMap(pieceNamesOf))];
+  if (pieces.length) parts.push(`이 주에 연습한 곡: ${pieces.map(pieceButton).join(', ')}`);
   return parts.length ? `<p class="meta area-line">${parts.join(' · ')}</p>` : '';
 }
 
@@ -1249,22 +1241,17 @@ async function copyText(text, okMsg, title = '복사할 글', action = null) {
   return ok;
 }
 
-// 지금까지 쌓인 기록 (예시 기록은 세지 않아요). area: 'exercise' | 'violin'. 목록 맨 아래에 작게 보여요.
+// 지금까지 쌓인 기록 (예시 기록은 세지 않아요). 바이올린 목록 맨 아래에 작게 보여요.
 //   첫 기록으로부터 TOTALS_AFTER_DAYS(10)일이 지나기 전에는 숫자 대신 "이제 시작했어요"만. 진짜 기록이 아직 없으면 아무것도 그리지 않아요.
-function totalsCardHTML(area) {
+function totalsCardHTML() {
   const real = records.filter((r) => !r.sample);
   const sampleNote = records.some((r) => r.sample) ? '예시 기록은 세지 않았어요.' : '';
-  const mine = real.filter((r) => r.type === (area === 'exercise' ? 'workout' : 'violin'));
+  const mine = real.filter((r) => r.type === 'violin');
   if (!mine.length) return '';
   const first = mine.reduce((m, r) => (r.date < m ? r.date : m), mine[0].date);
   const passed = Math.round((parseDate(todayStr()) - parseDate(first)) / 86400000);
   if (passed < TOTALS_AFTER_DAYS) return '<section class="card total-card total-start"><p class="meta">🌱 이제 시작했어요</p></section>';
   const note = sampleNote ? `<p class="meta" style="margin:8px 0 0">${sampleNote}</p>` : '';
-  if (area === 'exercise') {
-    return `<section class="card total-card"><h3>🌱 지금까지 쌓인 기록</h3>
-      <div class="stats" style="margin-top:8px"><div class="stat"><b>${mine.length}회</b><span>운동</span></div></div>${note}
-    </section>`;
-  }
   const prac = mine.filter((r) => r.kind !== '레슨');
   const lessons = mine.length - prac.length;
   const pieces = new Set(prac.flatMap(pieceNamesOf)).size;
@@ -1337,17 +1324,6 @@ function dayGroupedHTML(list, cardFn, emptyText) {
 }
 
 // 영역 화면의 공통 틀 (위에서 아래로): 제목·설명 한 줄 → ＋ 기록 버튼 → 칩 줄(첫 칩이 기본) → [기록 보기] 요약 한 줄 → 목록
-function renderExercise() {
-  const list = ofType('workout').sort(byNewest);
-  view.innerHTML = `
-    <h2 class="page-title">운동</h2>
-    <p class="page-sub">운동을 가볍게 남겨요. 잘했는지 못했는지 점수는 매기지 않아요.</p>
-    <div class="row actions-row add-row">
-      <button type="button" class="btn" data-act="add" data-type="workout">＋ 운동 기록</button>
-    </div>
-    ${areaLineHTML('exercise')}${dayGroupedHTML(list, workoutCard, EMPTY_TEXT.workout)}${totalsCardHTML('exercise')}`;
-}
-
 function renderViolin() {
   const mode = ui.vnView;
   const list = ofType('violin').sort(byNewest);
@@ -1662,9 +1638,10 @@ function goToRecord(id) {
   else if (r.type === 'art') { ui.tab = 'art'; }
   else if (r.type === 'englishArticle') { ui.tab = 'english'; }
   else if (r.type === 'violin') { ui.tab = 'violin'; ui.vnView = 'records'; }
-  else { ui.tab = 'exercise'; }
+  const inDay = r.type !== 'econRoutine' && r.type !== 'art' && r.type !== 'englishArticle' && r.type !== 'violin'; // 운동 · 쉼은 따로 목록이 없어서 그날의 기록 창으로 가요
   ui.query = '';
   render();
+  if (inDay) openDay(r.date);
   setTimeout(() => {
     const el = document.querySelector(`[data-rid="${CSS.escape(id)}"]`);
     if (!el) return;
@@ -2022,7 +1999,7 @@ async function setWeekCheck(date, idx, on) {
     const left = has.length - auto.length;
     if (left > 0) { // 운동 탭에서 직접 남기거나 고친 기록은 남겨 두고, 체크 표시만 꺼요
       await updateWeekPlan(sun, (p) => { p.skip.push(`${dow}:${idx}`); });
-      toast('운동 기록은 남겨 둘게요. 운동 탭에서 고치거나 지울 수 있어요.', 3500);
+      toast('운동 기록은 남겨 둘게요. 요일 머리를 눌러 그날 기록에서 고치거나 지울 수 있어요.', 3500);
     } else if (auto.length) toast('체크를 풀고, 그때 만든 운동 기록도 지웠어요.', 2500);
     render(); refreshDay();
   } finally { weekChecking = false; }
@@ -2431,13 +2408,18 @@ function weekTableHTML(model, opts = {}) {
       : `<button type="button" class="wkt-chip ex${b.optional ? ' opt' : ''}${on ? ' on' : ''}" data-act="wkCheck" data-date="${date}" data-i="${b.i}" aria-pressed="${on ? 'true' : 'false'}" ${date > today ? 'disabled' : ''} title="${esc(label)}" aria-label="${esc(label)}">${on ? '✓ ' : ''}${nm}</button>`;
   };
   const anyUntimed = untimed.some((u) => u.length);
-  const heads = Array.from({ length: 7 }, (_, d) => { const date = addDays(sun, d); const x = parseDate(date); return `<div class="wkt-head d${d}${date === today ? ' today' : ''}"><span>${DOW[d]}</span><small>${x.getMonth() + 1}/${x.getDate()}</small></div>`; }).join('');
+  const heads = Array.from({ length: 7 }, (_, d) => { // 요일 머리를 누르면 그날의 기록 창(캘린더의 날짜 창)이 열려요: 운동 기록 보기 · 더하기 · 고치기 · 지우기
+    const date = addDays(sun, d); const x = parseDate(date); const inner = `<span>${DOW[d]}</span><small>${x.getMonth() + 1}/${x.getDate()}</small>`; const cls = `wkt-head d${d}${date === today ? ' today' : ''}`;
+    return opts.preview ? `<div class="${cls}">${inner}</div>` : `<button type="button" class="${cls}" data-act="calDay" data-date="${date}" title="눌러서 이 날의 기록 보기" aria-label="${esc(`${DOW[d]}요일 ${x.getMonth() + 1}월 ${x.getDate()}일 기록 보기`)}">${inner}</button>`;
+  }).join('');
+  const legend = opts.preview ? '' : `<div class="wkt-legend" aria-label="범례"><span class="wkt-lg"><i class="wkt-sw t-online"></i>온라인 과외</span><span class="wkt-lg"><i class="wkt-sw t-face"></i>대면 과외</span><span class="wkt-lg"><i class="wkt-sw ex"></i>운동</span></div>`;
   const axis = Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * WKT_PX}px">${h0 + i}</span>`).join('');
   return `<div class="wkt-scroll"><div class="wkt" style="--wkt-h:${WKT_PX}px">
     <div class="wkt-corner"></div>${heads}
     <div class="wkt-axis" style="height:${H}px">${axis}</div>${cols}
     ${anyUntimed ? `<div class="wkt-axis2">시간 미정</div>${untimed.map((u, d) => `<div class="wkt-un">${u.map((b) => chip(b, d)).join('')}</div>`).join('')}` : ''}
   </div></div>
+  ${legend}
   ${memo ? `<p class="meta wkt-memo">메모: ${esc(memo)}</p>` : ''}`;
 }
 
@@ -2456,7 +2438,7 @@ function renderWeek() {
   for (let d = 0; d < 7; d += 1) dayChecks(addDays(sun, d), d, exBlocksOf(sun, d), plan).forEach((on, i) => { if (on) checks[`${d}:${i}`] = true; });
   view.innerHTML = `
     <h2 class="page-title">이번 주</h2>
-    <p class="page-sub">과외 일정과 운동 루틴을 한눈에 보고, 운동은 했다고 블록을 한 번만 눌러요. 점수나 비교는 없어요.</p>
+    <p class="page-sub">과외 일정과 운동 루틴을 한눈에 보고, 운동은 했다고 블록을 한 번만 눌러요. 루틴에 없던 운동은 ＋ 운동 기록으로, 그날 기록을 보고 고치려면 요일 머리(일·월…)를 눌러요. 점수나 비교는 없어요.</p>
     <div class="wkp-head">
       ${weekBtnHTML(sun === thisWeek)}
       <button type="button" class="btn ghost small" data-act="wkShift" data-d="-1" aria-label="지난 주">◀</button>
@@ -2464,6 +2446,7 @@ function renderWeek() {
       <button type="button" class="btn ghost small" data-act="wkShift" data-d="1" aria-label="다음 주">▶</button>
     </div>
     <div class="wkp-bar">
+      <button type="button" class="btn small" data-act="add" data-type="workout">＋ 운동 기록</button>
       <button type="button" class="btn ghost small" data-act="wkAsk">🤖 시간표 짜기</button>
       <button type="button" class="btn ghost small" data-act="wkAi">📥 클로드 시간표 붙여 넣기</button>
     </div>
@@ -4616,7 +4599,7 @@ function validRecords(payload, bump = false) {
   if (!payload || payload.app !== 'my-journal' || !Array.isArray(payload.records)) return null;
   // 더 이상 쓰지 않는 종류(경제 공부 메모·투자 기록)와 칸 값은 불러올 때 조용히 버려요.
   // 🧘 운동의 없어진 칸도 같아요: 지우고, 예전 "몸이 어땠나 한 줄"·"달리며 든 생각 한 줄"은 "한 줄"로 옮겨요. (bump: 바뀐 기록은 바꾼 시각도 새로 적어요)
-  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string').map((r) => violinCopy(stripQuick(workoutLiteCopy(cleanedCopy(r), bump), bump), bump));
+  return payload.records.filter((r) => r && typeof r.id === 'string' && SCHEMAS[r.type] && typeof r.date === 'string' && !(settings.weekLegacyV1 && r.type === 'config' && r.key === 'weekView')).map((r) => weekLegacyCopy(violinCopy(stripQuick(workoutLiteCopy(cleanedCopy(r), bump), bump), bump), bump)); // 🗓 예전 값 정리에 동의한 뒤에는 불러올 때도 같은 규칙이에요
 }
 
 /* ---------------------------------------------------------------------
@@ -4747,6 +4730,97 @@ async function migrateWorkoutLite() {
   settings.workoutLiteV1 = true;
   await saveSettings();
   if (dirty.length) { render(); if (valuable) toast('운동 기록을 정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000); }
+}
+
+/* ---------------------------------------------------------------------
+   0-3. 🗓 이번 주 · 🧘 운동 예전 값 정리 (한 번만, 확인한 뒤에)
+        운동에 종류가 없어졌고(모두 "운동") 🗓 이번 주가 표 하나가 되어서 쓰지 않는 예전 값을 정리해요.
+        ① 운동 기록 · 운동 루틴 · 이 주만 쓰는 운동 루틴의 종류(kind: 요가 · 근력 …)는 지우지 않고 모두 "운동"으로 통일
+        ② 예전 [목록][표] 보기 설정(weekView) 삭제  ③ 예전 체크 해제 표시("요일:종류" · 요일 숫자) 삭제  ④ 그 주 몸무게(weekPlan.weight) 삭제
+        정리하기 직전에 백업 파일을 내려받고 확인을 물어봐요. 바뀐 기록은 바꾼 시각을 새로 적고, 지운 것은 삭제 표시를 남겨서 ☁ 다른 기기에도 반영돼요.
+        한 번 하고 나면 flag(weekLegacyV1)가 켜지고, 그 뒤로는 백업 불러오기 · ☁ 받아 오기에서도 같은 규칙이에요(weekLegacyCopy).
+   --------------------------------------------------------------------- */
+const isLegacySkip = (t) => typeof t === 'number' || (typeof t === 'string' && !/^[0-6]:\d+$/.test(t)); // 숫자(요일 전체) · "요일:종류" 는 예전 표시, "요일:블록번호"는 지금 표시예요
+const exKindDirty = (b) => !!b && typeof b === 'object' && typeof b.kind === 'string' && b.kind !== EX_KIND;
+const exDayDirty = (d) => !!d && typeof d === 'object' && (Array.isArray(d.blocks) ? d.blocks.some(exKindDirty) : exKindDirty(d) && d.kind !== '');
+const dirtyRoutineConfig = (r) => !!r && r.type === 'config' && r.key === 'weekRoutine' && Array.isArray(r.value) && r.value.some(exDayDirty);
+const fixExDay = (d) => (d && typeof d === 'object' ? (Array.isArray(d.blocks) ? { ...d, blocks: d.blocks.map((b) => (exKindDirty(b) ? { ...b, kind: EX_KIND } : b)) } : (exKindDirty(d) && d.kind !== '' ? { ...d, kind: EX_KIND } : d)) : d);
+// 한 기록의 예전 값을 정리한 복사본 (바꿀 게 없으면 그대로). bump: 바뀐 기록은 바꾼 시각도 새로 적어요
+function weekLegacyClean(r, bump = false) {
+  if (!r) return r;
+  let c = null;
+  const edit = () => { if (!c) c = { ...r }; return c; };
+  if (r.type === 'workout') {
+    if (exKindDirty(r)) edit().kind = EX_KIND;
+  } else if (r.type === 'weekPlan') {
+    if ('weight' in r) delete edit().weight;
+    if (Array.isArray(r.skip) && r.skip.some(isLegacySkip)) { edit().skip = r.skip.filter((t) => !isLegacySkip(t)); if (!c.skip.length) delete c.skip; }
+    if (r.ex && typeof r.ex === 'object' && Object.values(r.ex).some(exDayDirty)) edit().ex = Object.fromEntries(Object.entries(r.ex).map(([k, v]) => [k, fixExDay(v)]));
+  } else if (dirtyRoutineConfig(r)) {
+    edit().value = r.value.map(fixExDay);
+  }
+  if (c && bump) c.updatedAt = Math.max(Date.now(), (r.updatedAt || 0) + 1);
+  return c || r;
+}
+// 정리에 동의한 뒤에만 불러올 때·받아 올 때 같은 규칙을 써요
+const weekLegacyCopy = (r, bump = false) => (settings.weekLegacyV1 ? weekLegacyClean(r, bump) : r);
+const planEmpty = (r) => !(Number(r.weight) > 0) && !(Array.isArray(r.skip) && r.skip.length) && !(r.ex && Object.keys(r.ex).length) && !(r.tutor && Object.keys(r.tutor).length) && !(typeof r.memo === 'string' && r.memo.trim());
+
+function weekLegacyScan() {
+  const real = records.filter((r) => !r.sample);
+  const plans = records.filter((r) => r.type === 'weekPlan');
+  return {
+    kinds: real.filter((r) => r.type === 'workout' && exKindDirty(r)).length,
+    routine: records.filter((r) => dirtyRoutineConfig(r) || (r.type === 'weekPlan' && r.ex && Object.values(r.ex).some(exDayDirty))).length,
+    view: records.some((r) => r.type === 'config' && r.key === 'weekView'),
+    skips: plans.reduce((n, r) => n + (Array.isArray(r.skip) ? r.skip.filter(isLegacySkip).length : 0), 0),
+    weights: plans.filter((r) => Number(r.weight) > 0).length,
+    any: records.some((r) => (r.type === 'workout' && exKindDirty(r)) || dirtyRoutineConfig(r) || (r.type === 'config' && r.key === 'weekView') || (r.type === 'weekPlan' && (('weight' in r) || (Array.isArray(r.skip) && r.skip.some(isLegacySkip)) || (r.ex && Object.values(r.ex).some(exDayDirty))))),
+  };
+}
+function weekLegacyMessage(c, name) {
+  const lines = [];
+  if (c.kinds || c.routine) lines.push(`· 운동 종류(요가·근력 등): 운동 기록 ${c.kinds}개${c.routine ? ` · 운동 루틴 ${c.routine}곳` : ''}을 모두 "운동"으로 통일해요 (지우지 않고 바꿔요)`);
+  if (c.view) lines.push('· 예전 [목록][표] 보기 설정(weekView)을 지워요');
+  if (c.skips) lines.push(`· 예전 체크 해제 표시 ${c.skips}개를 지워요 (체크를 풀어 두었던 날은 운동 기록이 남아 있으면 다시 체크된 것으로 보일 수 있어요)`);
+  if (c.weights) lines.push(`· 이제 화면에 없는 몸무게 ${c.weights}주치를 지워요`);
+  return `🗓 이번 주가 표 하나가 되고 운동에 종류가 없어져서, 쓰지 않는 예전 값을 정리해요. 정리하기 전에 백업을 저장했어요.\n${lines.join('\n')}\n\n정리할까요? (백업 파일은 다운로드 폴더에 있어요: ${name})`;
+}
+async function migrateWeekLegacy() {
+  if (settings.weekLegacyV1) return;
+  const c = weekLegacyScan();
+  if (!c.any) { settings.weekLegacyV1 = true; await saveSettings(); return; } // 정리할 것이 없으면 조용히 끝나요
+  const name = `my-journal-backup-before-week-cleanup-${todayStr().replace(/-/g, '')}.json`;
+  const valuable = c.kinds || c.routine || c.view || c.skips || c.weights;
+  if (valuable) {
+    await downloadBackup(name); // 정리하기 직전에 전체 백업
+    if (!(await askCleanup(weekLegacyMessage(c, name), name))) return; // 취소하면 아무것도 바꾸지 않고, 다음에 열 때 다시 물어봐요
+  }
+  // 예전에 표에서 만든 기록(plan: true)은 어느 블록의 체크였는지(plan = 블록 번호+1)를 종류가 바뀌기 전에 적어 둬요
+  const slot = new Map();
+  records.filter((r) => r.type === 'workout' && r.plan === true && !r.sample).forEach((r) => {
+    const sun = weekStartOf(r.date); const dow = parseDate(r.date).getDay();
+    const blocks = exBlocksOf(sun, dow);
+    const hit = dayAssign(r.date, blocks).findIndex((h) => h.some((x) => x.id === r.id));
+    if (hit >= 0) slot.set(r.id, hit + 1);
+  });
+  const at = Date.now();
+  const del = []; const put = [];
+  records.forEach((r) => {
+    let n = weekLegacyClean(r);
+    if (r.type === 'workout' && slot.has(r.id)) n = { ...n, plan: slot.get(r.id) };
+    if (r.type === 'config' && r.key === 'weekView') { del.push(r.id); return; }
+    if (n === r) return;
+    if (n.type === 'weekPlan' && planEmpty(n)) { del.push(r.id); return; } // 몸무게만 남아 있던 주 기록은 통째로
+    put.push({ ...n, updatedAt: Math.max(at + put.length, (r.updatedAt || 0) + 1) });
+  });
+  if (put.length) await Store.putMany(put);
+  records = await loadRecords();
+  for (const id of del) await deleteRecord(id); // 삭제 표시를 남겨서 ☁ 다른 기기에서도 사라져요
+  settings.weekLegacyV1 = true;
+  await saveSettings();
+  render();
+  if (valuable) toast('예전 값을 정리했어요. 백업 파일은 다운로드 폴더에 있어요.', 5000);
 }
 
 // 🎻 빠른 기록이 없어져서(🧘 운동은 앞서 없어졌어요) 모든 기록의 "간단 기록" 표시(quick)를 한 번만 지워요. 값이 아니라 표시라서 확인 없이 조용히 지워요.
@@ -5085,11 +5159,6 @@ function openSettings() {
         <h3>🍂 계절 장식</h3>
         <p class="meta">달마다 위쪽 제목 옆과 화면 오른쪽 아래에 작은 그림이 바뀌어요. 그림은 <b>app.js 맨 위의 SEASON_DECOR</b>에서 고칠 수 있어요.</p>
         <label class="meta"><input type="checkbox" data-act="season" ${settings.seasonOff ? '' : 'checked'}> 계절 장식 보기</label>
-      </div>
-      <div class="card" style="margin:0">
-        <h3>🗓 이번 주 (주간 루틴표)</h3>
-        <p class="meta">과외 시간표는 이 기기와 내 Drive에만 저장돼요. 운동 루틴은 요일마다 이름·시간·선택 여부를 고칠 수 있어요.</p>
-        <div class="row"><button type="button" class="btn ghost small" data-act="wkPaste">📋 기본 시간표 붙여 넣기</button><button type="button" class="btn ghost small" data-act="wkRoutineEdit">✎ 운동 루틴 고치기</button><button type="button" class="btn ghost small" data-act="wkAskSettings">🤖 시간표 짜기 문구 고치기</button></div>
       </div>
       <div class="card" style="margin:0">
         <h3>📖 이번 달 돌아보기</h3>
@@ -5514,7 +5583,7 @@ async function loadRecords() {
   const st = all.find((r) => r.id === '__meta_settings');
   const as = all.find((r) => r.id === '__meta_autosave');
   if (as && as.handle) { autosave.handle = as.handle; autosave.name = as.name || as.handle.name || ''; }
-  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, quickFlagV1: !!st.quickFlagV1, booksV1: !!st.booksV1, tempoV1: !!st.tempoV1, claudeBoxOpen: !!st.claudeBoxOpen };
+  if (st) settings = { lastBackupAt: st.lastBackupAt || null, snoozeUntil: st.snoozeUntil || null, celebrateOff: !!st.celebrateOff, audioSkip: !!st.audioSkip, seasonOff: !!st.seasonOff, cleanupV2: !!st.cleanupV2, cleanupV3: !!st.cleanupV3, artKindV1: !!st.artKindV1, workoutLiteV1: !!st.workoutLiteV1, quickFlagV1: !!st.quickFlagV1, booksV1: !!st.booksV1, tempoV1: !!st.tempoV1, weekLegacyV1: !!st.weekLegacyV1, claudeBoxOpen: !!st.claudeBoxOpen };
   seeded = all.some((r) => r.id === '__meta_seeded');
   const rows = all.filter((r) => r.type !== 'meta');
   tombstones = rows.filter(isTomb); // 삭제 표시는 화면용 기록에 넣지 않아요
@@ -5572,6 +5641,7 @@ async function start() {
   setTimeout(() => { // 화면이 먼저 보인 뒤에 물어봐요
     runUpdateCleanup().catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
       .then(() => migrateWorkoutLite()).catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
+      .then(() => migrateWeekLegacy()).catch(() => { /* 정리하지 못하면 다음에 열 때 다시 해요 */ })
       .then(() => migrateBooks()).catch(() => { /* 옮기지 못하면 다음에 열 때 다시 해요 */ })
       .then(() => migrateTempo()).catch(() => { /* 옮기지 못하면 다음에 열 때 다시 해요 */ })
       .finally(() => {
