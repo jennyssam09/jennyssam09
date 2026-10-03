@@ -17,6 +17,9 @@
   --purple-soft: #f2eef7;
   --teal: #4f857e;      /* 캘린더 "오늘" 표시 전용 (뮤트 틸) */
   --teal-soft: #e4eeec; /* 오늘 칸이 반짝일 때 */
+  --ex: #5b7590;        /* 🗓 이번 주 표의 운동 블록 (종류와 상관없이 뮤트톤 파랑 하나) */
+  --ex-soft: #dce6ef;
+  --ex-ink: color-mix(in srgb, var(--ex) 75%, var(--ink)); /* 파랑 바탕 위의 글자 */
   color-scheme: light;
 }
 
@@ -804,47 +807,12 @@ dialog.roomy { width: min(900px, 92vw); }
 .term-link { margin-right: 6px; }
 .recap-toggle { display: block; margin-top: 6px; }
 
-/* ---------- 🗓 이번 주 (주간 루틴표) ---------- */
-/* 한 주의 7개 행이 세로로 쌓여요. 과외 블록은 선 테두리만, 운동 블록은 종류별 옅은 채움이에요. 색은 위 :root 의 변수만 써요. */
+/* ---------- 🗓 이번 주: 항상 표로 보여요 · 도구 줄 · 운동 루틴 고치기 · 기본 시간표 붙여 넣기 ---------- */
+/* 색은 위 :root 의 변수만 써요. 운동 블록은 종류와 상관없이 파랑 하나(--ex-soft / --ex)이고, 과외는 온라인 연보라 · 대면 연분홍이에요. */
 .wkp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 12px; }
 .wkp-label { flex: 1 1 auto; text-align: center; min-width: 11em; font-variant-numeric: tabular-nums; }
 .wkp-last { margin: 0 0 10px; }
-.wkp-days { display: flex; flex-direction: column; gap: 10px; }
-.wkp-day { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 12px; min-width: 0; }
-.wkp-day.today { outline: 2px solid var(--teal); outline-offset: -2px; } /* 캘린더 오늘 칸과 같은 틸 표시 */
-.wkp-dh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.wkp-dow { font-weight: 800; font-size: 1.1rem; }
-.wkp-date { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
-.wkp-today { font-size: .75rem; font-weight: 700; color: var(--card); background: var(--teal); padding: 1px 9px; border-radius: 999px; }
-.wkp-items { display: flex; flex-direction: column; gap: 8px; }
-.wkp-tutor {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 100%; min-height: 44px; padding: 8px 12px;
-  text-align: left; cursor: pointer; background: transparent; border: 1px solid var(--line); border-radius: 12px;
-}
-.wkp-tutor:hover, .wkp-tutor:focus-visible { border-color: var(--accent); }
-.wkp-name { overflow-wrap: anywhere; min-width: 0; }
-.wkp-time { font-variant-numeric: tabular-nums; color: var(--ink); }
-.wkp-mode { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; line-height: 1.6; } /* 대면/온라인: 작고 조용하게 */
-.wkp-once { font-size: .72rem; color: var(--muted); }
-.wkp-ex { border: 1px solid transparent; border-radius: 12px; padding: 4px 12px; background: var(--bg); min-width: 0; }
-.wkp-ex.ex-근력 { background: var(--purple-soft); }
-.wkp-ex.ex-유산소, .wkp-ex.ex-슬로조깅 { background: var(--warm-soft); }
-.wkp-ex.ex-요가 { background: var(--accent-soft); }
-.wkp-ex.rest { background: transparent; border-color: var(--line); border-style: dashed; color: var(--muted); padding: 10px 12px; }
-.wkp-ex.on { border-color: var(--purple); }
-.wkp-ex-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; cursor: pointer; }
-.wkp-ex-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
-.wkp-kind { font-weight: 600; }
-.wkp-opt { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; background: var(--card); margin-right: 2px; } /* "선택" 표시 */
-.wkp-check { width: 30px; height: 30px; margin: 0; flex-shrink: 0; cursor: pointer; accent-color: var(--purple); }
-.wkp-check:disabled { cursor: default; opacity: .45; }
-.wkp-weight { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; font-size: .95rem; color: var(--muted); }
-.wkp-weight input { width: 7.5em; min-height: 44px; padding: 8px 10px; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
-.wkp-add { margin-top: 8px; }
-.wkp-editing { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
-.wkp-form .field { margin-bottom: 10px; }
-.wkp-form input[type=time], .wkp-form input[type=text] { font-size: 16px; font-variant-numeric: tabular-nums; }
-.wkp-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wkp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
 .wkp-how { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
 .wkp-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); cursor: pointer; font-size: .95rem; }
 .wkp-pill:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -860,52 +828,57 @@ dialog.roomy { width: min(900px, 92vw); }
 .wkr-day { margin: 0 0 12px; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
 .wkr-day legend { font-weight: 700; padding: 0 6px; }
 .wkr-chk { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
-.wkr-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; }
+.wkr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .wkr-day textarea { font-size: 16px; }
-@media (max-width: 480px) { .wkp-times, .wkr-row { grid-template-columns: 1fr; } }
-
-/* ---------- 🗓 이번 주: 표 보기 · 도구 줄 · 운동 루틴 고치기(블록 여러 개) ---------- */
-.wkp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
-.wkp-seg { display: inline-flex; gap: 6px; }
-.wkp-memo { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: var(--bg); overflow-wrap: anywhere; }
-.wkp-time { font-variant-numeric: tabular-nums; font-size: .88rem; color: var(--muted); }
-.wkp-ex .wkp-time { margin-left: 4px; }
 .wkr-block { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 4px; margin: 0 0 8px; background: var(--bg); }
 .wkr-block .field { margin-bottom: 8px; }
 .wkr-none { display: none; margin: 0 0 8px; }
 .wkr-blocks:empty + .wkr-none { display: block; }
-/* 표: 가로 7열(일~토) · 세로 시간축. 좁은 화면에서는 가로로 밀어 보고, 시간축은 왼쪽에 고정돼요 */
+
+/* 표: 가로 7열(일~토) · 세로 시간축. 좁은 화면(폰 390px)에서도 한 화면에 다 들어와서 가로로 밀 필요가 없어요. */
 .wkt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); -webkit-overflow-scrolling: touch; }
-.wkt { display: grid; grid-template-columns: 44px repeat(7, minmax(72px, 1fr)); min-width: 548px; }
+.wkt { display: grid; grid-template-columns: 30px repeat(7, minmax(0, 1fr)); min-width: 300px; }
 .wkt-corner, .wkt-axis, .wkt-axis2 { position: sticky; left: 0; z-index: 3; background: var(--card); }
 .wkt-corner { border-bottom: 1px solid var(--line); }
-.wkt-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 0 5px; font-weight: 700; line-height: 1.25; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); }
-.wkt-head small { font-weight: 400; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wkt-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 0 5px; font-weight: 700; line-height: 1.25; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 0; }
+.wkt-head small { font-weight: 400; font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wkt-head.d0 span { color: var(--red); }
 .wkt-head.d6 span { color: var(--purple); }
-.wkt-head.today span { background: var(--teal); color: var(--card); border-radius: 999px; padding: 0 10px; } /* 캘린더 오늘과 같은 틸 */
+.wkt-head.today span { background: var(--teal); color: var(--card); border-radius: 999px; padding: 0 8px; } /* 캘린더 오늘과 같은 틸 */
 .wkt-axis { position: sticky; }
-.wkt-axis span { position: absolute; right: 6px; transform: translateY(-50%); font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1; }
+.wkt-axis span { position: absolute; right: 4px; transform: translateY(-50%); font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1; }
 .wkt-axis span:first-child { transform: none; }
 .wkt-axis span:last-child { transform: translateY(-100%); }
-.wkt-col { position: relative; border-left: 1px solid var(--line); background-image: repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--wkt-h)); }
+.wkt-col { position: relative; min-width: 0; border-left: 1px solid var(--line); background-image: repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--wkt-h)); }
 .wkt-col.today { box-shadow: inset 0 0 0 2px var(--teal); }
-.wkt-rest { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: var(--muted); font-size: .85rem; }
-.wkt-b { position: absolute; display: flex; flex-direction: column; gap: 1px; margin: 0 1px; padding: 2px 4px; border: 0; border-radius: 6px; text-align: left; font-size: .72rem; line-height: 1.2; overflow: hidden; color: var(--ink); cursor: pointer; min-width: 0; }
+.wkt-rest { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: var(--muted); font-size: .78rem; }
+.wkt-b { position: absolute; display: flex; flex-direction: column; gap: 1px; margin: 0 1px; padding: 2px 2px; border: 0; border-radius: 6px; text-align: left; font: inherit; font-size: .66rem; line-height: 1.2; overflow: hidden; color: var(--ink); min-width: 0; }
 .wkt-n { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .wkt-b.short .wkt-n, .wkt-b.mid .wkt-n { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; } /* 낮은 블록은 이름 한 줄 */
-.wkt-t { font-size: .66rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.wkt-ck { position: absolute; top: 1px; right: 3px; font-size: .72rem; font-weight: 800; color: var(--accent); line-height: 1; }
-.wkt-b.t-online, .wkt-sw.t-online, .wkt-chip.t-online { background: var(--purple-soft); }
-.wkt-b.t-face, .wkt-sw.t-face, .wkt-chip.t-face { background: var(--red-soft); }
-.wkt-b.x-요가, .wkt-sw.x-요가, .wkt-chip.x-요가 { background: var(--accent-soft); border: 1.5px solid var(--accent); }
-.wkt-b.x-유산소, .wkt-sw.x-유산소, .wkt-chip.x-유산소, .wkt-b.x-슬로조깅, .wkt-sw.x-슬로조깅, .wkt-chip.x-슬로조깅 { background: var(--warm-soft); border: 1.5px solid var(--warm); }
-.wkt-b.x-근력, .wkt-sw.x-근력, .wkt-chip.x-근력 { background: var(--purple-soft); border: 1.5px solid var(--purple); }
-.wkt-b.opt, .wkt-sw.opt, .wkt-chip.opt { border-style: dashed; } /* 선택 운동: 같은 색에 점선 테두리 */
-.wkt-axis2 { padding: 6px 4px 4px; font-size: .68rem; line-height: 1.25; color: var(--muted); text-align: right; word-break: keep-all; border-top: 1px solid var(--line); }
-.wkt-un { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; padding: 4px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); min-width: 0; }
-.wkt-chip { font-size: .68rem; line-height: 1.3; padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
-.wkt-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 2px 4px; font-size: .82rem; color: var(--muted); }
-.wkt-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; border: 1px solid transparent; }
-.wkt-memo { margin: 4px 2px 0; overflow-wrap: anywhere; }
+.wkt-t { font-size: .6rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wkt-b.t-online, .wkt-chip.t-online { background: var(--purple-soft); }
+.wkt-b.t-face, .wkt-chip.t-face { background: var(--red-soft); }
+/* 운동: 종류와 상관없이 같은 파랑. 선택 운동은 같은 색에 점선 테두리 */
+.wkt-b.ex, .wkt-chip.ex { background: var(--ex-soft); border: 1.5px solid var(--ex); color: var(--ex-ink); }
+.wkt-b.ex .wkt-t { color: var(--ex-ink); }
+.wkt-b.opt, .wkt-chip.opt { border-style: dashed; }
+button.wkt-b, button.wkt-chip { cursor: pointer; }
+button.wkt-b:disabled, button.wkt-chip:disabled { cursor: default; opacity: 1; }
+button.wkt-b:focus-visible, button.wkt-chip:focus-visible { outline: 2px solid var(--ex); outline-offset: 1px; }
+.wkt-ck { position: absolute; top: 1px; right: 2px; font-size: .7rem; font-weight: 800; color: var(--ex-ink); line-height: 1; } /* 했어요 체크 */
+.wkt-b.on .wkt-n { padding-right: .8em; }
+.wkt-axis2 { padding: 6px 2px 4px; font-size: .6rem; line-height: 1.25; color: var(--muted); text-align: right; word-break: keep-all; border-top: 1px solid var(--line); }
+.wkt-un { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; padding: 4px 2px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); min-width: 0; }
+.wkt-chip { font: inherit; font-size: .62rem; line-height: 1.3; padding: 1px 4px; border-radius: 6px; border: 1.5px solid transparent; text-align: left; overflow-wrap: anywhere; max-width: 100%; color: var(--ink); }
+.wkt-memo { margin: 8px 2px 0; overflow-wrap: anywhere; }
 .wkt-prevwrap { margin-top: 8px; }
+@media (min-width: 520px) {
+  .wkt { grid-template-columns: 44px repeat(7, minmax(0, 1fr)); }
+  .wkt-axis span { right: 6px; font-size: .72rem; }
+  .wkt-head small { font-size: .72rem; }
+  .wkt-b { padding: 2px 4px; font-size: .72rem; }
+  .wkt-t { font-size: .68rem; }
+  .wkt-axis2 { font-size: .68rem; padding: 6px 4px 4px; }
+  .wkt-chip { font-size: .68rem; padding: 1px 6px; }
+  .wkt-rest { font-size: .85rem; }
+}
