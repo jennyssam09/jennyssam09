@@ -1822,7 +1822,6 @@ function renderEnglish() {
    - 설정 값 'weekRoutine' = 운동 루틴 7일(일~토) [{ blocks: [{ name, kind('운동'), optional, s, e }] }]   (예전 모양 { text, kind, workout, optional, time } 도 읽어요 · 없으면 WEEK_ROUTINE_DEFAULT)
    - 설정 값 'tutorBase'   = 과외 기본 시간표 [{ from(적용이 시작되는 주의 일요일 날짜, ''면 처음부터), blocks: [{ id, d(0=일~6=토), name, s('H:MM'), e, m('대면'|'온라인') }] }]
                              "앞으로 계속"으로 고치면 그 주부터 새 시간표가 시작돼요. 지나간 주는 그때 시간표 그대로 보여요.
-   - 설정 값 'weekClaude'  = 🤖 시간표 짜기 요청의 "내 정보"·"요청" 중 내가 고친 것만 { info, request }
    - 기록 'weekPlan'       = 한 주에 하나 (id 'wp-<일요일 날짜>'): { weight, tutor: { add, edit, del }(이번 주만 바꾼 과외), ex: { 요일번호: { blocks } }(이번 주만 쓰는 운동 루틴), memo(그 주 메모), skip: [체크를 푼 운동 "요일:블록번호"(예전: "요일:종류")] }
    (설정 값 'weekView'(예전 [목록][표] 보기)는 이제 읽지 않아요. 값이 남아 있어도 괜찮아요.)
    운동 체크는 따로 저장하지 않고 운동 기록(type 'workout')에서 읽어요. 체크하면 그 날짜의 운동 기록이 하나 생기고(kind '운동', plan: 그 블록 번호+1), 풀면 그 기록이 지워져요.
@@ -1911,6 +1910,19 @@ function tutorBlocksOf(sun) {
   });
   t.add.forEach((b) => out.push({ ...b, src: 'add', once: true }));
   return out;
+}
+
+// 그 주 과외 회수·시간 합계 (지금 보이는 과외 블록만, 운동은 빼요. 시간 = 끝 − 시작이고 끝 시간이 없는 블록은 회수에만 들어가요)
+function tutorTotals(sun) {
+  const blocks = tutorBlocksOf(sun);
+  const min = blocks.reduce((n, b) => { const s = timeMin(b.s); const e = timeMin(b.e); return s !== null && e !== null && e > s ? n + e - s : n; }, 0);
+  return { count: blocks.length, min };
+}
+function tutorTotalText({ count, min }) {
+  if (!count) return '과외 없음';
+  const h = Math.floor(min / 60); const m = min % 60;
+  const time = [h ? `${h}시간` : '', m ? `${m}분` : ''].filter(Boolean).join(' ');
+  return `과외 ${count}회${time ? ` · ${time}` : ''}`;
 }
 
 // 한 주 기록을 바꿔요. 순서대로 하나씩 실행해서 서로 덮어쓰지 않아요. 아무것도 안 남으면 그 기록은 저절로 사라져요.
@@ -2026,7 +2038,7 @@ async function applyTutorBase(fromWeek, op) {
 }
 
 /* ---------------------------------------------------------------------
-   시간표 글 (복사·붙여 넣기 공통). 한 줄에 한 요일(일~토), 블록은 " / "로 구분, 각 블록은 "이름 시작~끝 종류":
+   시간표 글 (📥 붙여 넣기가 읽어요. 매주 예약 작업이 만든 시간표를 붙여 넣어요). 한 줄에 한 요일(일~토), 블록은 " / "로 구분, 각 블록은 "이름 시작~끝 종류":
      [시간표]
      일: 휴식
      월: 학생A 9:00~11:00 온라인 / 숄더 요가 12:00~12:30 운동 선택 / 경사 걷기 13:00~13:30 운동
@@ -2093,90 +2105,6 @@ function parseSchedule(text) {
   return { days, memo, bad, dup, any: days.some((x) => x.present) };
 }
 const parsedCounts = (ps) => ({ tutors: ps.days.reduce((n, d) => n + d.tutors.length, 0), ex: ps.days.reduce((n, d) => n + d.ex.length, 0) });
-
-// 한 주를 시간표 글로 (지금 보이는 그대로: 기본 + 이번 주만 바꾼 것)
-const oneLineName = (s) => String(s || '').replace(/\s*\n\s*/g, ' ').replace(/\s+\/\s+/g, ', ').trim(); // 이름 속의 " / " 는 블록 구분과 헷갈려서 쉼표로
-function scheduleText(sun) {
-  const tutors = tutorBlocksOf(sun);
-  const rows = Array.from({ length: 7 }, (_, d) => {
-    const items = [
-      ...tutors.filter((b) => b.d === d).map((b) => ({ t: timeMin(b.s), text: `${oneLineName(b.name)} ${blockTime(b)} ${b.m}`.replace(/\s+/g, ' ').trim() })),
-      ...exBlocksOf(sun, d).map((b) => ({ t: timeMin(b.s), text: `${oneLineName(b.name)}${b.s ? ` ${blockTime(b)}` : ''} ${EX_KIND}${b.optional ? ' 선택' : ''}` })),
-    ].sort((a, b) => (a.t === null ? 1e9 : a.t) - (b.t === null ? 1e9 : b.t));
-    return `${DOW[d]}: ${items.length ? items.map((i) => i.text).join(' / ') : '휴식'}`;
-  });
-  const memo = planMemo(weekPlanOf(sun));
-  return ['[시간표]', ...rows, ...(memo ? [`메모: ${oneLineName(memo)}`] : [])].join('\n');
-}
-
-/* ---- 🤖 시간표 짜기 (클로드에게 보낼 글) ---- */
-// 내 정보·요청의 처음 값 (⚙ 설정 › 🗓 이번 주 › "🤖 시간표 짜기 문구 고치기"에서 고쳐요. {주}는 "이번 주(10/4~10/10)" 같은 날짜 범위로 바뀌어요)
-const WEEK_ASK_INFO = '영어 과외 강사예요. 평일 수업은 밤 11시쯤 끝나고, 보통 이른 오후가 비어 있어요. 일찍 일어난 날은 낮잠이 필요할 만큼 피곤해요.\n요가·근력·유산소를 무리 없이 꾸준히 하고 싶어요. 스트레스가 쌓이지 않는 게 1순위예요.';
-const WEEK_ASK_REQUEST = '아래는 {주} 과외 시간표와 지금 운동 루틴이에요. 과외 시간은 바꾸지 말고, 운동을 무리 없이 다시 배치해 줘.';
-// 답변 형식 안내 (고정 문구: 붙여 넣기가 읽을 수 있는 형식)
-const WEEK_ASK_FORMAT = [
-  '답변 맨 끝에 아래 형식의 코드 블록 하나로 이번 주 전체 시간표를 써 줘. 이 블록은 그대로 내 기록장에 붙여 넣을 거야. 설명은 코드 블록 위에 짧게.',
-  '형식: 한 줄에 한 요일(일~토 7줄), 블록은 " / "로 구분하고, 각 블록은 "이름 시작~끝 종류"로 써. 끝 시간이 없으면 시작만 써도 돼.',
-  '종류: 온라인·대면 = 과외 / 운동 = 운동 (뒤에 "선택"을 붙이면 안 해도 되는 운동). 그 요일에 아무것도 없으면 "휴식". 메모는 맨 아래 "메모:" 줄에 한 줄로(없으면 생략). 과외는 위 시간표 그대로 옮겨 줘.',
-  '예시:',
-  '```',
-  '[시간표]',
-  '일: 휴식',
-  '월: 학생A 9:00~11:00 온라인 / 숄더 요가 12:00~12:30 운동 선택 / 경사 걷기 13:00~13:30 운동',
-  '화: 아로마 요가 10:00 운동 / 학생B 18:00~20:00 대면',
-  '수: 휴식',
-  '목: 학생A 9:00~11:00 온라인 / 하체 근력 13:00~13:30 운동',
-  '금: 가볍게 걷기 20분 운동 선택',
-  '토: 휴식',
-  '메모: 수·금은 아침 수업이 있어 휴식',
-  '```',
-].join('\n');
-const weekClaudeStored = () => { const v = getConfig('weekClaude', null); return v && typeof v === 'object' ? v : {}; };
-const weekAskInfo = () => { const v = weekClaudeStored().info; return typeof v === 'string' && v.trim() ? v : WEEK_ASK_INFO; };
-const weekAskRequest = () => { const v = weekClaudeStored().request; return typeof v === 'string' && v.trim() ? v : WEEK_ASK_REQUEST; };
-const weekRangeText = (sun) => { const f = (d) => { const x = parseDate(d); return `${x.getMonth() + 1}/${x.getDate()}`; }; return `${f(sun)}~${f(addDays(sun, 6))}`; };
-const weekNoun = (sun) => (sun === weekStartOf(todayStr()) ? `이번 주(${weekRangeText(sun)})` : weekLabel(sun));
-function weekAskText(sun, wish = '') {
-  const req = weekAskRequest().replace(/\{주\}/g, weekNoun(sun)).trim();
-  const w = oneLine(wish);
-  return [weekAskInfo().trim(), `${req}${w ? `\n이번에 바라는 것: ${w}` : ''}`, scheduleText(sun), WEEK_ASK_FORMAT].join('\n\n');
-}
-let wkAskEdited = false; // 보낼 글을 직접 고쳤으면 "바라는 것"을 적어도 덮어쓰지 않아요
-function openWeekAsk() {
-  const sun = ui.weekStart || weekStartOf(todayStr());
-  wkAskEdited = false;
-  openDlg(`<h2>🤖 시간표 짜기</h2>
-    <p class="meta" style="margin-top:0">${esc(weekLabel(sun))} 시간표와 운동 루틴을 클로드에게 보내요. 답이 오면 🗓 화면의 <b>📥 클로드 시간표 붙여 넣기</b>로 이 주에 반영해요.</p>
-    <div class="field"><label for="wkWish">이번에 바라는 것 <span class="meta">(선택)</span></label><input id="wkWish" type="text" maxlength="200" autocomplete="off" placeholder="예: 목요일 운동을 오전으로 옮기고 싶어"></div>
-    <div class="field"><label for="wkAskPrev">보낼 글 <span class="meta">(고쳐도 돼요)</span></label><textarea id="wkAskPrev" class="copy-text" rows="12">${esc(weekAskText(sun))}</textarea></div>
-    <div class="dlg-actions"><button type="button" class="btn ghost" data-act="wkAskSettings">✎ 내 정보·요청 문구</button><button type="button" class="btn ghost" data-act="closeDlg">닫기</button><button type="button" class="btn" data-act="wkAskCopy">📋 복사하기</button></div>`, 'roomy');
-}
-async function weekAskCopy() {
-  const ta = $('#wkAskPrev');
-  if (!ta || !ta.value.trim()) return;
-  const ok = await copyText(ta.value, '복사했어요. 클로드의 답이 오면 📥 클로드 시간표 붙여 넣기로 이 주에 반영해요.', '복사할 글', { label: '📥 붙여 넣기', act: 'wkAi' });
-  if (ok) closeDlg();
-}
-function weekAskSettingsHTML() {
-  return `<h2>✎ 시간표 짜기 문구</h2>
-    <p class="meta" style="margin-top:0">🤖 시간표 짜기 글 맨 위에 붙는 "내 정보"와 "요청"이에요. 요청 안의 <b>{주}</b>는 "이번 주(10/4~10/10)" 같은 날짜 범위로 바뀌어요. "이번에 바라는 것"·지금 시간표·답변 형식 안내는 자동으로 붙어요.</p>
-    <form id="wkAskForm" novalidate>
-      <div class="field"><label for="wkaInfo">내 정보</label><textarea id="wkaInfo" name="info" rows="5">${esc(weekAskInfo())}</textarea>
-        <button type="button" class="btn ghost small" data-act="wkAskReset" data-field="info" style="margin-top:6px">기본값으로 되돌리기</button></div>
-      <div class="field"><label for="wkaReq">요청</label><textarea id="wkaReq" name="request" rows="4">${esc(weekAskRequest())}</textarea>
-        <button type="button" class="btn ghost small" data-act="wkAskReset" data-field="request" style="margin-top:6px">기본값으로 되돌리기</button></div>
-      <div class="dlg-actions"><button type="button" class="btn ghost" data-act="closeDlg">닫기</button><button type="submit" class="btn">저장</button></div>
-    </form>`;
-}
-async function saveWeekAskSettings(form) {
-  const info = form.elements.info.value.trim(); const request = form.elements.request.value.trim();
-  const v = {};
-  if (info && info !== WEEK_ASK_INFO) v.info = info; // 기본값과 같으면 저장하지 않아요 (나중에 기본값이 바뀌어도 따라가요)
-  if (request && request !== WEEK_ASK_REQUEST) v.request = request;
-  await setConfig('weekClaude', Object.keys(v).length ? v : null);
-  closeDlg();
-  toast('시간표 짜기 문구를 저장했어요.', 2500);
-}
 
 /* ---- 📥 클로드 시간표 붙여 넣기 → 지금 보는 주에만 반영 ---- */
 // 붙여 넣은 글을 그 주에 얹은 "결과" (적힌 요일은 붙여 넣은 것, 안 적힌 요일은 지금 모습 그대로)
@@ -2439,6 +2367,7 @@ function renderWeek() {
   view.innerHTML = `
     <h2 class="page-title">이번 주</h2>
     <p class="page-sub">과외 일정과 운동 루틴을 한눈에 보고, 운동은 했다고 블록을 한 번만 눌러요. 루틴에 없던 운동은 ＋ 운동 기록으로, 그날 기록을 보고 고치려면 요일 머리(일·월…)를 눌러요. 점수나 비교는 없어요.</p>
+    <p class="meta wkp-hours">${esc(tutorTotalText(tutorTotals(sun)))}</p>
     <div class="wkp-head">
       ${weekBtnHTML(sun === thisWeek)}
       <button type="button" class="btn ghost small" data-act="wkShift" data-d="-1" aria-label="지난 주">◀</button>
@@ -2447,7 +2376,6 @@ function renderWeek() {
     </div>
     <div class="wkp-bar">
       <button type="button" class="btn small" data-act="add" data-type="workout">＋ 운동 기록</button>
-      <button type="button" class="btn ghost small" data-act="wkAsk">🤖 시간표 짜기</button>
       <button type="button" class="btn ghost small" data-act="wkAi">📥 클로드 시간표 붙여 넣기</button>
     </div>
     ${last ? `<p class="meta wkp-last">지난주 운동 ${last}번</p>` : ''}
@@ -5254,10 +5182,6 @@ document.addEventListener('click', async (e) => {
     case 'wkRoutineReset': if (confirm('요일별 운동 루틴을 처음 값으로 되돌릴까요?')) { await setConfig('weekRoutine', null); closeDlg(); render(); toast('처음 운동 루틴으로 되돌렸어요.', 2500); } break;
     case 'wkPaste': openDlg(`<h2>📋 기본 시간표 붙여 넣기</h2>${pasteBoxHTML()}`, true); syncPasteBox(); break;
     case 'wkCheck': if (!el.disabled) await setWeekCheck(el.dataset.date, Number(el.dataset.i || 0), el.getAttribute('aria-pressed') !== 'true'); break; // 🗓 표에서 운동 블록을 누르면 했어요 체크 켜기·끄기
-    case 'wkAsk': openWeekAsk(); break;
-    case 'wkAskCopy': await weekAskCopy(); break;
-    case 'wkAskSettings': openDlg(weekAskSettingsHTML(), 'roomy'); break;
-    case 'wkAskReset': { const f = $('#wkAskForm'); if (f) f.elements[el.dataset.field].value = el.dataset.field === 'info' ? WEEK_ASK_INFO : WEEK_ASK_REQUEST; break; }
     case 'wkAi': openWeekAi(); break;
     case 'wkAiApply': await applyWeekAi(); break;
     case 'wkReset': await resetWeekToBase(); break;
@@ -5479,7 +5403,6 @@ document.addEventListener('submit', (e) => {
   else if (f.id === 'rtNoteForm') { e.preventDefault(); once(f, () => saveRoutineNote(f.dataset.date)); }
   else if (f.id === 'termForm') { e.preventDefault(); once(f, () => saveTerm(f)); }
   else if (f.id === 'wkRoutineForm') { e.preventDefault(); once(f, () => saveWeekRoutine(f)); }
-  else if (f.id === 'wkAskForm') { e.preventDefault(); once(f, () => saveWeekAskSettings(f)); }
   else if (f.id === 'pieceMemoForm') { e.preventDefault(); once(f, () => savePieceMemo(f.dataset.piece, f.elements.memo.value.trim())); }
 }, true);
 
@@ -5540,8 +5463,6 @@ document.addEventListener('input', (e) => {
   if (e.target.matches && e.target.matches('#recForm [data-book-piece], #recForm #f_piece')) { syncLineDim(); return; } // 곡 이름을 적으면 그 줄의 템포·녹음 줄이 또렷해져요
   if (e.target.id === 'wkPasteText') { syncPasteBox(); return; } // 붙여 넣은 시간표 미리보기
   if (e.target.id === 'wkAiText') { syncWeekAi(); return; } // 🗓 클로드 시간표: 붙여 넣은 글을 읽어 표로 미리 보여 줘요
-  if (e.target.id === 'wkWish') { const ta = $('#wkAskPrev'); if (ta && !wkAskEdited) ta.value = weekAskText(ui.weekStart || weekStartOf(todayStr()), e.target.value); return; } // 🗓 시간표 짜기: "바라는 것"을 적으면 보낼 글이 따라 바뀌어요 (글을 직접 고쳤으면 덮어쓰지 않아요)
-  if (e.target.id === 'wkAskPrev') { wkAskEdited = true; return; }
   if (e.target.id === 'termSearch') { ui.termQuery = e.target.value; const list = $('#termList'); if (list) list.innerHTML = termListHTML(); return; } // 찾는 말에 따라 목록만 새로 그려요 (입력 칸은 그대로)
   if (e.target.id === 'search') { ui.query = e.target.value; $('#listBox').innerHTML = econBodyHTML(); }
 });
