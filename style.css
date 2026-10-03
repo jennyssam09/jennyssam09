@@ -809,6 +809,7 @@ dialog.roomy { width: min(900px, 92vw); }
 
 /* ---------- 🗓 이번 주: 항상 표로 보여요 · 도구 줄 · 운동 루틴 고치기 · 기본 시간표 붙여 넣기 ---------- */
 /* 색은 위 :root 의 변수만 써요. 운동 블록은 종류와 상관없이 파랑 하나(--ex-soft / --ex)이고, 과외는 온라인 연보라 · 대면 연분홍이에요. */
+.wkp-hours { margin: 0; text-align: right; white-space: nowrap; } /* 이번 주 과외 회수·시간: 제목 설명 글 아래, n월 n주 줄 위, 오른쪽 */
 .wkp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 12px; }
 .wkp-label { flex: 1 1 auto; text-align: center; min-width: 11em; font-variant-numeric: tabular-nums; }
 .wkp-last { margin: 0 0 10px; }
