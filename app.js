@@ -2100,18 +2100,20 @@ function pasteBoxHTML(inDialog) {
     <div class="row"><button type="button" class="btn" id="wkPasteGo" data-act="wkPasteApply" disabled>이대로 넣기</button>${inDialog ? '<button type="button" class="btn ghost" data-act="closeDlg">닫기</button>' : '<button type="button" class="btn ghost" data-act="wkPasteHide">나중에</button>'}</div>
   </section>`;
 }
+// 붙여 넣기 칸은 화면 안(시간표가 비었을 때)과 창(⚙ 설정·"📋 시간표 붙여 넣기")에 같이 있을 수 있어요. 창이 열려 있으면 창 안의 칸을 써요.
+const wkq = (sel) => { const root = (dlg.open && dlg.querySelector('#wkPaste')) || document.querySelector('#wkPaste'); return root ? root.querySelector(sel) : null; };
 function syncPasteBox() {
-  const ta = $('#wkPasteText'); const box = $('#wkPastePrev'); const go = $('#wkPasteGo');
+  const ta = wkq('#wkPasteText'); const box = wkq('#wkPastePrev'); const go = wkq('#wkPasteGo');
   if (!ta || !box) return;
   box.innerHTML = pastePreviewHTML(ta.value);
   if (go) go.disabled = !parseTutorText(ta.value).blocks.length;
 }
 async function applyPaste() {
-  const ta = $('#wkPasteText');
+  const ta = wkq('#wkPasteText');
   if (!ta) return;
   const { blocks } = parseTutorText(ta.value);
   if (!blocks.length) return;
-  const how = ($('input[name=wkHow]:checked') || {}).value || 'merge';
+  const how = (wkq('input[name=wkHow]:checked') || {}).value || 'merge';
   const thisWeek = weekStartOf(todayStr());
   const vs = tutorVersions();
   if (!vs.length || tutorBaseEmpty()) await setConfig('tutorBase', [{ from: '', blocks }]); // 처음 넣는 시간표는 모든 주에 적용돼요
